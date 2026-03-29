@@ -273,8 +273,8 @@ function listenData(){if(!db)return;
   db.ref('.info/connected').on('value',s=>{setSS(s.val()===true);});
   db.ref(DB_ROOT+'/live_scoring').on('value',snap=>{
     D.liveScoring=snap.val()||{};
-    var fo=document.getElementById('leon-fans-overlay');
-    if(fo&&fo.style.display!=='none')renderLeonFans();
+    var fo=document.getElementById('school-fans-overlay');
+    if(fo&&fo.style.display!=='none')renderFans();
     const today=td();
     Object.entries(D.liveScoring).forEach(([idx,live])=>{
       if(!live||live.date!==today)return;
@@ -6138,22 +6138,22 @@ var _lfRefreshTimer=null;
 function showLeonFans(){
   var loginOl=document.getElementById('login-overlay');
   if(loginOl)loginOl.classList.add('hidden');
-  var ol=document.getElementById('leon-fans-overlay');
-  if(ol){ol.style.display='block';renderLeonFans();}
+  var ol=document.getElementById('school-fans-overlay');
+  if(ol){ol.style.display='block';renderFans();history.pushState({fanPage:true},'');}
   // Auto-refresh every 30 seconds while page is open
   if(_lfRefreshTimer)clearInterval(_lfRefreshTimer);
   _lfRefreshTimer=setInterval(function(){
-    var overlay=document.getElementById('leon-fans-overlay');
+    var overlay=document.getElementById('school-fans-overlay');
     if(!overlay||overlay.style.display==='none'){clearInterval(_lfRefreshTimer);_lfRefreshTimer=null;return;}
-    renderLeonFans();
+    renderFans();
     // Flash the refresh indicator
     var dot=document.getElementById('lf-refresh-dot');
     if(dot){dot.style.opacity='1';setTimeout(function(){dot.style.opacity='0.4';},600);}
   },30000);
 }
 
-function hideLeonFans(){
-  var ol=document.getElementById('leon-fans-overlay');
+function hideFans(){
+  var ol=document.getElementById('school-fans-overlay');
   if(ol)ol.style.display='none';
   // Stop auto-refresh
   if(_lfRefreshTimer){clearInterval(_lfRefreshTimer);_lfRefreshTimer=null;}
@@ -6164,14 +6164,14 @@ function hideLeonFans(){
 }
 
 function lfManualRefresh(){
-  renderLeonFans();
+  renderFans();
   var dot=document.getElementById('lf-refresh-dot');
   if(dot){dot.style.opacity='1';setTimeout(function(){dot.style.opacity='0.4';},600);}
 }
 
-function renderLeonFans(){
+function renderFans(){
   var BN='font-family:"Bebas Neue",sans-serif';
-  var WIN_C='#0a9e5c',LOSS_C='#e63946',RED='#e4002b',DARK_RED='#8b0000',GOLD='#d4a843';
+  var WIN_C='#0a9e5c',LOSS_C='#e63946',RED=SC.colors.primary,DARK_RED=SC.colors.primaryDeeper,GOLD=SC.colors.gold||'#d4a843';
   var today=td();
   var TIER={1:'Top',2:'Mid',3:'Dev',4:'Court 4',5:'Court 5'};
 
@@ -6630,6 +6630,10 @@ document.getElementById('sc-filter-date').value=td();
 document.getElementById('assign-date').value=td();
 document.getElementById('cnote-date').value=td();
 initFB();
+window.addEventListener('popstate',function(e){
+  var ol=document.getElementById('school-fans-overlay');
+  if(ol&&ol.style.display!=='none'){ol.style.display='none';if(typeof hideFans==='function')hideFans();}
+});
 setTimeout(runMigration,2000);
 setTimeout(function(){
   if(!db)return;
