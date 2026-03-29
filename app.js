@@ -324,6 +324,19 @@ function filterPastLineups(){
   renderPastLineups(dateVal, oppVal, playerVal);
 }
 
+function changeCoachPin(){
+  const newPin=document.getElementById('new-coach-pin')?.value?.trim();
+  const statusEl=document.getElementById('pin-change-status');
+  if(!newPin||newPin.length<4){if(statusEl)statusEl.textContent='PIN must be at least 4 digits';return;}
+  if(!db){if(statusEl)statusEl.textContent='Not connected';return;}
+  db.ref(DB_ROOT+'/config/coachPin').set(newPin,err=>{
+    if(err){if(statusEl)statusEl.textContent='Error saving PIN';return;}
+    window._coachPin=newPin;
+    if(statusEl)statusEl.textContent='PIN updated ✓';
+    setTimeout(()=>{if(statusEl)statusEl.textContent='';},2000);
+  });
+}
+
 const COURTS=[1,2,3,4,5,6,7,8],CL={1:'Top',2:'Mid',3:'Dev',4:'Court 4',5:'Court 5',6:'Exhib',7:'Exhib',8:'Exhib'};
 const EXHIBITION_COURTS=new Set([6,7,8]);
 const CO={SR:0,JR:1,SO:2,FR:3};
@@ -6350,6 +6363,8 @@ function hideFans(){
     if(loginOl)loginOl.classList.remove('hidden');
   }
 }
+
+function hideLeonFans(){hideFans();}
 
 function lfManualRefresh(){
   renderFans();
