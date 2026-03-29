@@ -3295,6 +3295,8 @@ function saveAssignment(){
   const id=gi('asgn');
   fbSet('assignments/'+id,{id,date,type,opponent:opp||null,courts,notes:notes||null,createdAt:td()});
   toast('Assignment saved!');
+  // Prompt lineup release for duals with opponent
+  if(type==='gameday'&&opp)setTimeout(()=>promptLineupRelease(date,opp),600);
   // Clear form
   document.getElementById('assign-opp').value='';
   document.getElementById('assign-notes').value='';
