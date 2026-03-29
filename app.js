@@ -2702,7 +2702,7 @@ function exportExcel(){
 // ============================================================
 // COURT ASSIGNMENT SCANNER
 // ============================================================
-document.getElementById('ca-date').value=td();
+const _cad=document.getElementById('ca-date');if(_cad)_cad.value=td();
 document.getElementById('ca-file').addEventListener('change',async function(e){
   const file=e.target.files[0];if(!file)return;
   const preview=document.getElementById('ca-preview');
