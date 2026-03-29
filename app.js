@@ -83,6 +83,7 @@ function listenSharedLineup(date, oppName){
     // Store draft status for UI
     window._myLineupDraft=val[mySubKey]||null;
     renderSharedLineupPanel(date, oppName, val);
+    renderDualSheet(date, oppName, val);
   });
 }
 
@@ -168,7 +169,159 @@ function releaseLineup(date, oppName){
   setTimeout(()=>{
     db.ref(sharedKey+'/'+mySubKey+'/released').set(true);
     toast('Lineup released to '+oppName+' ✓');
+    // Refresh dual sheet
+    const sharedKey2=getSharedLineupKey(date,oppName);
+    if(sharedKey2&&db)db.ref(sharedKey2).once('value',snap=>renderDualSheet(date,oppName,snap.val()||{}));
   },400);
+}
+
+// ── MOVEMENT RESTRICTION MODAL ─────────────────────────────
+function showMovementModal(violations){
+  const names=violations.map(v=>`${v.name} (Pair ${v.from} → Pair ${v.to})`).join(', ');
+  const modal=document.getElementById('movement-reason-modal');
+  if(!modal){
+    // Create modal
+    const m=document.createElement('div');
+    m.id='movement-reason-modal';
+    m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+    m.innerHTML=`<div style="background:var(--white);border-radius:12px;padding:20px;max-width:400px;width:100%;box-shadow:var(--shadow-lg);">
+      <div style="font-family:'Bebas Neue';font-size:18px;letter-spacing:1px;color:var(--red);margin-bottom:8px;">⚠️ MOVEMENT EXCEEDS 1 PAIR</div>
+      <div style="font-size:13px;color:var(--charcoal);margin-bottom:12px;" id="mvr-names"></div>
+      <div style="font-size:12px;font-weight:700;color:var(--gray);margin-bottom:8px;">REASON FOR MOVEMENT</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;" id="mvr-choices">
+        ${['Injury','Performance-based move','Strategic adjustment','Player request','Coach discretion'].map((r,i)=>`<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;"><input type="radio" name="mvr" value="${r}" ${i===0?'checked':''}> ${r}</label>`).join('')}
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-primary" style="flex:1;" onclick="saveWithMovementReason()">Save with Reason</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('movement-reason-modal').remove()">Cancel</button>
+      </div>
+    </div>`;
+    document.body.appendChild(m);
+  } else {
+    modal.style.display='flex';
+  }
+  const nameEl=document.getElementById('mvr-names');
+  if(nameEl)nameEl.textContent='Moving: '+names;
+}
+
+function saveWithMovementReason(){
+  const modal=document.getElementById('movement-reason-modal');
+  const selected=document.querySelector('input[name="mvr"]:checked');
+  const reason=selected?selected.value:'Coach discretion';
+  const{existingAssign,id,date,type,opp,slots}=window._pendingAssignment||{};
+  if(!slots){if(modal)modal.remove();return;}
+  if(existingAssign){fbRemove('assignments/'+existingAssign.id);}
+  const assignData={id,date,type,opponent:opp||null,courts:slots,
+    movementReason:reason,
+    movementViolations:(window._pendingViolations||[]).map(v=>({name:v.name,from:v.from,to:v.to})),
+    notes:null,createdAt:new Date().toISOString()};
+  fbSet('assignments/'+id,assignData);
+  toast('Assignment saved — movement reason logged ✓');
+  window._pendingAssignment=null;
+  window._pendingViolations=null;
+  if(modal)modal.remove();
+  renderAssignments();
+  // Prompt lineup release
+  promptLineupRelease(date, opp);
+}
+
+// ── MAKE LINEUP PUBLIC PROMPT ──────────────────────────────
+function promptLineupRelease(date, oppName){
+  if(!oppName||!date)return;
+  const sharedKey=getSharedLineupKey(date,oppName);
+  if(!sharedKey)return;
+  const modal=document.createElement('div');
+  modal.id='lineup-release-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  modal.innerHTML=`<div style="background:var(--white);border-radius:12px;padding:20px;max-width:380px;width:100%;box-shadow:var(--shadow-lg);">
+    <div style="font-family:'Bebas Neue';font-size:18px;letter-spacing:1px;color:var(--blue);margin-bottom:8px;">📋 LINEUP READY</div>
+    <div style="font-size:13px;color:var(--charcoal);margin-bottom:16px;">Make your lineup public for <strong>${oppName}</strong> on <strong>${fD(date)}</strong>?<br><br><span style="font-size:11px;color:var(--gray);">This shares your lineup with ${oppName} and makes it visible on the dual sheet.</span></div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-primary" style="flex:1;background:var(--green);border-color:var(--green);" onclick="releaseLineup('${date}','${oppName}');document.getElementById('lineup-release-modal').remove();toast('Lineup made public ✓');">✓ Make Lineup Public</button>
+      <button class="btn btn-secondary" onclick="document.getElementById('lineup-release-modal').remove()">Not Yet</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+// ── DUAL SHEET ─────────────────────────────────────────────
+function renderDualSheet(date, oppName, sharedVal){
+  const el=document.getElementById('dual-sheet-container');
+  if(!el)return;
+  const mySubKey=getMyLineupSubKey();
+  const oppSubKey=getOppLineupSubKey(oppName);
+  const myData=(sharedVal||{})[mySubKey]||null;
+  const oppData=oppSubKey?(sharedVal||{})[oppSubKey]:null;
+  const myReleased=myData&&myData.released;
+  const oppReleased=oppData&&oppData.released;
+  const myCourts=myData?myData.courts:{};
+  const oppCourts=oppData?oppData.courts:{};
+
+  let h=`<div style="font-family:'Bebas Neue';font-size:16px;letter-spacing:2px;margin-bottom:12px;color:var(--charcoal);">FHSAA DUAL MATCH LINEUP</div>`;
+  h+=`<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--gray);margin-bottom:8px;">
+    <span>${fD(date)}</span><span>${SC.schoolName} vs ${oppName||'Opponent'}</span>
+  </div>`;
+
+  // Header row
+  h+=`<div style="display:grid;grid-template-columns:40px 1fr 1fr;gap:4px;margin-bottom:4px;">
+    <div></div>
+    <div style="text-align:center;font-family:'Bebas Neue';font-size:13px;color:var(--red);letter-spacing:1px;padding:6px;background:var(--red-bg);border-radius:6px;">
+      ${SC.schoolName}${myReleased?'<span style="color:var(--green);font-size:10px;"> ✓ PUBLIC</span>':''}
+    </div>
+    <div style="text-align:center;font-family:'Bebas Neue';font-size:13px;color:var(--gray);letter-spacing:1px;padding:6px;background:var(--gray-lighter);border-radius:6px;">
+      ${oppName||'Opponent'}${oppReleased?'<span style="color:var(--green);font-size:10px;"> ✓ PUBLIC</span>':''}
+    </div>
+  </div>`;
+
+  // Pair rows 1-5
+  [1,2,3,4,5].forEach(pair=>{
+    const myC=myCourts[pair]||null;
+    const oppC=oppCourts[pair]||null;
+    h+=`<div style="display:grid;grid-template-columns:40px 1fr 1fr;gap:4px;margin-bottom:4px;align-items:center;">
+      <div style="font-family:'Bebas Neue';font-size:14px;color:var(--blue);text-align:center;">P${pair}</div>
+      <div style="background:var(--off-white);border-radius:6px;padding:8px;min-height:44px;">`;
+    if(myC&&(myC.p1||myC.p2)){
+      h+=`<div style="font-size:12px;font-weight:700;">${myC.p1||'—'}</div>`;
+      h+=`<div style="font-size:12px;font-weight:700;">${myC.p2||'—'}</div>`;
+    } else {
+      h+=`<div style="font-size:11px;color:var(--gray);font-style:italic;">Not set</div>`;
+    }
+    h+=`</div><div style="background:var(--off-white);border-radius:6px;padding:8px;min-height:44px;">`;
+    if(oppC&&(oppC.p1||oppC.p2)){
+      h+=`<div style="font-size:12px;font-weight:700;">${oppC.p1||'—'}</div>`;
+      h+=`<div style="font-size:12px;font-weight:700;">${oppC.p2||'—'}</div>`;
+    } else if(!oppSubKey){
+      h+=`<button class="btn btn-secondary btn-small" style="font-size:10px;" onclick="triggerOppLineupPhoto()">📸 Scan Form</button>`;
+    } else {
+      h+=`<div style="font-size:11px;color:var(--gray);font-style:italic;">Waiting...</div>`;
+    }
+    h+=`</div></div>`;
+  });
+
+  // Movement reason note if present
+  const myAssign=Object.values(D.assignments||{}).find(a=>a.date===date&&a.type==='gameday');
+  if(myAssign&&myAssign.movementReason){
+    h+=`<div style="margin-top:8px;padding:8px;background:#fffbeb;border-radius:6px;font-size:11px;color:#92400e;">
+      📝 Movement note: ${myAssign.movementReason}
+    </div>`;
+  }
+
+  el.innerHTML=h;
+}
+
+function triggerOppLineupPhoto(){
+  // Reuse existing scan input
+  const input=document.getElementById('scan-file');
+  if(input)input.click();
+  else toast('Use the Scan Court Sheet button above to photograph the opponent form');
+}
+
+// ── LINEUP HISTORY SEARCH ──────────────────────────────────
+function filterPastLineups(){
+  const dateVal=(document.getElementById('lineup-search-date')?.value||'').trim();
+  const oppVal=(document.getElementById('lineup-search-opp')?.value||'').toLowerCase().trim();
+  const playerVal=(document.getElementById('lineup-search-player')?.value||'').toLowerCase().trim();
+  renderPastLineups(dateVal, oppVal, playerVal);
 }
 
 const COURTS=[1,2,3,4,5,6,7,8],CL={1:'Top',2:'Mid',3:'Dev',4:'Court 4',5:'Court 5',6:'Exhib',7:'Exhib',8:'Exhib'};
@@ -2730,11 +2883,38 @@ function confirmCAAssignment(){
   }
   if(!slots.length){toast('No valid courts to save');return;}
   // If existing assignment for this date, delete it first then save updated version
+  // ── MOVEMENT RESTRICTION (duals only) ──────────────────────
+  if(type==='gameday'){
+    const pastDuals=Object.values(D.assignments||{})
+      .filter(a=>a.type==='gameday'&&a.date<date&&(a.courts||[]).length>0)
+      .sort((a,b)=>b.date.localeCompare(a.date));
+    const prevAssign=pastDuals[0];
+    if(prevAssign){
+      const violations=[];
+      slots.forEach(slot=>{
+        [slot.p1,slot.p2].filter(Boolean).forEach(pid=>{
+          const prevCourt=(prevAssign.courts||[]).findIndex(c=>c.p1===pid||c.p2===pid)+1;
+          if(prevCourt>0&&Math.abs(slot.court-prevCourt)>1){
+            const p=gP(pid);
+            violations.push({pid,name:p?p.firstName+' '+p.lastName:'Player',from:prevCourt,to:slot.court});
+          }
+        });
+      });
+      if(violations.length>0){
+        window._pendingAssignment={existingAssign,id:existingAssign?existingAssign.id:gi('asgn'),date,type,opp,slots};
+        window._pendingViolations=violations;
+        showMovementModal(violations);
+        return;
+      }
+    }
+  }
+  // ── SAVE ────────────────────────────────────────────────────
   if(existingAssign){fbRemove('assignments/'+existingAssign.id);}
   const id=existingAssign?existingAssign.id:gi('asgn');
   const assignData={id,date,type,opponent:opp||null,courts:slots,notes:null,createdAt:new Date().toISOString()};
   fbSet('assignments/'+id,assignData);
   toast(`Assignment ${existingAssign?'updated':'saved'}! ${slots.length} court(s) for ${date}`);
+  if(type==='gameday'&&opp)setTimeout(()=>promptLineupRelease(date,opp),600);
   document.getElementById('ca-result').innerHTML='';
   document.getElementById('ca-preview').innerHTML='';
   document.getElementById('ca-opp').value='';
@@ -3669,7 +3849,7 @@ function renderAssignments(){
 }
 
 // ── Past Court Lineups (from gamedays + scrimmages) ──────────────────────────
-function renderPastLineups(){
+function renderPastLineups(filterDate, filterOpp, filterPlayer){
   const container=document.getElementById('past-lineups-list');
   if(!container)return;
   const today=td();
@@ -3704,7 +3884,15 @@ function renderPastLineups(){
   });
 
   // Sort newest first
-  const sorted=Object.values(groups).sort((a,b)=>b.date.localeCompare(a.date));
+  let sorted=Object.values(groups).sort((a,b)=>b.date.localeCompare(a.date));
+  // Apply search filters
+  if(filterDate)sorted=sorted.filter(g=>g.date===filterDate);
+  if(filterOpp)sorted=sorted.filter(g=>(g.opponent||'').toLowerCase().includes(filterOpp));
+  if(filterPlayer)sorted=sorted.filter(g=>g.courts.some(c=>{
+    const p1=gP(c.pair&&c.pair[0]),p2=gP(c.pair&&c.pair[1]);
+    const names=[(p1?p1.firstName+' '+p1.lastName:''),(p2?p2.firstName+' '+p2.lastName:'')].join(' ').toLowerCase();
+    return names.includes(filterPlayer);
+  }));
 
   let h='';
   sorted.forEach(g=>{
@@ -6199,7 +6387,7 @@ function renderFans(){
       var sets=(m.sets||[]);
       var sw=sets.filter(function(s){return (s.scoreUs||0)>(s.scoreThem||0);}).length;
       var setStr=sets.map(function(s){return s.scoreUs+'-'+s.scoreThem;}).join(', ');
-      var pairLabel=(m.pair||[]).map(function(pid){var p=(D.players||[]).find(function(x){return x.id===pid;});return p?p.firstName+' '+p.lastName.charAt(0)+'.':'';}).filter(Boolean).join(' & ');
+      var pairLabel=(m.pair||[]).map(function(pid){var p=(D.players||[]).find(function(x){return x.id===pid;});return p?(p.firstName+' '+p.lastName.charAt(0)+'.'+(p.jersey?' #'+p.jersey:'')):'';}).filter(Boolean).join(' & ');
       courts.push({ct:ct,pair:pairLabel||m.opponent||'CT'+ct,sets:setStr,win:sw>(sets.length-sw)});
     }
     return {opp:g.opponent||'Opponent',date:g.date||'',w:parseInt(g.scoreUs)||0,l:parseInt(g.scoreThem)||0,courts:courts};
@@ -6272,7 +6460,7 @@ function renderFans(){
       (todayAssign.courts||[]).sort(function(a,b){return (a.court||0)-(b.court||0);}).forEach(function(c,idx){
         var m=todayGD[c.court];
         var pids=[c.p1,c.p2].filter(Boolean);
-        var pairLabel2=pids.map(function(pid){var p=(D.players||[]).find(function(x){return x.id===pid;});return p?p.firstName+' '+p.lastName.charAt(0)+'.':'';}).filter(Boolean).join(' & ');
+        var pairLabel2=pids.map(function(pid){var p=(D.players||[]).find(function(x){return x.id===pid;});return p?(p.firstName+' '+p.lastName.charAt(0)+'.'+(p.jersey?' #'+p.jersey:'')):'';}).filter(Boolean).join(' & ');
         var live=liveScoring[idx]||liveScoring[String(idx)];
         var hasLive=!!(live&&live.date===today&&(live.us>0||live.them>0));
         if(m&&(m.sets||[]).length>0){
