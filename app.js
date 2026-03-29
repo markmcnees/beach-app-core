@@ -872,7 +872,8 @@ function renderExtMatches(type){
   const list=isGD?D.gamedays:D.scrimmages;
   const dateEl=document.getElementById(prefix+'-filter-date');
   const container=document.getElementById(prefix+'-matches-list');
-  fillSel([prefix+'-p1',prefix+'-p2'],document.getElementById(prefix+'-court').value);
+  if(!dateEl||!container)return;
+  fillSel([prefix+'-p1',prefix+'-p2'],document.getElementById(prefix+'-court')?.value);
 
   const filterDate=dateEl.value;
   let matches=[...list];
