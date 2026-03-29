@@ -337,7 +337,7 @@ function changeCoachPin(){
   });
 }
 
-const COURTS=[1,2,3,4,5,6,7,8],CL={1:'Top',2:'Mid',3:'Dev',4:'Court 4',5:'Court 5',6:'Exhib',7:'Exhib',8:'Exhib'};
+const COURTS=[1,2,3,4,5,6,7,8],CL={1:'PG 1',2:'PG 2',3:'PG 3',4:'PG 4',5:'PG 5',6:'Exhib',7:'Exhib',8:'Exhib'};
 const EXHIBITION_COURTS=new Set([6,7,8]);
 const CO={SR:0,JR:1,SO:2,FR:3};
 let db=null;
@@ -1249,11 +1249,11 @@ function renderRoster(){
   let html='',last=null;
   sorted.forEach(p=>{if(p.court!==last){
     html+=`<div style="font-family:'Bebas Neue';font-size:12px;letter-spacing:1.5px;color:var(--red);margin:12px 0 6px;padding-top:8px;${last!==null?'border-top:2px solid var(--gray-lighter);':''}">
-      <span class="court-badge court-${p.court}">Court ${p.court} — ${CL[p.court]||''}</span></div>`;last=p.court;}
+      <span class="court-badge court-${p.court}">PG ${p.court}</span></div>`;last=p.court;}
     html+=`<div class="roster-item" id="ritem-${p.id}"><span class="class-badge class-${p.classYear}">${p.classYear}</span>
       <span class="roster-name" id="rname-${p.id}">${p.firstName} ${p.lastName}</span>
       <input type="number" min="0" max="99" placeholder="#" title="Jersey #" value="${p.jersey||''}" style="width:52px;padding:4px 6px;border:1px solid var(--gray-lighter);border-radius:6px;font-family:'Bebas Neue',sans-serif;font-size:15px;text-align:center;color:var(--charcoal);" onchange="updJersey('${p.id}',this.value)">
-      <select class="court-select" onchange="updCt('${p.id}',this.value)">${COURTS.map(c=>`<option value="${c}" ${p.court===c?'selected':''}>CT ${c}</option>`).join('')}</select>
+      <select class="court-select" onchange="updCt('${p.id}',this.value)">${COURTS.map(c=>`<option value="${c}" ${p.court===c?'selected':''}>PG ${c}</option>`).join('')}</select>
       <button class="btn btn-small" onclick="editPlayerName('${p.id}')" style="padding:4px 8px;font-size:10px;background:var(--blue);color:var(--white);">✎</button>
       <button class="btn btn-danger btn-small" onclick="remPlayer('${p.id}')" style="padding:4px 8px;font-size:10px;">✕</button></div>`;});
   document.getElementById('roster-list').innerHTML=html;
@@ -1568,7 +1568,7 @@ function renderPlayerPortal(){
   const pid=currentPlayerId;
 
   document.getElementById('pp-name').textContent=p.firstName+' '+p.lastName;
-  document.getElementById('pp-meta').innerHTML=`${p.jersey!=null?'<span style="font-family:\'Bebas Neue\',sans-serif;font-size:16px;color:var(--red);margin-right:6px;">#'+p.jersey+'</span>':''}<span class="class-badge class-${p.classYear}">${p.classYear}</span> <span class="court-badge court-${p.court}">Court ${p.court} — ${CL[p.court]||''}</span>`;
+  document.getElementById('pp-meta').innerHTML=`${p.jersey!=null?'<span style="font-family:\'Bebas Neue\',sans-serif;font-size:16px;color:var(--red);margin-right:6px;">#'+p.jersey+'</span>':''}<span class="class-badge class-${p.classYear}">${p.classYear}</span>`;
 
   // Summary stats — filtered by ppStatView
   const qs=queensStats(pid,D.matches);
@@ -2388,14 +2388,14 @@ function buildTeamDataForPairings(){
   const allDrillsAI=Object.values(profilesData?.starDrills||{});
   const allVertsAI=Object.values(profilesData?.jumpTests||profilesData?.verticals||{});
   let data='TEAM ROSTER & DATA:\n';
-  data+='Pair levels: 1=Top, 2=Mid, 3=Dev, 4=Court 4, 5=Court 5\n\n';
+  data+='Practice Groups: 1=strongest, 5=developing. Used for internal grouping only.\n\n';
   allP.forEach(p=>{
     const sk=profilesData?.skills?.[p.id]||profilesData?.players?.[p.id]?.skills||{};
     const qs=queensStats(p.id,D.matches);
     const gs=extStats(p.id,D.gamedays);
     const ss=extStats(p.id,D.scrimmages);
     const pp=profilesData?.players?.[p.id]||{};
-    data+=`${p.firstName} ${p.lastName} (${p.id}): ${p.classYear}, Court ${p.court}`;
+    data+=`${p.firstName} ${p.lastName} (${p.id}): ${p.classYear}, PG ${p.court}`;
     data+=`, Position: ${pp.position||'unknown'}, Side: ${pp.preferredSide||'unknown'}, Hand: ${pp.dominantHand||'right'}`;
     if(pp.height)data+=`, Height: ${pp.height}`;
     const skillNames=['serving','passing','setting','hitting','blocking','defense','courtSense','communication'];
@@ -3257,10 +3257,12 @@ function buildAssignSlots(){
   const n=parseInt(document.getElementById('assign-courts').value)||3;
   let h='';
   for(let c=1;c<=n;c++){
-    h+=`<div class="form-row" style="margin-bottom:6px;align-items:center;">
-      <span style="font-family:'Bebas Neue';font-size:14px;min-width:42px;color:var(--blue);">CT ${c}</span>
-      <select class="form-select" id="assign-c${c}-p1" style="padding:6px;font-size:12px;"><option value="">Player 1</option></select>
-      <select class="form-select" id="assign-c${c}-p2" style="padding:6px;font-size:12px;"><option value="">Player 2</option></select>
+    h+=`<div style="margin-bottom:10px;background:var(--off-white);border-radius:8px;padding:8px 10px;">
+      <div style="font-family:'Bebas Neue';font-size:13px;color:var(--blue);letter-spacing:1px;margin-bottom:6px;">PAIR ${c}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <select class="form-select" id="assign-c${c}-p1" style="padding:6px;font-size:12px;text-align:center;"><option value="">Player 1</option></select>
+        <select class="form-select" id="assign-c${c}-p2" style="padding:6px;font-size:12px;text-align:center;"><option value="">Player 2</option></select>
+      </div>
     </div>`;
   }
   document.getElementById('assign-court-slots').innerHTML=h;
@@ -3269,7 +3271,7 @@ function buildAssignSlots(){
   for(let c=1;c<=n;c++){
     ['p1','p2'].forEach(p=>{
       const sel=document.getElementById('assign-c'+c+'-'+p);
-      sorted.forEach(pl=>{const o=document.createElement('option');o.value=pl.id;o.textContent=pl.firstName+' '+pl.lastName.charAt(0)+'. (CT'+pl.court+')';sel.appendChild(o);});
+      sorted.forEach(pl=>{const o=document.createElement('option');o.value=pl.id;o.textContent=pl.firstName+' '+pl.lastName.charAt(0)+'. (PG'+pl.court+')';sel.appendChild(o);});
     });
   }
   // Notes section
@@ -3969,7 +3971,7 @@ function renderPlayerAssignment(pid){
     <div style="font-family:'Bebas Neue';font-size:20px;margin-bottom:4px;">${fD(nextAssign.date)} — ${typeLabel}</div>
     ${nextAssign.opponent?'<div style="font-size:13px;color:var(--gray);margin-bottom:8px;">vs '+nextAssign.opponent+'</div>':''}
     <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--off-white);border-radius:8px;">
-      <span class="court-badge court-${nextCourt.court}" style="font-size:14px;">Court ${nextCourt.court}</span>
+      <span class="court-badge court-${nextCourt.court}" style="font-size:14px;">Pair ${nextCourt.court}</span>
       <div><span style="font-weight:700;font-size:14px;">You & ${partner?partner.firstName+' '+partner.lastName:'TBD'}</span></div>
     </div>`;
   // Check for notes mentioning this player
