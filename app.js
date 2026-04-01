@@ -3347,7 +3347,7 @@ function openAssignEditModal(id){
   titleEl.style.color=tC[a.type||'gameday']||'var(--red)';
   const sortedP=[...D.players].sort((x,y)=>x.court-y.court||x.lastName.localeCompare(y.lastName));
   function pOpts(val){
-    return'<option value="">\u2014</option>'+sortedP.map(p=>`<option value="${p.id}" ${p.id===val?'selected':''}>${p.firstName} ${p.lastName.charAt(0)}. (CT${p.court})</option>`).join('');
+    return'<option value="">\u2014</option>'+sortedP.map(p=>`<option value="${p.id}" ${p.id===val?'selected':''}>${p.firstName} ${p.lastName.charAt(0)}.</option>`).join('');
   }
   let h=`<div class="form-row" style="margin-bottom:10px;">
     <div class="form-group" style="margin-bottom:0;"><label class="form-label" style="font-size:11px;">Date</label>
