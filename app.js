@@ -3904,7 +3904,7 @@ function renderPastLineups(filterDate, filterOpp, filterPlayer){
   if(filterDate)sorted=sorted.filter(g=>g.date===filterDate);
   if(filterOpp)sorted=sorted.filter(g=>(g.opponent||'').toLowerCase().includes(filterOpp));
   if(filterPlayer)sorted=sorted.filter(g=>g.courts.some(c=>{
-    const p1=gP(c.pair&&c.pair[0]),p2=gP(c.pair&&c.pair[1]);
+    const _fp=c.pair||c.team1||[];const p1=gP(_fp[0]),p2=gP(_fp[1]);
     const names=[(p1?p1.firstName+' '+p1.lastName:''),(p2?p2.firstName+' '+p2.lastName:'')].join(' ').toLowerCase();
     return names.includes(filterPlayer);
   }));
@@ -3926,7 +3926,7 @@ function renderPastLineups(filterDate, filterOpp, filterPlayer){
       </div>
       <div id="${id}" style="display:none;margin-top:8px;">
         ${courtsOrdered.map(c=>{
-          const p1=gP((c.pair||[])[0]),p2=gP((c.pair||[])[1]);
+          const _ep=c.pair||c.team1||[];const p1=gP(_ep[0]),p2=gP(_ep[1]);
           const n1=p1?p1.firstName+' '+p1.lastName.charAt(0)+'.':'TBD';
           const n2=p2?p2.firstName+' '+p2.lastName.charAt(0)+'.':'TBD';
           return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;">
@@ -5417,7 +5417,7 @@ function renderDuals(){
     if(scored.length){
       h+='<div style="margin-top:8px;">';
       scored.forEach(c=>{
-        const pair=(c.pair||[]).map(id=>pN(id)).join(' & ')||'TBD';
+        const pair=(c.pair||c.team1||[]).map(id=>pN(id)).join(' & ')||'TBD';
         const sets=c.sets||[];let sw=0,sl=0;sets.forEach(s=>{(s.scoreUs||0)>(s.scoreThem||0)?sw++:sl++;});
         const cWin=sw>sl;
         const mid=c.id||'';
@@ -5449,7 +5449,7 @@ function renderDuals(){
     if(exhib.length){
       h+='<div style="font-size:10px;font-weight:800;color:var(--gray);letter-spacing:1px;margin:6px 0 2px;padding-top:4px;border-top:1px dashed var(--gray-lighter);">EXHIBITION</div>';
       exhib.forEach(c=>{
-        const pair=(c.pair||[]).map(id=>pN(id)).join(' & ')||'TBD';
+        const pair=(c.pair||c.team1||[]).map(id=>pN(id)).join(' & ')||'TBD';
         const sets=c.sets||[];const setsStr=sets.length?sets.map(s=>s.scoreUs+'-'+s.scoreThem).join(', '):'—';
         h+=`<div class="dual-court-row" style="opacity:0.65;">
           <span class="court-badge court-${c.court}" style="min-width:28px;text-align:center;">${c.court}</span>
@@ -5484,7 +5484,7 @@ function copyDualLineup(idx){
   const scored=courts.filter(c=>!c.isExhibition);
   const exhib=courts.filter(c=>c.isExhibition);
   scored.forEach(c=>{
-    const ids=c.pair||[];
+    const ids=c.pair||c.team1||[];
     const fmt=id=>{const p=gP(id);if(!p)return'TBD';return p.firstName+' '+p.lastName+(p.jersey!=null?' (#'+p.jersey+')':'');};
     lines.push('Court '+c.court+': '+fmt(ids[0])+' / '+fmt(ids[1]));
   });
