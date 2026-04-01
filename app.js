@@ -3845,7 +3845,7 @@ function renderAssignments(){
           <span style="font-size:12px;margin-left:6px;color:${typeColor};font-weight:700;">${typeLabel}</span>
           ${a.opponent?'<span style="font-size:12px;margin-left:4px;color:var(--gray);">vs '+a.opponent+'</span>':''}</div>
         <div style="display:flex;align-items:center;gap:8px;">
-          <button style="background:none;border:none;color:var(--gray);cursor:pointer;font-size:14px;padding:4px;" onclick="openEditAssignment('${a.id}')" title="Edit">✎</button>
+          <button style="background:none;border:none;color:var(--gray);cursor:pointer;font-size:14px;padding:4px;" onclick="openAssignEditModal('${a.id}')" title="Edit">✎</button>
           <button data-del-assign="${a.id}" style="background:none;border:none;color:var(--gray-light);cursor:pointer;font-size:14px;padding:4px;" onclick="deleteAssignment('${a.id}')" title="Delete — tap once to arm, again to confirm">✕</button>
         </div>
       </div>`;
