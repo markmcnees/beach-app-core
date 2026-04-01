@@ -2839,7 +2839,6 @@ Rules:
         const caDate=document.getElementById('ca-date').value||td();
         const existingAssign=Object.values(D.assignments).find(a=>a.date===caDate);
         let h=`<div style="font-family:'Bebas Neue';font-size:14px;letter-spacing:1px;margin-bottom:8px;color:var(--green);">✓ Found ${parsed.length} court(s) — edit if needed</div>`;
-        if(existingAssign)h+=`<div style="font-size:12px;color:var(--gold);padding:6px 10px;background:#fffbeb;border-radius:6px;margin-bottom:8px;">⚠ An assignment already exists for ${caDate}. Saving will replace it.</div>`;
         parsed.forEach((m,i)=>{
           const isExhib=EXHIBITION_COURTS.has(m.court);
           h+=`<div style="padding:10px;background:var(--off-white);border-radius:6px;margin-bottom:8px;">
@@ -2862,7 +2861,7 @@ Rules:
           h+='</div>';
         });
         h+=`<div style="margin-top:10px;display:flex;gap:8px;">
-          <button class="btn btn-primary btn-small" onclick="confirmCAAssignment()">✓ ${existingAssign?'Update':'Save'} Assignment</button>
+          <button class="btn btn-primary btn-small" onclick="confirmCAAssignment()">✓ Save Assignment</button>
           <button class="btn btn-secondary btn-small" onclick="document.getElementById('ca-result').innerHTML='';document.getElementById('ca-preview').innerHTML='';">✕ Cancel</button></div>`;
         result.innerHTML=h;
         window._caData={parsed,count:parsed.length,isOpponent:false,existingAssign};
@@ -2914,7 +2913,7 @@ function confirmCAAssignment(){
         });
       });
       if(violations.length>0){
-        window._pendingAssignment={existingAssign,id:existingAssign?existingAssign.id:gi('asgn'),date,type,opp,slots};
+        window._pendingAssignment={id:gi('asgn'),date,type,opp,slots};
         window._pendingViolations=violations;
         showMovementModal(violations);
         return;
@@ -2922,11 +2921,10 @@ function confirmCAAssignment(){
     }
   }
   // ── SAVE ────────────────────────────────────────────────────
-  if(existingAssign){fbRemove('assignments/'+existingAssign.id);}
-  const id=existingAssign?existingAssign.id:gi('asgn');
+  const id=gi('asgn');
   const assignData={id,date,type,opponent:opp||null,courts:slots,notes:null,createdAt:new Date().toISOString()};
   fbSet('assignments/'+id,assignData);
-  toast(`Assignment ${existingAssign?'updated':'saved'}! ${slots.length} court(s) for ${date}`);
+  toast(`Assignment saved! ${slots.length} court(s) for ${date}`);
   if(type==='gameday'&&opp)setTimeout(()=>promptLineupRelease(date,opp),600);
   document.getElementById('ca-result').innerHTML='';
   document.getElementById('ca-preview').innerHTML='';
