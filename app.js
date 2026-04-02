@@ -4321,6 +4321,16 @@ function renderLiveScoring(dateOverride,assignOverride){
 
 if(!window._lsLiveDebounce)window._lsLiveDebounce={};
 // ── Side switch alert ──────────────────────────────────────
+function setCaTeam(mode){
+  const sel=document.getElementById('ca-team');
+  if(sel)sel.value=mode;
+  const wrap=document.getElementById('ca-opp-wrap');
+  if(wrap)wrap.style.display=mode==='opponent'?'block':'none';
+  const btnMine=document.getElementById('ca-toggle-mine');
+  const btnOpp=document.getElementById('ca-toggle-opp');
+  if(btnMine)btnMine.className='btn btn-'+(mode==='mine'?'primary':'secondary')+' btn-small';
+  if(btnOpp)btnOpp.className='btn btn-'+(mode==='opponent'?'primary':'secondary')+' btn-small';
+}
 function checkSideSwitch(usId,themId,setnumId){
   const usEl=document.getElementById(usId);
   const themEl=document.getElementById(themId);
