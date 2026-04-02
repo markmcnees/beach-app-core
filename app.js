@@ -5396,7 +5396,7 @@ function renderDuals(){
   const structuredDuals=D.duals||[];
   // For structured duals missing courts data, fill in from gameday-derived version
   const enrichedStructured=structuredDuals.map(d=>{
-    if((d.courts||[]).length>0)return d;
+    if((d.courts||[]).some(c=>!c.isExhibition&&(c.court||0)<6))return d;
     const gdMatch=gdDuals.find(g=>(g.date||'')===(d.date||'')&&(g.opponent||'').toLowerCase()===(d.opponent||'').toLowerCase());
     return gdMatch?{...d,courts:gdMatch.courts||[]}:d;
   });
