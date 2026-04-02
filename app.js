@@ -911,22 +911,23 @@ function renderPlayers(){
   });
 
   const tbody=document.querySelector('#players-table tbody');
+  const pNameCell=(p)=>currentRole==='coach'?`<span class="player-name" style="cursor:pointer;text-decoration:underline dotted;color:var(--red);" onclick="coachOpenPlayer('${p.id}')">${p.firstName} ${p.lastName.charAt(0)}.</span>`:`<span class="player-name">${p.firstName} ${p.lastName.charAt(0)}.</span>`;
   if(pType==='queens'){
     tbody.innerHTML=rows.map(r=>{const p=r.p,s=r.s;
-      return`<tr><td><span class="player-name">${p.firstName} ${p.lastName.charAt(0)}.</span></td>
+      return`<tr><td>${pNameCell(p)}</td>
         <td><span class="court-badge court-${p.court}">${p.court}</span></td>
         <td>${s.wins}</td><td>${s.losses}</td><td>${s.gp>0?Math.round(s.pct)+'%':'—'}</td>
         <td class="plus-minus ${pmClass(s.diff)}">${s.gp>0?pmStr(s.diff):'—'}</td></tr>`;}).join('');
   }else if(pType==='gameday'||pType==='scrimmage'||pType==='exhibition'){
     tbody.innerHTML=rows.map(r=>{const p=r.p,s=r.s;
-      return`<tr><td><span class="player-name">${p.firstName} ${p.lastName.charAt(0)}.</span></td>
+      return`<tr><td>${pNameCell(p)}</td>
         <td><span class="court-badge court-${p.court}">${p.court}</span></td>
         <td>${s.sets}</td>
         <td class="plus-minus ${pmClass(s.diff)}">${s.sets>0?pmStr(s.diff):'—'}</td>
         <td>${s.k}</td><td>${s.b}</td><td>${s.a}</td><td>${s.se}</td><td>${s.re}</td><td>${s.he}</td><td>${s.de}</td></tr>`;}).join('');
   }else{
     tbody.innerHTML=rows.map(r=>{const p=r.p,c=r.c;
-      return`<tr><td><span class="player-name">${p.firstName} ${p.lastName.charAt(0)}.</span></td>
+      return`<tr><td>${pNameCell(p)}</td>
         <td><span class="court-badge court-${p.court}">${p.court}</span></td>
         <td class="wl-record">${c.qWins}-${c.qLosses}</td>
         <td class="plus-minus ${pmClass(c.qDiff)}">${c.qGP>0?pmStr(c.qDiff):'—'}</td>
@@ -2159,6 +2160,140 @@ function renderPlayerProfileData(pid){
         <div style="font-size:11px;color:var(--gray);font-weight:600;">${fD(n.date)}</div>
         <div style="font-size:13px;margin-top:2px;line-height:1.5;">${n.text}</div></div>`).join('');
   }else{document.getElementById('pp-notes').innerHTML='<div style="color:var(--gray);font-size:13px;text-align:center;padding:12px;">No coach notes yet.</div>';}
+}
+
+// ============================================================
+// COACH PLAYER PROFILE MODAL
+// ============================================================
+function coachOpenPlayer(pid){
+  const p=gP(pid);if(!p)return;
+  const CL_LABELS={1:'Top',2:'Mid',3:'Dev',4:'Court 4',5:'Court 5'};
+  const modal=document.getElementById('coach-player-modal');
+  const overlay=document.getElementById('coach-player-overlay');
+  if(!modal||!overlay)return;
+  // Header
+  document.getElementById('cpm-name').textContent=p.firstName+' '+p.lastName;
+  document.getElementById('cpm-meta').innerHTML=`<span class="class-badge class-${p.classYear}">${p.classYear}</span> <span class="court-badge court-${p.court}">PG ${p.court} — ${CL_LABELS[p.court]||''}</span>`;
+  // Skills sliders
+  const SKILL_KEYS=['serving','passing','setting','hitting','blocking','defense','courtSense','communication'];
+  const SKILL_LABELS={serving:'Serving',passing:'Passing',setting:'Setting',hitting:'Hitting',blocking:'Blocking',defense:'Defense',courtSense:'Court Sense',communication:'Communication'};
+  const sk=profilesData?.skills?.[pid]||profilesData?.players?.[pid]?.skills||{};
+  let skillsHtml='';
+  SKILL_KEYS.forEach(k=>{
+    const v=sk[k]||0;
+    skillsHtml+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;">
+      <span style="font-size:12px;font-weight:600;min-width:105px;">${SKILL_LABELS[k]}</span>
+      <input type="range" id="cpm-skill-${k}" min="0" max="10" step="1" value="${v}" style="flex:1;" oninput="document.getElementById('cpm-sv-${k}').textContent=this.value">
+      <span id="cpm-sv-${k}" style="font-family:'Bebas Neue';font-size:16px;min-width:20px;text-align:right;">${v||'—'}</span>
+    </div>`;
+  });
+  document.getElementById('cpm-skills').innerHTML=skillsHtml;
+  // Date defaults
+  const t=td();
+  const drillDateEl=document.getElementById('cpm-drill-date');
+  const vertDateEl=document.getElementById('cpm-vert-date');
+  const noteDateEl=document.getElementById('cpm-note-date');
+  if(drillDateEl)drillDateEl.value=t;
+  if(vertDateEl)vertDateEl.value=t;
+  if(noteDateEl)noteDateEl.value=t;
+  // Render existing data
+  coachRenderDrillHistory(pid);
+  coachRenderVertHistory(pid);
+  coachRenderNoteHistory(pid);
+  // Store current pid
+  overlay.dataset.pid=pid;
+  overlay.classList.add('active');
+}
+
+function coachClosePlayer(){
+  const overlay=document.getElementById('coach-player-overlay');
+  if(overlay)overlay.classList.remove('active');
+}
+
+function coachSaveSkills(){
+  const overlay=document.getElementById('coach-player-overlay');
+  const pid=overlay?.dataset.pid;if(!pid)return;
+  const SKILL_KEYS=['serving','passing','setting','hitting','blocking','defense','courtSense','communication'];
+  const skills={};
+  SKILL_KEYS.forEach(k=>{skills[k]=parseInt(document.getElementById('cpm-skill-'+k)?.value)||0;});
+  db.ref(SC.dbRoots.profiles+'/skills/'+pid).set(skills);
+  toast('Skills saved!');
+}
+
+function coachAddDrill(){
+  const overlay=document.getElementById('coach-player-overlay');
+  const pid=overlay?.dataset.pid;if(!pid)return;
+  const date=document.getElementById('cpm-drill-date')?.value;
+  const timeVal=parseFloat(document.getElementById('cpm-drill-time')?.value);
+  if(!date||isNaN(timeVal)||timeVal<=0){toast('Enter date and time');return;}
+  const id='sd-'+pid+'-'+Date.now();
+  db.ref(SC.dbRoots.profiles+'/starDrills/'+id).set({id,playerId:pid,player:pid,date,time:timeVal});
+  document.getElementById('cpm-drill-time').value='';
+  toast('Drill time added!');
+  setTimeout(()=>coachRenderDrillHistory(pid),600);
+}
+
+function coachRenderDrillHistory(pid){
+  const el=document.getElementById('cpm-drill-history');if(!el)return;
+  const drills=Object.values(profilesData?.starDrills||{}).filter(d=>d.playerId===pid||d.player===pid).sort((a,b)=>b.date.localeCompare(a.date));
+  if(!drills.length){el.innerHTML='<div style="color:var(--gray);font-size:12px;text-align:center;padding:8px;">No times yet</div>';return;}
+  const best=Math.min(...drills.map(d=>d.time));
+  el.innerHTML=drills.map(d=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(0,0,0,0.05);font-size:13px;">
+    <span style="color:var(--gray);">${fD(d.date)}</span>
+    <span style="font-family:'Bebas Neue';font-size:15px;color:${d.time===best?'var(--green)':'inherit'};">${d.time.toFixed(1)}s${d.time===best?' ★':''}</span>
+  </div>`).join('');
+}
+
+function coachAddVertical(){
+  const overlay=document.getElementById('coach-player-overlay');
+  const pid=overlay?.dataset.pid;if(!pid)return;
+  const date=document.getElementById('cpm-vert-date')?.value;
+  const sr=document.getElementById('cpm-vert-sr')?.value.trim();
+  const bj=document.getElementById('cpm-vert-bj')?.value.trim();
+  const aj=document.getElementById('cpm-vert-aj')?.value.trim();
+  if(!date||(! sr&&!bj&&!aj)){toast('Enter date and at least one measurement');return;}
+  const id='jt-'+pid+'-'+Date.now();
+  db.ref(SC.dbRoots.profiles+'/jumpTests/'+id).set({id,playerId:pid,player:pid,date,standingReach:sr||null,blockJump:bj||null,approachJump:aj||null});
+  ['cpm-vert-sr','cpm-vert-bj','cpm-vert-aj'].forEach(i=>{const el=document.getElementById(i);if(el)el.value='';});
+  toast('Vertical added!');
+  setTimeout(()=>coachRenderVertHistory(pid),600);
+}
+
+function coachRenderVertHistory(pid){
+  const el=document.getElementById('cpm-vert-history');if(!el)return;
+  const verts=Object.values(profilesData?.jumpTests||profilesData?.verticals||{}).filter(v=>v.playerId===pid||v.player===pid).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  if(!verts.length){el.innerHTML='<div style="color:var(--gray);font-size:12px;text-align:center;padding:8px;">No measurements yet</div>';return;}
+  el.innerHTML=verts.map(v=>`<div style="padding:5px 0;border-bottom:1px solid rgba(0,0,0,0.05);font-size:12px;">
+    <div style="color:var(--gray);font-weight:600;margin-bottom:2px;">${fD(v.date)}</div>
+    <div style="display:flex;gap:14px;">
+      ${v.standingReach?`<span>Reach: <strong>${v.standingReach}</strong></span>`:''}
+      ${v.blockJump?`<span>Block: <strong>${v.blockJump}</strong></span>`:''}
+      ${v.approachJump?`<span>Approach: <strong>${v.approachJump}</strong></span>`:''}
+    </div>
+  </div>`).join('');
+}
+
+function coachAddNote(){
+  const overlay=document.getElementById('coach-player-overlay');
+  const pid=overlay?.dataset.pid;if(!pid)return;
+  const date=document.getElementById('cpm-note-date')?.value;
+  const text=document.getElementById('cpm-note-text')?.value.trim();
+  if(!date||!text){toast('Enter date and note');return;}
+  const id='note-'+pid+'-'+Date.now();
+  db.ref(SC.dbRoots.profiles+'/notes/'+id).set({id,playerId:pid,player:pid,date,text,coachName:'Coach'});
+  document.getElementById('cpm-note-text').value='';
+  toast('Note saved!');
+  setTimeout(()=>coachRenderNoteHistory(pid),600);
+}
+
+function coachRenderNoteHistory(pid){
+  const el=document.getElementById('cpm-note-history');if(!el)return;
+  const notes=Object.values(profilesData?.notes||{}).filter(n=>n.playerId===pid||n.player===pid).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  if(!notes.length){el.innerHTML='<div style="color:var(--gray);font-size:12px;text-align:center;padding:8px;">No notes yet</div>';return;}
+  el.innerHTML=notes.map(n=>`<div style="padding:6px 0;border-bottom:1px solid rgba(0,0,0,0.05);">
+    <div style="font-size:11px;color:var(--gray);font-weight:600;">${fD(n.date)}</div>
+    <div style="font-size:13px;margin-top:2px;line-height:1.5;">${n.text}</div>
+  </div>`).join('');
 }
 
 function playerGoalCollapse(gid){
