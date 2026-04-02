@@ -4154,7 +4154,8 @@ function closeDual(){
   }
   if(db)db.ref(DB_ROOT+'/live_scoring').remove();
 
-  const resultMsg='Leon '+leonCourts+'-'+oppCourts+' ('+(dualWin?'WIN':'LOSS')+')';
+  const winner=dualWin?(SC.shortName||'Us'):opponent;
+  const resultMsg=winner+' wins '+leonCourts+'-'+oppCourts;
   if(btn){btn.textContent='\u2713 Saved!';btn.style.background='var(--green)';}
   showResult('\u2713 '+resultMsg+' saved!',false);
 
@@ -4339,8 +4340,9 @@ function switchSidesAlert(total,setNum,interval){
   const div=document.createElement('div');
   div.id='switch-sides-alert';
   div.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#1e40af;color:#fff;text-align:center;padding:14px 16px 12px;box-shadow:0 4px 20px rgba(0,0,0,0.35);animation:switchSlideIn 0.25s ease;cursor:pointer;';
-  div.innerHTML='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:22px;letter-spacing:3px;margin-bottom:2px;">\u21c4 SWITCH SIDES</div>'
-    +'<div style="font-size:12px;font-weight:600;opacity:0.88;">Set '+setNum+' \u00b7 '+total+' total points (switch every '+interval+')</div>';
+  const isTechTO=total===21&&setNum<3;
+  div.innerHTML='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:22px;letter-spacing:3px;margin-bottom:2px;">\u21c4 SWITCH SIDES'+(isTechTO?' + TECH TIMEOUT':'')+' </div>'
+    +'<div style="font-size:12px;font-weight:600;opacity:0.88;">Set '+setNum+' \u00b7 '+total+' total points (switch every '+interval+')'+(isTechTO?' \u00b7 Technical Timeout':'')+'</div>';
   div.onclick=()=>div.remove();
   document.body.appendChild(div);
   setTimeout(()=>{if(div.parentNode)div.remove();},6000);
@@ -4427,6 +4429,9 @@ function saveLiveSet(idx,p1,p2,date,court,subCourt,existingId,opponent,fbNode){
     fbSet(node+'/'+id,{id,date,court:parseInt(court),pair,opponent:opp,sets:[newSet]});
   }
   toast((us>them?'\u2713 Win':'\u2717 Loss')+' — '+us+'-'+them+' saved');
+  // Immediately zero scores so user sees 0-0 right away (no need to hit minus)
+  {const usR=document.getElementById('ls-us-'+idx);const themR=document.getElementById('ls-them-'+idx);
+  if(usR)usR.value='0';if(themR)themR.value='0';}
   if(db)db.ref(DB_ROOT+'/live_scoring/'+idx).remove();
   setTimeout(()=>refreshSingleCourtCard(idx,date,node),600);
 }
