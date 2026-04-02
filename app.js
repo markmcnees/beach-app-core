@@ -699,7 +699,7 @@ function renderStandings(){
     const isLeon=name===SC.myStandingsKey;
     h+=`<tr style="${isLeon?'background:var(--red-bg);font-weight:700;':''}">
       <td style="font-family:'Bebas Neue';font-size:14px;color:var(--gray);">${i+1}</td>
-      <td style="${isLeon?'color:var(--red);':''}font-weight:700;">${name}${isLeon?' 🦁':''}</td>
+      <td style="${isLeon?'color:var(--red);':''}font-weight:700;">${name}${isLeon?' '+(SC.teamEmoji||'🦁'):''}</td>
       <td style="font-family:'Bebas Neue';font-size:16px;color:var(--green);">${s.w}</td>
       <td style="font-family:'Bebas Neue';font-size:16px;color:var(--loss-red);">${s.l}</td>
       <td style="font-family:'Bebas Neue';font-size:14px;">${pct}</td>
@@ -849,7 +849,7 @@ async function fetchMaxPrepsStandings(){
     const isLeon=/leon/i.test(name);
     h+=`<tr style="${isLeon?'background:var(--red-bg);font-weight:700;':''}">
       <td style="font-family:'Bebas Neue';font-size:14px;color:var(--gray);">${i+1}</td>
-      <td style="${isLeon?'color:var(--red);':''}font-weight:700;">${name}${isLeon?' 🦁':''}</td>
+      <td style="${isLeon?'color:var(--red);':''}font-weight:700;">${name}${isLeon?' '+(SC.teamEmoji||'🦁'):''}</td>
       <td style="font-family:'Bebas Neue';font-size:16px;color:var(--green);">${w}</td>
       <td style="font-family:'Bebas Neue';font-size:16px;color:var(--loss-red);">${l}</td>
       <td style="font-family:'Bebas Neue';font-size:14px;">${pct}</td></tr>`;
@@ -1872,7 +1872,7 @@ function renderPlayerStandings(){
     const isLeon=name===SC.myStandingsKey;
     h+=`<tr style="${isLeon?'background:var(--red-bg);font-weight:700;':''}">
       <td style="font-family:'Bebas Neue';font-size:14px;color:var(--gray);">${i+1}</td>
-      <td style="${isLeon?'color:var(--red);':''}font-weight:700;">${name}${isLeon?' 🦁':''}</td>
+      <td style="${isLeon?'color:var(--red);':''}font-weight:700;">${name}${isLeon?' '+(SC.teamEmoji||'🦁'):''}</td>
       <td style="font-family:'Bebas Neue';font-size:16px;color:var(--green);">${s.w}</td>
       <td style="font-family:'Bebas Neue';font-size:16px;color:var(--loss-red);">${s.l}</td>
       <td style="font-family:'Bebas Neue';font-size:14px;">${pct}</td></tr>`;
@@ -2454,7 +2454,7 @@ async function generateAIPairings(){
   const context=document.getElementById('ai-pair-context').value;
   const numRounds=context==='queens'?parseInt(document.getElementById('ai-pair-rounds')?.value||1):1;
   const aiDate=document.getElementById('ai-pair-date')?.value||td();
-  const aiLocation=document.getElementById('ai-pair-location')?.value||'Tom Brown';
+  const aiLocation=document.getElementById('ai-pair-location')?.value||SC.homeVenue||'Tom Brown';
   const aiTime=document.getElementById('ai-pair-time')?.value||'';
   const container=document.getElementById('ai-pairings-result');
   const btn=document.getElementById('ai-pair-btn');
@@ -3362,7 +3362,7 @@ function openAssignEditModal(id){
       <input type="text" class="form-input" id="ae-opp" value="${a.opponent||''}" placeholder="e.g. Chiles" style="padding:8px;font-size:13px;"></div>
     <div class="form-group" style="margin-bottom:0;"><label class="form-label" style="font-size:11px;">Location</label>
       <select class="form-select" id="ae-loc" style="padding:8px;font-size:13px;">
-        <option ${(a.location==='Tom Brown'||!a.location)?'selected':''}>Tom Brown</option>
+        <option ${(a.location===( SC.homeVenue||'Tom Brown')||!a.location)?'selected':''}>${SC.homeVenue||'Tom Brown'}</option>
         <option ${a.location==='Northside'?'selected':''}>Northside</option>
         <option ${a.location==='4 Oaks'?'selected':''}>4 Oaks</option>
         <option ${a.location==='Away'?'selected':''}>Away</option>
@@ -3793,7 +3793,7 @@ function saveAssignEdit(){
   if(!date){toast('Select a date');return;}
   const type=document.getElementById('ae-type')?.value||'gameday';
   const opp=document.getElementById('ae-opp')?.value.trim()||null;
-  const loc=document.getElementById('ae-loc')?.value||'Tom Brown';
+  const loc=document.getElementById('ae-loc')?.value||SC.homeVenue||'Tom Brown';
   const atime=document.getElementById('ae-time')?.value||'';
   const n=window._editAssignCourtCount||0;
   const courts=[];
@@ -5396,7 +5396,7 @@ function renderDuals(){
   const structuredDuals=D.duals||[];
   // For structured duals missing courts data, fill in from gameday-derived version
   const enrichedStructured=structuredDuals.map(d=>{
-    if((d.courts||[]).some(c=>!c.isExhibition&&(c.court||0)<6))return d;
+    if((d.courts||[]).length>0)return d;
     const gdMatch=gdDuals.find(g=>(g.date||'')===(d.date||'')&&(g.opponent||'').toLowerCase()===(d.opponent||'').toLowerCase());
     return gdMatch?{...d,courts:gdMatch.courts||[]}:d;
   });
@@ -6068,7 +6068,7 @@ function editAIPairings(){
   <div class="form-row" style="margin-bottom:8px;">
     <div class="form-group" style="margin-bottom:0;"><label class="form-label" style="font-size:11px;">Location</label>
       <select class="form-input" id="aip-location" style="padding:8px;font-size:13px;">
-        <option${(data.aiLocation==='Tom Brown'||!data.aiLocation)?' selected':''}>Tom Brown</option>
+        <option${(data.aiLocation===(SC.homeVenue||'Tom Brown')||!data.aiLocation)?' selected':''}>${SC.homeVenue||'Tom Brown'}</option>
         <option${data.aiLocation==='Northside'?' selected':''}>Northside</option>
         <option${data.aiLocation==='4 Oaks'?' selected':''}>4 Oaks</option>
         <option${data.aiLocation==='Away'?' selected':''}>Away</option>
@@ -6141,7 +6141,7 @@ function saveAIAssignment(btnEl){
   // Read date/opp/loc/time from edit form if showing, else from generator fields
   const date=(hasForm?document.getElementById('aip-date')?.value:null)||data.aiDate||td();
   const opp=(hasForm?document.getElementById('aip-opp')?.value.trim():null)||null;
-  const loc=(hasForm?document.getElementById('aip-location')?.value:null)||data.aiLocation||'Tom Brown';
+  const loc=(hasForm?document.getElementById('aip-location')?.value:null)||data.aiLocation||SC.homeVenue||'Tom Brown';
   const atime=(hasForm?document.getElementById('aip-time')?.value:null)||data.aiTime||'';
 
   // Helper: deterministic ID prevents duplicates if saved twice
