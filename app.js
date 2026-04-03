@@ -911,7 +911,7 @@ function renderPlayers(){
   });
 
   const tbody=document.querySelector('#players-table tbody');
-  const pNameCell=(p)=>currentRole==='coach'?`<span class="player-name" style="cursor:pointer;text-decoration:underline dotted;color:var(--red);" onclick="coachOpenPlayer('${p.id}')">${p.firstName} ${p.lastName.charAt(0)}.</span>`:`<span class="player-name">${p.firstName} ${p.lastName.charAt(0)}.</span>`;
+  const pNameCell=(p)=>currentRole==='coach'?`<button class="player-name" style="background:none;border:none;padding:0;cursor:pointer;text-decoration:underline dotted;color:var(--red);font-family:inherit;font-size:inherit;font-weight:700;text-align:left;-webkit-tap-highlight-color:transparent;" onclick="coachOpenPlayer('${p.id}')">${p.firstName} ${p.lastName.charAt(0)}.</button>`:`<span class="player-name">${p.firstName} ${p.lastName.charAt(0)}.</span>`;
   if(pType==='queens'){
     tbody.innerHTML=rows.map(r=>{const p=r.p,s=r.s;
       return`<tr><td>${pNameCell(p)}</td>
