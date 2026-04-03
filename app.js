@@ -4368,8 +4368,25 @@ function closeDual(){
   _dualCloseInProgress=true;
   setTimeout(()=>{
     _dualCloseInProgress=false;
+    const today=td();
+    const nextToday=Object.values(D.assignments||{})
+      .filter(x=>x.date===today&&x.type==='gameday'&&x.id!==id&&(x.courts||[]).length>0)
+      .sort((a,b)=>(a.time||'').localeCompare(b.time||''));
     const dualsTab=document.querySelector('.tab[data-tab="duals"]');
     if(dualsTab)dualsTab.click();
+    if(nextToday.length){
+      setTimeout(()=>{
+        const next=nextToday[0];
+        const banner=document.getElementById('next-match-banner');
+        if(banner){
+          banner.style.display='block';
+          banner.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 16px;background:var(--blue-bg);border:2px solid var(--blue);border-radius:10px;margin-bottom:12px;">
+            <span style="font-weight:600;">📋 Next match ready: <strong>${next.opponent||'Opponent'}</strong>${next.time?' at '+next.time:''}</span>
+            <button class="btn btn-blue btn-small" onclick="loadLiveCourts('${next.id}');document.getElementById('next-match-banner').style.display='none';">▶ Load ${next.opponent||'Next Match'}</button>
+          </div>`;
+        }
+      },300);
+    }
   },1800);
 }
 
