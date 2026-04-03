@@ -1289,13 +1289,44 @@ function refreshTab(id){
 }
 
 // ============================================================
+// MODE SWITCHING (Game Day / Manage)
+// ============================================================
+function switchMode(mode){
+  const gdBar=document.getElementById('sub-tabs-gameday');
+  const mgBar=document.getElementById('sub-tabs-manage');
+  const gdBtn=document.getElementById('mode-gameday');
+  const mgBtn=document.getElementById('mode-manage');
+  if(!gdBar||!mgBar)return;
+  if(mode==='gameday'){
+    gdBar.style.display='flex';mgBar.style.display='none';
+    if(gdBtn)gdBtn.classList.add('active');
+    if(mgBtn)mgBtn.classList.remove('active');
+    // Activate first game day tab if none active
+    const activeGD=gdBar.querySelector('.tab.active');
+    if(!activeGD){const first=gdBar.querySelector('.tab');if(first)first.click();}
+    else{refreshTab(activeGD.dataset.tab);}
+  }else{
+    gdBar.style.display='none';mgBar.style.display='flex';
+    if(mgBtn)mgBtn.classList.add('active');
+    if(gdBtn)gdBtn.classList.remove('active');
+    const activeMG=mgBar.querySelector('.tab.active');
+    if(!activeMG){const first=mgBar.querySelector('.tab');if(first)first.click();}
+    else{refreshTab(activeMG.dataset.tab);}
+  }
+}
+
+// ============================================================
 // EVENT LISTENERS
 // ============================================================
 // Tab navigation
 document.querySelectorAll('.tab').forEach(t=>{t.addEventListener('click',()=>{
-  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  // Only deactivate tabs in the same sub-tabs group
+  const parent=t.closest('.sub-tabs')||document.getElementById('tabs');
+  (parent?parent.querySelectorAll('.tab'):document.querySelectorAll('.tab')).forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('active'));
-  t.classList.add('active');document.getElementById('tab-'+t.dataset.tab).classList.add('active');
+  t.classList.add('active');
+  const tc=document.getElementById('tab-'+t.dataset.tab);
+  if(tc)tc.classList.add('active');
   refreshTab(t.dataset.tab);});});
 
 // Players tab filters
