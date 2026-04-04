@@ -1349,11 +1349,11 @@ function toggleSplitQ(){
   document.getElementById('q-split-extra').style.display=on?'block':'none';
   if(on)fillSel(['q-s2a1','q-s2a2','q-s2b1','q-s2b2'],document.getElementById('q-court').value);
 }
-document.getElementById('q-court').addEventListener('change',()=>{
+const _elq_court=document.getElementById('q-court');if(_elq_court)_elq_court.addEventListener('change',()=>{
   fillSel(['q-a1','q-a2','q-b1','q-b2'],document.getElementById('q-court').value);
   updateQSplitToggle();
 });
-document.getElementById('save-queens').addEventListener('click',()=>{
+const _elsave_queens=document.getElementById('save-queens');if(_elsave_queens)_elsave_queens.addEventListener('click',()=>{
   const date=document.getElementById('q-date').value,court=parseInt(document.getElementById('q-court').value);
   const a1=document.getElementById('q-a1').value,a2=document.getElementById('q-a2').value,b1=document.getElementById('q-b1').value,b2=document.getElementById('q-b2').value;
   const s1=parseInt(document.getElementById('q-sa').value),s2=parseInt(document.getElementById('q-sb').value);
@@ -1397,9 +1397,9 @@ function toggleSplitGD(){
 ;
 
 // Scrimmage tab
-document.getElementById('sc-court').addEventListener('change',()=>fillSel(['sc-p1','sc-p2'],document.getElementById('sc-court').value));
-document.getElementById('sc-filter-date').addEventListener('change',()=>renderExtMatches('scrimmage'));
-document.getElementById('save-sc-match').addEventListener('click',()=>{
+const _elsc_court=document.getElementById('sc-court');if(_elsc_court)_elsc_court.addEventListener('change',()=>fillSel(['sc-p1','sc-p2'],document.getElementById('sc-court').value));
+const _elsc_filter_date=document.getElementById('sc-filter-date');if(_elsc_filter_date)_elsc_filter_date.addEventListener('change',()=>renderExtMatches('scrimmage'));
+const _elsave_sc_match=document.getElementById('save-sc-match');if(_elsave_sc_match)_elsave_sc_match.addEventListener('click',()=>{
   const date=document.getElementById('sc-date').value,court=parseInt(document.getElementById('sc-court').value);
   const p1=document.getElementById('sc-p1').value,p2=document.getElementById('sc-p2').value;
   const opp=document.getElementById('sc-opp').value.trim();
@@ -3308,7 +3308,7 @@ function confirmOppLineup(){
 // SCORESHEET SCANNER
 // ============================================================
 const _scanDateEl=document.getElementById('scan-date');if(_scanDateEl)_scanDateEl.value=td();
-document.getElementById('scan-file').addEventListener('change',async function(e){
+const _scanFileEl=document.getElementById('scan-file');if(_scanFileEl)_scanFileEl.addEventListener('change',async function(e){
   const file=e.target.files[0];if(!file)return;
   const preview=document.getElementById('scan-preview');
   const result=document.getElementById('scan-result');
@@ -4067,7 +4067,7 @@ function deleteLiveAssignment(id,btn){
 }
 
 function renderAssignments(){
-  const container=document.getElementById('assignments-list');
+  const container=document.getElementById('assignments-list');if(!container)return;
   const entries=Object.values(D.assignments).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
   if(!entries.length){container.innerHTML='<div style="color:var(--gray);font-size:13px;text-align:center;padding:12px;">No upcoming assignments.</div>';return;}
   const today=td();
@@ -4227,8 +4227,8 @@ function renderPlayerAssignment(pid){
 }
 
 // Init assignment slots when courts dropdown changes
-document.getElementById('assign-courts').addEventListener('change',buildAssignSlots);
-document.getElementById('assign-type').addEventListener('change',function(){
+const _elassign_courts=document.getElementById('assign-courts');if(_elassign_courts)_elassign_courts.addEventListener('change',buildAssignSlots);
+const _elassign_type=document.getElementById('assign-type');if(_elassign_type)_elassign_type.addEventListener('change',function(){
   const showOpp=this.value==='gameday'||this.value==='scrimmage';
   document.getElementById('assign-opp').closest('.form-group').style.display=showOpp?'':'none';
 });
@@ -7100,11 +7100,7 @@ function qsScanSave(count,date){
   renderQueens();
 }
 
-document.getElementById('q-date').value=td();
-document.getElementById('sc-date').value=td();
-document.getElementById('sc-filter-date').value=td();
-document.getElementById('assign-date').value=td();
-document.getElementById('cnote-date').value=td();
+['q-date','sc-date','sc-filter-date','assign-date','cnote-date','dual-scan-date','qs-scan-date'].forEach(function(id){var el=document.getElementById(id);if(el)el.value=td();});
 initFB();
 window.addEventListener('popstate',function(e){
   var ol=document.getElementById('school-fans-overlay');
