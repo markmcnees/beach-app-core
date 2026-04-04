@@ -3307,7 +3307,7 @@ function confirmOppLineup(){
 // ============================================================
 // SCORESHEET SCANNER
 // ============================================================
-document.getElementById('scan-date').value=td();
+const _scanDateEl=document.getElementById('scan-date');if(_scanDateEl)_scanDateEl.value=td();
 document.getElementById('scan-file').addEventListener('change',async function(e){
   const file=e.target.files[0];if(!file)return;
   const preview=document.getElementById('scan-preview');
@@ -3490,7 +3490,8 @@ function confirmScan(){
 // COACH SCHEDULING & ASSIGNMENTS
 // ============================================================
 function buildAssignSlots(){
-  const n=parseInt(document.getElementById('assign-courts').value)||3;
+  const courtsEl=document.getElementById('assign-courts');if(!courtsEl)return;
+  const n=parseInt(courtsEl.value)||3;
   let h='';
   for(let c=1;c<=n;c++){
     h+=`<div style="margin-bottom:10px;background:var(--off-white);border-radius:8px;padding:8px 10px;">
@@ -4339,7 +4340,7 @@ function loadLiveCourts(id){
   }
 }
 
-let _dualCloseInProgress=false;
+var _dualCloseInProgress=false;
 
 function closeDual(){
   const a=window._loadedAssignment||Object.values(D.assignments||{}).find(x=>x.type==='gameday');
