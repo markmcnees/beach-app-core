@@ -1,4 +1,5 @@
 const SC=window.SCHOOL_CONFIG;
+var _dualCloseInProgress=false;
 
 // Proxy helper — auto-injects schoolId into every AI request
 async function aiProxy(payload){
@@ -4340,7 +4341,6 @@ function loadLiveCourts(id){
   }
 }
 
-var _dualCloseInProgress=false;
 
 function closeDual(){
   const a=window._loadedAssignment||Object.values(D.assignments||{}).find(x=>x.type==='gameday');
