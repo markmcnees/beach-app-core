@@ -1279,8 +1279,9 @@ function refreshTab(id){
     case'dashboard':renderDash();break;
     case'players':renderPlayers();break;
     case'queens':renderQueens();break;
-    case'gameday':renderExtMatches('gameday');buildAssignSlots();renderAssignments();renderPastLineups();break;
-    case'duals':renderDuals();if(typeof renderLiveAssignmentList==='function')renderLiveAssignmentList();break;
+    case'gameday':buildAssignSlots();renderAssignments();break;
+    case'duals':if(typeof renderLiveAssignmentList==='function')renderLiveAssignmentList();break;
+    case'dualhistory':renderDuals();renderPastLineups();break;
     case'scrimmage':renderExtMatches('scrimmage');break;
     case'goals':renderCoachGoals();break;
     case'scouts':renderScouts();break;
