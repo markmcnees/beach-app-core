@@ -750,21 +750,16 @@ async function fetchMaxPrepsStandings(){
   for(const proxyUrl of ATTEMPTS){
     try{
       const resp=await fetch(proxyUrl);
+      if(resp.status===405){if(st)st.textContent='(offline)';return;}
       const xStatus=resp.headers.get('X-Proxy-Status')||'?';
       const raw=await resp.text();
-      console.log('[MaxPreps] tried:',proxyUrl.slice(-60));
-      console.log('[MaxPreps] X-Proxy-Status:',xStatus,'| body preview:',raw.slice(0,400));
 
-      if(xStatus==='406'||xStatus==='403'||xStatus==='429'){
-        console.log('[MaxPreps] blocked on this URL, trying next…');
-        continue;
-      }
+      if(xStatus==='406'||xStatus==='403'||xStatus==='429')continue;
 
       // ── Try JSON response (API endpoint) ──
       if(raw.trim().startsWith('{')||raw.trim().startsWith('[')){
         try{
           const json=JSON.parse(raw);
-          console.log('[MaxPreps] got JSON, top keys:',Object.keys(json).join(', '));
           // Walk for standings array
           const find=(obj,depth)=>{
             if(depth>8||!obj||typeof obj!=='object')return null;
@@ -784,16 +779,14 @@ async function fetchMaxPrepsStandings(){
               const l=+(t.losses??t.l??rec.losses??rec.l??0);
               return{name:String(name).trim(),w,l};
             }).filter(t=>t.name&&t.name!=='?');
-            console.log('[MaxPreps] JSON parse got',teams.length,'teams');
             if(teams.length)break;
           }
-        }catch(e){console.warn('[MaxPreps] JSON parse failed:',e.message);}
+        }catch(e){}
       }
 
       // ── Try __NEXT_DATA__ ──
       const ndMatch=raw.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
       if(ndMatch){
-        console.log('[MaxPreps] found __NEXT_DATA__ len=',ndMatch[1].length);
         try{
           const nd=JSON.parse(ndMatch[1]);
           const find=(obj,depth,path)=>{
@@ -801,7 +794,6 @@ async function fetchMaxPrepsStandings(){
             if(Array.isArray(obj)&&obj.length>=2){
               const s=obj[0];
               if(s&&typeof s==='object'&&(s.wins!==undefined||s.losses!==undefined||s.schoolName!==undefined)){
-                console.log('[MaxPreps] standings array at path:',path,'len=',obj.length);
                 return obj;
               }
             }
@@ -817,23 +809,19 @@ async function fetchMaxPrepsStandings(){
               const l=+(t.losses??rec.losses??0);
               return{name:String(name).trim(),w,l};
             }).filter(t=>t.name&&t.name!=='?');
-            console.log('[MaxPreps] __NEXT_DATA__ parse got',teams.length,'teams');
             if(teams.length)break;
           }
-        }catch(e){console.warn('[MaxPreps] __NEXT_DATA__ parse failed:',e.message);}
+        }catch(e){}
       }
 
       // ── Log what we got if nothing parsed ──
       if(!teams||!teams.length){
-        console.log('[MaxPreps] could not extract data from this URL');
-        console.log('[MaxPreps] __NEXT_DATA__ found?',!!ndMatch,'| JSON?',raw.trim().startsWith('{'));
       }
 
-    }catch(e){console.warn('[MaxPreps] fetch error:',e.message);}
+    }catch(e){}
   }
 
   if(!teams||!teams.length){
-    console.warn('[MaxPreps] all attempts failed — falling back to Firebase data');
     if(st)st.textContent='(offline)';
     return;
   }
