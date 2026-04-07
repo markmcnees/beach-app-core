@@ -4204,7 +4204,7 @@ Rules:
           <button class="btn btn-primary btn-small" style="flex:1;" onclick="confirmOppLineup()">✓ Save to Scouts + Lineup</button>
           <button class="btn btn-secondary btn-small" onclick="document.getElementById('ca-result').innerHTML='';document.getElementById('ca-preview').innerHTML='';">✕ Cancel</button></div>`;
         result.innerHTML=h;
-        window._caData={starters,alternates,count:starters.length,altCount:alternates.length,schoolName,isOpponent:true};
+        window._caData={starters,alternates,count:starters.length,altCount:alternates.length,schoolName,isOpponent:true,source:'scanner'};
       }else{
         // Leon's lineup
         const sorted=[...D.players].sort((a,b)=>a.court-b.court||a.lastName.localeCompare(b.lastName));
@@ -4339,12 +4339,80 @@ function renderManualOppEntry(){
     const starters=[1,2,3,4,5].map(ct=>({court:ct,p1:{first:document.getElementById('ca-opp-'+(ct-1)+'-p1f')?.value||'',last:document.getElementById('ca-opp-'+(ct-1)+'-p1l')?.value||'',jersey:document.getElementById('ca-opp-'+(ct-1)+'-p1j')?.value||''},p2:{first:document.getElementById('ca-opp-'+(ct-1)+'-p2f')?.value||'',last:document.getElementById('ca-opp-'+(ct-1)+'-p2l')?.value||'',jersey:document.getElementById('ca-opp-'+(ct-1)+'-p2j')?.value||''}}));
     const alts=[0,1,2,3,4,5].map(i=>({first:document.getElementById('ca-alt-'+i+'-f')?.value||'',last:document.getElementById('ca-alt-'+i+'-l')?.value||'',jersey:document.getElementById('ca-alt-'+i+'-j')?.value||''})).filter(a=>a.first||a.last);
     const schoolName=document.getElementById('ca-opp')?.value.trim()||'Opponent';
-    window._caData={starters,alternates:alts,count:5,altCount:alts.length,schoolName,isOpponent:true};
+    window._caData={starters,alternates:alts,count:5,altCount:alts.length,schoolName,isOpponent:true,source:'manual'};
     confirmOppLineup();
   })()">&#x2713; Save Manual Entry</button>`;
   h+='</div>';
   return h;
 }
+
+// ── OPPONENT INTEL — shared cross-school scouting node ──────────────────────
+// Normalizes a school name to a stable Firebase key.
+// "Chiles HS", "W.T. Chiles", "Chiles High School" → "chiles"
+// "Lincoln HS" → "lincoln_hs", "Rickards High" → "rickards"
+function normalizeOpponentId(name){
+  if(!name)return'unknown';
+  return name
+    .toLowerCase()
+    .replace(/\bw\.?t\.?\b/g,'wt')           // W.T. → wt
+    .replace(/\bhigh school\b/g,'')           // remove "high school"
+    .replace(/\bhigh\b/g,'')                  // remove "high"
+    .replace(/\bh\.?s\.?\b/g,'hs')            // H.S. / HS → hs
+    .replace(/[^a-z0-9]+/g,'_')              // non-alphanum → underscore
+    .replace(/^_+|_+$/g,'')                  // trim leading/trailing underscores
+    .replace(/_+/g,'_')                      // collapse repeated underscores
+    ||'unknown';
+}
+
+// Writes one appearance record to the shared top-level opponent_intel node.
+// Uses db.ref() directly (not fbSet) so it is NOT scoped to DB_ROOT.
+// Called from confirmOppLineup() after the school-scoped opponents/ write.
+function writeOpponentIntel(date, oppName, oppCourts, alternates, source){
+  if(!db||!oppName||!date)return;
+  const opponentId=normalizeOpponentId(oppName);
+  const reportingSchool=MY_SCHOOL_KEY.replace('_matches',''); // e.g. 'leon_queens'
+  const appearanceId=date.replace(/-/g,'')+'_'+reportingSchool; // e.g. '20250315_leon_queens'
+
+  // Build pairs map keyed by court number
+  const pairs={};
+  (oppCourts||[]).forEach(function(c){
+    if(c.court)pairs[c.court]={p1:c.player1||'',p2:c.player2||''};
+  });
+
+  // Build alternates array (first names only for privacy)
+  const altNames=(alternates||[])
+    .map(function(a){return(a.firstName||a.first||'').trim();})
+    .filter(Boolean);
+
+  // Confidence: scanner reads can have OCR errors; manual is coach-verified
+  const confidence=source==='scanner'?'high':'medium';
+
+  // Write appearance record (fire-and-forget, same pattern as fbSet)
+  db.ref('opponent_intel/'+opponentId+'/appearances/'+appearanceId).set({
+    date:date,
+    reportingSchool:reportingSchool,
+    source:source||'manual',
+    pairs:pairs,
+    alternates:altNames,
+    confidence:confidence,
+    ts:new Date().toISOString()
+  });
+
+  // Upsert meta (lastSeen and seenBy always update; displayName only if not set)
+  var metaRef=db.ref('opponent_intel/'+opponentId+'/meta');
+  metaRef.once('value',function(snap){
+    var existing=snap.val()||{};
+    var seenBy=existing.seenBy||{};
+    seenBy[reportingSchool]=true;
+    metaRef.set({
+      displayName:existing.displayName||oppName,
+      firstSeen:existing.firstSeen||date,
+      lastSeen:date,
+      seenBy:seenBy
+    });
+  });
+}
+// ── END OPPONENT INTEL ────────────────────────────────────────────────────────
 
 function confirmOppLineup(){
   const{count,altCount,starters,alternates,schoolName}=window._caData||{};
@@ -4433,6 +4501,10 @@ function confirmOppLineup(){
     const id=gi('asgn');
     fbSet('assignments/'+id,{id,date,type:'gameday',opponent:opp,courts:[],oppLineup:oppCourts,notes:null,createdAt:new Date().toISOString()});
   }
+
+
+  // Write to shared cross-school opponent intel node
+  writeOpponentIntel(date,opp,oppCourts,(window._caData&&window._caData.alternates)||[],window._caData&&window._caData.source||'manual');
 
   toast('Saved '+oppCourts.length+' courts + '+(altC)+' alternates to Scouts!');
   document.getElementById('ca-result').innerHTML='';
