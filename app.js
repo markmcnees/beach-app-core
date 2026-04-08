@@ -6918,6 +6918,7 @@ function renderDuals(){
         h+=`<div class="dual-court-row" style="flex-wrap:wrap;align-items:flex-start;">
           <span class="court-badge court-${c.court}" style="min-width:28px;text-align:center;margin-top:3px;">${c.court}</span>
           <span style="flex:1;font-weight:600;font-size:12px;padding-top:3px;">${pair}</span>
+          ${mid?`<button onclick="dhEditPairModal('${mid}')" style="font-size:10px;padding:1px 5px;border:1px solid var(--gray-lighter);border-radius:3px;background:var(--white);color:var(--gray);cursor:pointer;" title="Edit pair/court">✎</button>`:''}
           <span style="font-family:'Bebas Neue';font-size:14px;color:${cWin?'var(--green)':'var(--loss-red)'};">${sw}-${sl}</span>
           <div style="width:100%;padding-left:36px;margin-top:4px;">${setsHtml}${mid?`<button onclick="dhAddSet('${mid}')" style="font-size:10px;padding:1px 7px;border:1px dashed var(--gray-lighter);border-radius:3px;background:none;color:var(--gray);cursor:pointer;margin-top:2px;">+ Add Set</button>`:''}</div>
         </div>`;
@@ -6932,17 +6933,19 @@ function renderDuals(){
         h+=`<div class="dual-court-row" style="opacity:0.65;">
           <span class="court-badge court-${c.court}" style="min-width:28px;text-align:center;">${c.court}</span>
           <span style="flex:1;font-size:12px;">${pair}</span>
+          ${c.id?`<button onclick="dhEditPairModal('${c.id}')" style="font-size:10px;padding:1px 5px;border:1px solid var(--gray-lighter);border-radius:3px;background:var(--white);color:var(--gray);cursor:pointer;" title="Edit pair/court">✎</button>`:''}
           <span style="font-size:10px;color:var(--purple);font-weight:700;">Exhib</span>
           <span style="font-size:11px;color:var(--gray);min-width:80px;text-align:right;">${setsStr}</span>
         </div>`;
       });
     }
-    // Copy lineup button
+    // Add Pair + Copy lineup buttons
     const allCourts=(d.courts||[]).sort((a,b)=>(a.court||0)-(b.court||0));
-    if(allCourts.length){
-      const dIdx=duals.indexOf(d);
-      h+=`<button class="btn btn-small" style="width:100%;margin-top:10px;background:var(--charcoal);color:#fff;border:none;" onclick="copyDualLineup(${dIdx})">📋 Copy Lineup</button>`;
-    }
+    const _safeOpp=(d.opponent||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    h+=`<div style="display:flex;gap:6px;margin-top:10px;">
+      <button class="btn btn-small" style="flex:1;background:var(--green);color:#fff;border:none;font-size:11px;" onclick="dhAddPairModal('${d.date||''}','${_safeOpp}')">+ Add Pair</button>
+      ${allCourts.length?`<button class="btn btn-small" style="flex:2;background:var(--charcoal);color:#fff;border:none;font-size:11px;" onclick="copyDualLineup(${duals.indexOf(d)})">📋 Copy Lineup</button>`:''}
+    </div>`;
     h+='</div>';
   });
   container.innerHTML=h;
@@ -7235,6 +7238,95 @@ function dhAddSet(matchId){
   const m=D.gamedays.find(x=>x.id===matchId);if(!m)return;
   // Open the existing Add Set modal
   openAddSet(matchId,'gameday');
+}
+
+// ── DUAL HISTORY: EDIT PAIR / COURT ─────────────────────────
+function dhEditPairModal(matchId){
+  const m=D.gamedays.find(x=>x.id===matchId);if(!m){toast('Match not found');return;}
+  const sorted=[...D.players].sort((a,b)=>(a.court||99)-(b.court||99)||a.lastName.localeCompare(b.lastName));
+  const sel=(selected)=>sorted.map(p=>`<option value="${p.id}"${p.id===selected?' selected':''}>${p.firstName} ${p.lastName}</option>`).join('');
+  const p1=(m.pair||[])[0]||'';
+  const p2=(m.pair||[])[1]||'';
+  document.getElementById('edit-modal-body').innerHTML=`
+    <div style="margin-bottom:10px;">
+      <label style="font-size:11px;font-weight:700;color:var(--gray);display:block;margin-bottom:4px;">COURT NUMBER</label>
+      <input type="number" id="dh-pair-court" class="form-input" value="${m.court||1}" min="1" max="10" style="width:80px;padding:8px;">
+    </div>
+    <div style="margin-bottom:10px;">
+      <label style="font-size:11px;font-weight:700;color:var(--gray);display:block;margin-bottom:4px;">PLAYER 1</label>
+      <select id="dh-pair-p1" class="form-select"><option value="">-- Select --</option>${sel(p1)}</select>
+    </div>
+    <div style="margin-bottom:10px;">
+      <label style="font-size:11px;font-weight:700;color:var(--gray);display:block;margin-bottom:4px;">PLAYER 2</label>
+      <select id="dh-pair-p2" class="form-select"><option value="">-- Select --</option>${sel(p2)}</select>
+    </div>
+    <div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+        <input type="checkbox" id="dh-pair-exhib"${m.isExhibition?' checked':''} style="width:16px;height:16px;"> Exhibition match
+      </label>
+    </div>`;
+  document.querySelector('#edit-modal .modal-title').innerHTML='Edit Pair / Court <button class="modal-close" onclick="closeEdit()">&#x2715;</button>';
+  document.querySelector('#edit-modal .modal-title').style.color='var(--blue)';
+  document.getElementById('edit-save').textContent='Save Changes';
+  document.getElementById('edit-save').onclick=function(){dhSavePair(matchId);};
+  document.getElementById('edit-modal').classList.add('active');
+}
+
+function dhSavePair(matchId){
+  const m=D.gamedays.find(x=>x.id===matchId);if(!m)return;
+  const court=parseInt(document.getElementById('dh-pair-court')?.value);
+  const p1=document.getElementById('dh-pair-p1')?.value;
+  const p2=document.getElementById('dh-pair-p2')?.value;
+  const exhib=document.getElementById('dh-pair-exhib')?.checked||false;
+  if(!court||!p1||!p2){toast('Court and both players required');return;}
+  if(p1===p2){toast('Players must be different');return;}
+  fbSet('gamedays/'+matchId+'/court',court);
+  fbSet('gamedays/'+matchId+'/pair',[p1,p2]);
+  fbSet('gamedays/'+matchId+'/isExhibition',exhib);
+  toast('Pair updated!');
+  closeEdit();
+}
+
+// ── DUAL HISTORY: ADD NEW PAIR TO EXISTING DUAL ─────────────
+function dhAddPairModal(date,opponent){
+  const sorted=[...D.players].sort((a,b)=>(a.court||99)-(b.court||99)||a.lastName.localeCompare(b.lastName));
+  const opts=sorted.map(p=>`<option value="${p.id}">${p.firstName} ${p.lastName}</option>`).join('');
+  document.getElementById('edit-modal-body').innerHTML=`
+    <div style="margin-bottom:10px;">
+      <label style="font-size:11px;font-weight:700;color:var(--gray);display:block;margin-bottom:4px;">COURT NUMBER</label>
+      <input type="number" id="dh-new-court" class="form-input" value="1" min="1" max="10" style="width:80px;padding:8px;">
+    </div>
+    <div style="margin-bottom:10px;">
+      <label style="font-size:11px;font-weight:700;color:var(--gray);display:block;margin-bottom:4px;">PLAYER 1</label>
+      <select id="dh-new-p1" class="form-select"><option value="">-- Select --</option>${opts}</select>
+    </div>
+    <div style="margin-bottom:10px;">
+      <label style="font-size:11px;font-weight:700;color:var(--gray);display:block;margin-bottom:4px;">PLAYER 2</label>
+      <select id="dh-new-p2" class="form-select"><option value="">-- Select --</option>${opts}</select>
+    </div>
+    <div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+        <input type="checkbox" id="dh-new-exhib" style="width:16px;height:16px;"> Exhibition match
+      </label>
+    </div>`;
+  document.querySelector('#edit-modal .modal-title').innerHTML='Add Pair to Dual <button class="modal-close" onclick="closeEdit()">&#x2715;</button>';
+  document.querySelector('#edit-modal .modal-title').style.color='var(--green)';
+  document.getElementById('edit-save').textContent='Add Pair';
+  document.getElementById('edit-save').onclick=function(){dhSaveNewPair(date,opponent);};
+  document.getElementById('edit-modal').classList.add('active');
+}
+
+function dhSaveNewPair(date,opponent){
+  const court=parseInt(document.getElementById('dh-new-court')?.value);
+  const p1=document.getElementById('dh-new-p1')?.value;
+  const p2=document.getElementById('dh-new-p2')?.value;
+  const exhib=document.getElementById('dh-new-exhib')?.checked||false;
+  if(!court||!p1||!p2){toast('Court and both players required');return;}
+  if(p1===p2){toast('Players must be different');return;}
+  const id='gd_'+Date.now();
+  fbSet('gamedays/'+id,{id,date,court,pair:[p1,p2],opponent,isExhibition:exhib,sets:[],addedByCoach:true,createdAt:td()});
+  toast('Pair added!');
+  closeEdit();
 }
 
 
