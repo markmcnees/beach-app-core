@@ -1208,8 +1208,9 @@ function listenSharedLineup(date, oppName){
     const val=snap.val()||{};
     const oppSubKey=getOppLineupSubKey(oppName);
     const mySubKey=getMyLineupSubKey();
-    // If opponent has released their lineup, auto-populate into the loaded assignment
-    if(oppSubKey&&val[oppSubKey]&&val[oppSubKey].released){
+    // Only reveal opponent lineup once BOTH schools have posted (released)
+    const bothReleased=oppSubKey&&val[oppSubKey]&&val[oppSubKey].released&&val[mySubKey]&&val[mySubKey].released;
+    if(bothReleased){
       const oppCourts=val[oppSubKey].courts||{};
       const a=window._loadedAssignment;
       if(a){
@@ -1221,11 +1222,21 @@ function listenSharedLineup(date, oppName){
           jersey1:c.j1||'',
           jersey2:c.j2||''
         }));
-        a.oppLineup=oppLineup;
-        // Re-render live scoring to show opponent names
+        if(!a.oppLineup||JSON.stringify(a.oppLineup)!==JSON.stringify(oppLineup)){
+          a.oppLineup=oppLineup;
+          // Re-render live scoring to show opponent names
+          const container=document.getElementById('live-courts-container');
+          if(container&&a.date)renderLiveScoring(a.date,a);
+          toast('Both lineups posted - opponent lineup now visible ✓');
+        }
+      }
+    } else {
+      // Clear opponent lineup from UI if mutual reveal not met
+      const a=window._loadedAssignment;
+      if(a&&a.oppLineup){
+        a.oppLineup=null;
         const container=document.getElementById('live-courts-container');
         if(container&&a.date)renderLiveScoring(a.date,a);
-        toast('Opponent lineup received from '+oppName+' ✓');
       }
     }
     // Store draft status for UI
@@ -1249,6 +1260,7 @@ function renderSharedLineupPanel(date, oppName, sharedVal){
   const oppData=oppSubKey?sharedVal[oppSubKey]:null;
   const myReleased=myData&&myData.released;
   const oppReleased=oppData&&oppData.released;
+  const bothReleased=myReleased&&oppReleased;
 
   let h=`<div style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:1.5px;color:var(--blue);margin-bottom:10px;">📋 SHARED LINEUP — vs ${oppName}</div>`;
 
@@ -1262,19 +1274,23 @@ function renderSharedLineupPanel(date, oppName, sharedVal){
     <button class="btn btn-primary btn-small" onclick="saveLineupDraft('${date}','${oppName}')">↺ Update Draft</button>
     <button class="btn btn-small" style="background:var(--green);color:#fff;border:none;" onclick="releaseLineup('${date}','${oppName}')">🚀 Release to ${oppName}</button>`;
   } else {
-    h+=`<span style="font-size:12px;color:var(--green);font-weight:700;">✓ Released to ${oppName}</span>
+    h+=`<span style="font-size:12px;color:var(--green);font-weight:700;">✓ Lineup posted</span>
     <button class="btn btn-secondary btn-small" onclick="saveLineupDraft('${date}','${oppName}')">↺ Update</button>`;
   }
   h+=`</div>`;
 
-  // Opponent status
+  // Mutual reveal status indicator
   if(oppSubKey){
-    if(!oppData){
-      h+=`<div style="font-size:12px;color:var(--gray);padding:6px 0;">⏳ Waiting for ${oppName} to post their lineup...</div>`;
-    } else if(!oppReleased){
-      h+=`<div style="font-size:12px;color:var(--gold);padding:6px 0;">⏳ ${oppName} has a draft saved but hasn't released yet.</div>`;
+    if(bothReleased){
+      h+=`<div style="font-size:12px;color:var(--green);padding:6px 10px;margin-bottom:6px;background:#ecfdf5;border-radius:6px;font-weight:700;">✓ Both lineups posted - opponent lineup available</div>`;
+    } else if(myReleased&&!oppReleased){
+      h+=`<div style="font-size:12px;color:var(--gold);padding:6px 10px;margin-bottom:6px;background:#fffbeb;border-radius:6px;font-weight:700;">⏳ Lineup posted - waiting for ${oppName}</div>`;
+    } else if(!myReleased&&oppReleased){
+      h+=`<div style="font-size:12px;color:var(--gold);padding:6px 10px;margin-bottom:6px;background:#fffbeb;border-radius:6px;font-weight:700;">⏳ ${oppName} has posted - post yours to reveal both lineups</div>`;
+    } else if(oppData&&!oppReleased){
+      h+=`<div style="font-size:12px;color:var(--gray);padding:6px 0;">⏳ ${oppName} has a draft saved but hasn't released yet.</div>`;
     } else {
-      h+=`<div style="font-size:12px;color:var(--green);padding:6px 0;">✓ ${oppName}'s lineup is live — auto-populated into courts above.</div>`;
+      h+=`<div style="font-size:12px;color:var(--gray);padding:6px 0;">⏳ Waiting for ${oppName} to post their lineup...</div>`;
     }
   }
 
@@ -1402,6 +1418,7 @@ function renderDualSheet(date, oppName, sharedVal){
   const oppData=oppSubKey?(sharedVal||{})[oppSubKey]:null;
   const myReleased=myData&&myData.released;
   const oppReleased=oppData&&oppData.released;
+  const bothReleased=myReleased&&oppReleased;
   const myCourts=myData?myData.courts:{};
   const oppCourts=oppData?oppData.courts:{};
 
@@ -1411,13 +1428,15 @@ function renderDualSheet(date, oppName, sharedVal){
   </div>`;
 
   // Header row
+  const myStatusTag=myReleased?'<span style="color:var(--green);font-size:10px;"> ✓ POSTED</span>':'';
+  const oppStatusTag=bothReleased?'<span style="color:var(--green);font-size:10px;"> ✓ POSTED</span>':(oppReleased?'<span style="color:var(--gold);font-size:10px;"> 🔒 POSTED</span>':'');
   h+=`<div style="display:grid;grid-template-columns:40px 1fr 1fr;gap:4px;margin-bottom:4px;">
     <div></div>
     <div style="text-align:center;font-family:'Bebas Neue';font-size:13px;color:var(--red);letter-spacing:1px;padding:6px;background:var(--red-bg);border-radius:6px;">
-      ${SC.schoolName}${myReleased?'<span style="color:var(--green);font-size:10px;"> ✓ PUBLIC</span>':''}
+      ${SC.schoolName}${myStatusTag}
     </div>
     <div style="text-align:center;font-family:'Bebas Neue';font-size:13px;color:var(--gray);letter-spacing:1px;padding:6px;background:var(--gray-lighter);border-radius:6px;">
-      ${oppName||'Opponent'}${oppReleased?'<span style="color:var(--green);font-size:10px;"> ✓ PUBLIC</span>':''}
+      ${oppName||'Opponent'}${oppStatusTag}
     </div>
   </div>`;
 
@@ -1435,11 +1454,13 @@ function renderDualSheet(date, oppName, sharedVal){
       h+=`<div style="font-size:11px;color:var(--gray);font-style:italic;">Not set</div>`;
     }
     h+=`</div><div style="background:var(--off-white);border-radius:6px;padding:8px;min-height:44px;">`;
-    if(oppC&&(oppC.p1||oppC.p2)){
+    if(bothReleased&&oppC&&(oppC.p1||oppC.p2)){
       h+=`<div style="font-size:12px;font-weight:700;">${oppC.p1||'—'}</div>`;
       h+=`<div style="font-size:12px;font-weight:700;">${oppC.p2||'—'}</div>`;
     } else if(!oppSubKey){
       h+=`<button class="btn btn-secondary btn-small" style="font-size:10px;" onclick="triggerOppLineupPhoto()">📸 Scan Form</button>`;
+    } else if(oppReleased&&!bothReleased){
+      h+=`<div style="font-size:11px;color:var(--gold);font-style:italic;">🔒 Hidden until you post</div>`;
     } else {
       h+=`<div style="font-size:11px;color:var(--gray);font-style:italic;">Waiting...</div>`;
     }
@@ -6859,9 +6880,8 @@ function renderDuals(){
   const structuredDuals=D.duals||[];
   // For structured duals missing courts data, fill in from gameday-derived version
   const enrichedStructured=structuredDuals.map(d=>{
-    if((d.courts||[]).length>0)return d;
-    const gdMatch=gdDuals.find(g=>(g.date||'')===(d.date||'')&&(g.opponent||'').toLowerCase()===(d.opponent||'').toLowerCase());
-    return gdMatch?{...d,courts:gdMatch.courts||[]}:d;
+    const base=(d.courts||[]).length>0?d:(()=>{const gdMatch=gdDuals.find(g=>(g.date||'')===(d.date||'')&&(g.opponent||'').toLowerCase()===(d.opponent||'').toLowerCase());return gdMatch?{...d,courts:gdMatch.courts||[]}:d;})();
+    return {...base,_isStructured:true};
   });
   const structuredKeys=new Set(enrichedStructured.map(d=>(d.date||'')+'||'+(d.opponent||'').toLowerCase()));
   const merged=[
@@ -6881,6 +6901,7 @@ function renderDuals(){
       <div style="position:absolute;top:8px;right:8px;display:flex;gap:4px;">
         <button class="match-action-btn" onclick="dhScanOppModal('${d.date||''}','${(d.opponent||'').replace(/'/g,"\\'")}','${d.location||'home'}')" title="Scan opponent lineup">📷</button>
         <button class="match-action-btn edit-btn" onclick="openDualEditModal('${d.id}','${d.opponent||''}','${d.date||''}','${d.location||'home'}')" title="Edit">&#x270E;</button>
+        ${d._isStructured&&currentRole==='coach'?`<button class="match-action-btn" onclick="reopenDual('${d.id}')" title="Reopen dual">&#x21BA;</button>`:''}
         <button class="match-action-btn" onclick="deleteDual('${d.id}')" title="Delete">&#x2715;</button>
       </div>
       <div class="dual-header">
@@ -7028,6 +7049,14 @@ function saveDualEdit(id){
 function deleteDual(id){
   if(_delDualArmed[id]){clearTimeout(_delDualArmed[id]);delete _delDualArmed[id];fbRemove('duals/'+id);toast('Dual deleted');}
   else{_delDualArmed[id]=setTimeout(()=>{delete _delDualArmed[id];},3000);toast('Tap again to confirm delete');}
+}
+function reopenDual(id){
+  const pin=prompt('Enter Coach PIN to reopen this dual:');
+  if(!pin)return;
+  if(pin!==(window._coachPin||COACH_PIN)){toast('Incorrect PIN');return;}
+  fbRemove('duals/'+id);
+  toast('Dual reopened');
+  renderDuals();
 }
 
 // ── DUAL SCORESHEET UPLOAD ──────────────────────────────────
