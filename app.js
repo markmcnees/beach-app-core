@@ -6879,6 +6879,7 @@ function renderDuals(){
     const exhib=(d.courts||[]).filter(c=>c.isExhibition).sort((a,b)=>(a.court||0)-(b.court||0));
     h+=`<div class="dual-card ${win?'win':loss?'loss':''}">
       <div style="position:absolute;top:8px;right:8px;display:flex;gap:4px;">
+        <button class="match-action-btn" onclick="dhScanOppModal('${d.date||''}','${(d.opponent||'').replace(/'/g,"\\'")}','${d.location||'home'}')" title="Scan opponent lineup">📷</button>
         <button class="match-action-btn edit-btn" onclick="openDualEditModal('${d.id}','${d.opponent||''}','${d.date||''}','${d.location||'home'}')" title="Edit">&#x270E;</button>
         <button class="match-action-btn" onclick="deleteDual('${d.id}')" title="Delete">&#x2715;</button>
       </div>
@@ -7326,6 +7327,172 @@ function dhSaveNewPair(date,opponent){
   const id='gd_'+Date.now();
   fbSet('gamedays/'+id,{id,date,court,pair:[p1,p2],opponent,isExhibition:exhib,sets:[],addedByCoach:true,createdAt:td()});
   toast('Pair added!');
+  closeEdit();
+}
+
+// ── DUAL HISTORY: RETROACTIVE OPPONENT LINEUP SCAN ──────────
+function dhScanOppModal(date,opp){
+  const safeOpp=(opp||'').replace(/"/g,'&quot;');
+  document.getElementById('edit-modal-body').innerHTML=`
+    <div style="margin-bottom:10px;display:flex;gap:10px;">
+      <div style="flex:1;">
+        <label style="font-size:11px;font-weight:700;color:var(--gray);display:block;margin-bottom:4px;">DATE</label>
+        <input type="date" id="dhso-date" class="form-input" value="${date||td()}" style="padding:8px;">
+      </div>
+      <div style="flex:2;">
+        <label style="font-size:11px;font-weight:700;color:var(--gray);display:block;margin-bottom:4px;">OPPONENT</label>
+        <input type="text" id="dhso-opp" class="form-input" value="${safeOpp}" placeholder="e.g. Chiles" style="font-size:14px;">
+      </div>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="font-size:11px;font-weight:700;color:var(--gray);display:block;margin-bottom:6px;">LINEUP PHOTO (FHSAA form)</label>
+      <input type="file" id="dhso-file" accept="image/*" capture="environment" style="font-size:13px;width:100%;">
+    </div>
+    <div id="dhso-preview"></div>
+    <div id="dhso-result"></div>`;
+  document.querySelector('#edit-modal .modal-title').innerHTML='📷 Scan Opponent Lineup <button class="modal-close" onclick="closeEdit()">&#x2715;</button>';
+  document.querySelector('#edit-modal .modal-title').style.color='var(--charcoal)';
+  // Hide the generic Save button — we'll inject our own inside dhso-result
+  const saveBtn=document.getElementById('edit-save');
+  if(saveBtn)saveBtn.style.display='none';
+  document.getElementById('edit-modal').classList.add('active');
+  // Wire the file input after the modal is in the DOM
+  setTimeout(()=>{
+    const fileEl=document.getElementById('dhso-file');
+    if(!fileEl)return;
+    fileEl.addEventListener('change',async function(e){
+      const file=e.target.files[0];if(!file)return;
+      const preview=document.getElementById('dhso-preview');
+      const result=document.getElementById('dhso-result');
+      const reader=new FileReader();
+      reader.onload=async function(ev){
+        const base64=ev.target.result.split(',')[1];
+        const mediaType=file.type||'image/jpeg';
+        preview.innerHTML=`<img src="${ev.target.result}" style="max-width:100%;border-radius:8px;border:2px solid var(--gray-lighter);margin-bottom:10px;">`;
+        result.innerHTML='<div class="ai-loading"><div class="spinner"></div><div style="margin-top:8px;">Reading FHSAA lineup form...</div></div>';
+        const promptText=`TASK: Extract data from an FHSAA Beach Volleyball Dual Match Lineup Form image.\n\nOUTPUT: Return ONLY a single JSON object. No explanation, no markdown, no code fences. Just the raw JSON.\n\nJSON FORMAT:\n{"school":"Lincoln HS","starters":[{"court":1,"p1":{"first":"Kenzie","last":"Poppell","jersey":"4"},"p2":{"first":"Londyn","last":"Dickey","jersey":"11"}}],"alternates":[{"first":"Jenny","last":"Heimbach","jersey":"7"}]}\n\nREADING THE FORM:\n- SCHOOL field at top = school name\n- Each row No.1 through No.5 = one court\n- Each row has TWO players: left-side = p1, right-side = p2\n- Columns per player: First Name, Last Name, Jersey No.\n- ALTERNATES table at bottom = alternates array\n- jersey field: jersey number as string or "" if not visible\n\nReturn the JSON object only. Start your response with { and end with }`;
+        try{
+          const response=await fetch('https://beach-volleyball-ai.markmcnees-479.workers.dev',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,
+              messages:[{role:'user',content:[
+                {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
+                {type:'text',text:promptText}
+              ]}]})
+          });
+          const data=await response.json();
+          const text=data.content?.map(c=>c.text||'').join('')||'';
+          let parsed;
+          (function(){
+            let clean=text.replace(/```json|```/gi,'').trim();
+            try{parsed=JSON.parse(clean);return;}catch(e){}
+            const ob=clean.indexOf('{');const oe=clean.lastIndexOf('}');
+            if(ob>=0&&oe>ob){try{parsed=JSON.parse(clean.slice(ob,oe+1));return;}catch(e){}}
+          })();
+          if(!parsed){result.innerHTML=`<div style="color:var(--loss-red);font-size:13px;padding:10px;background:var(--off-white);border-radius:8px;">Couldn't parse the image. Try a flatter, better-lit photo.<br><small style="color:var(--gray);">${text.slice(0,200)}</small></div>`;return;}
+          const starters=parsed.starters||[];
+          const alternates=parsed.alternates||[];
+          let h=`<div style="font-family:'Bebas Neue';font-size:13px;letter-spacing:1px;color:var(--green);margin-bottom:8px;">✓ Found ${starters.length} court(s) — edit if needed</div>`;
+          starters.forEach((m,i)=>{
+            const p1=m.p1||{first:'',last:'',jersey:''};
+            const p2=m.p2||{first:'',last:'',jersey:''};
+            h+=`<div style="padding:10px;background:var(--off-white);border-radius:8px;margin-bottom:8px;">
+              <div style="font-family:'Bebas Neue';font-size:12px;letter-spacing:1px;margin-bottom:8px;">COURT ${m.court}</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <div><div style="font-size:10px;font-weight:700;color:var(--gray);margin-bottom:4px;">PLAYER 1</div>
+                  <input type="text" id="dhso-${i}-p1f" value="${p1.first||''}" placeholder="First" style="width:100%;padding:5px;border:1px solid var(--gray-lighter);border-radius:4px;font-size:12px;margin-bottom:4px;">
+                  <input type="text" id="dhso-${i}-p1l" value="${p1.last||''}" placeholder="Last" style="width:100%;padding:5px;border:1px solid var(--gray-lighter);border-radius:4px;font-size:12px;margin-bottom:4px;">
+                  <input type="text" id="dhso-${i}-p1j" value="${p1.jersey||''}" placeholder="#" style="width:60px;padding:5px;border:1px solid var(--gray-lighter);border-radius:4px;font-size:12px;">
+                </div>
+                <div><div style="font-size:10px;font-weight:700;color:var(--gray);margin-bottom:4px;">PLAYER 2</div>
+                  <input type="text" id="dhso-${i}-p2f" value="${p2.first||''}" placeholder="First" style="width:100%;padding:5px;border:1px solid var(--gray-lighter);border-radius:4px;font-size:12px;margin-bottom:4px;">
+                  <input type="text" id="dhso-${i}-p2l" value="${p2.last||''}" placeholder="Last" style="width:100%;padding:5px;border:1px solid var(--gray-lighter);border-radius:4px;font-size:12px;margin-bottom:4px;">
+                  <input type="text" id="dhso-${i}-p2j" value="${p2.jersey||''}" placeholder="#" style="width:60px;padding:5px;border:1px solid var(--gray-lighter);border-radius:4px;font-size:12px;">
+                </div>
+              </div>
+              <input type="hidden" id="dhso-${i}-court" value="${m.court||i+1}">
+            </div>`;
+          });
+          if(alternates.length){
+            h+=`<div style="padding:8px;background:var(--off-white);border-radius:8px;margin-bottom:8px;">
+              <div style="font-family:'Bebas Neue';font-size:11px;letter-spacing:1px;color:var(--purple);margin-bottom:6px;">ALTERNATES</div>`;
+            alternates.forEach((a,i)=>{
+              h+=`<div style="display:flex;gap:6px;margin-bottom:4px;">
+                <input type="text" id="dhso-alt-${i}-f" value="${a.first||''}" placeholder="First" style="flex:1;padding:5px;border:1px solid var(--gray-lighter);border-radius:4px;font-size:12px;">
+                <input type="text" id="dhso-alt-${i}-l" value="${a.last||''}" placeholder="Last" style="flex:1;padding:5px;border:1px solid var(--gray-lighter);border-radius:4px;font-size:12px;">
+                <input type="text" id="dhso-alt-${i}-j" value="${a.jersey||''}" placeholder="#" style="width:50px;padding:5px;border:1px solid var(--gray-lighter);border-radius:4px;font-size:12px;">
+              </div>`;
+            });
+            h+='</div>';
+          }
+          h+=`<button class="btn btn-primary" style="width:100%;margin-top:4px;" onclick="dhScanOppSave(${starters.length},${alternates.length})">💾 Save to Scouts</button>`;
+          result.innerHTML=h;
+        }catch(err){
+          result.innerHTML='<div style="color:var(--loss-red);font-size:13px;">Error contacting AI. Check your connection and try again.</div>';
+          console.error('dhScanOpp error:',err);
+        }
+      };
+      reader.readAsDataURL(file);
+      e.target.value='';
+    });
+  },100);
+}
+
+function dhScanOppSave(count,altCount){
+  const date=document.getElementById('dhso-date')?.value||td();
+  const opp=document.getElementById('dhso-opp')?.value.trim()||'Opponent';
+  const schoolKey=opp.toLowerCase().replace(/[^a-z0-9]+/g,'_');
+  const existingSchool=D.opponents[schoolKey]||{};
+  const oppCourts=[];
+  for(let i=0;i<count;i++){
+    const court=parseInt(document.getElementById(`dhso-${i}-court`)?.value)||i+1;
+    const p1Name=(document.getElementById(`dhso-${i}-p1f`)?.value.trim()+' '+document.getElementById(`dhso-${i}-p1l`)?.value.trim()).trim();
+    const p2Name=(document.getElementById(`dhso-${i}-p2f`)?.value.trim()+' '+document.getElementById(`dhso-${i}-p2l`)?.value.trim()).trim();
+    const p1j=document.getElementById(`dhso-${i}-p1j`)?.value.trim()||'';
+    const p2j=document.getElementById(`dhso-${i}-p2j`)?.value.trim()||'';
+    if(p1Name||p2Name)oppCourts.push({court,player1:p1Name,jersey1:p1j,player2:p2Name,jersey2:p2j});
+  }
+  fbSet('opponents/'+schoolKey+'/info',{displayName:opp,lastDual:date});
+  oppCourts.forEach(c=>{
+    const up=(name,jersey,court,isAlt)=>{
+      if(!name)return;
+      const pKey=name.toLowerCase().replace(/[^a-z0-9]+/g,'_');
+      const ex=(existingSchool.players||{})[pKey]||{};
+      fbSet('opponents/'+schoolKey+'/players/'+pKey,{...ex,firstName:name.split(' ')[0]||name,lastName:name.split(' ').slice(1).join(' ')||'',fullName:name,jersey:jersey||ex.jersey||'',typicalCourt:court||ex.typicalCourt||null,isAlternate:isAlt||false,firstSeen:ex.firstSeen||date,lastSeen:date});
+    };
+    up(c.player1,c.jersey1,c.court,false);
+    up(c.player2,c.jersey2,c.court,false);
+    if(c.player1&&c.player2){
+      const pairKey=[c.player1,c.player2].map(n=>n.toLowerCase().replace(/[^a-z0-9]+/g,'_')).sort().join('__');
+      const ex=(existingSchool.pairs||{})[pairKey]||{};
+      fbSet('opponents/'+schoolKey+'/pairs/'+pairKey,{...ex,player1:c.player1,player2:c.player2,court:c.court,firstSeen:ex.firstSeen||date,lastSeen:date});
+    }
+  });
+  const alts=[];
+  for(let i=0;i<altCount;i++){
+    const af=document.getElementById(`dhso-alt-${i}-f`)?.value.trim()||'';
+    const al=document.getElementById(`dhso-alt-${i}-l`)?.value.trim()||'';
+    const aj=document.getElementById(`dhso-alt-${i}-j`)?.value.trim()||'';
+    const aName=(af+' '+al).trim();
+    if(aName){
+      alts.push({firstName:af,lastName:al,jersey:aj,fullName:aName});
+      const pKey=aName.toLowerCase().replace(/[^a-z0-9]+/g,'_');
+      const ex=(existingSchool.players||{})[pKey]||{};
+      fbSet('opponents/'+schoolKey+'/players/'+pKey,{...ex,firstName:af||aName,lastName:al||'',fullName:aName,jersey:aj||ex.jersey||'',typicalCourt:ex.typicalCourt||null,isAlternate:true,firstSeen:ex.firstSeen||date,lastSeen:date});
+    }
+  }
+  writeOpponentIntel(date,opp,oppCourts,alts,'scanner');
+  // Also save oppLineup to the matching assignment so Live Scoring shows opponent names
+  const existingAssign=Object.values(D.assignments||{}).find(a=>a.date===date);
+  if(existingAssign){
+    fbSet('assignments/'+existingAssign.id+'/oppLineup',oppCourts);
+  }else{
+    const aid=gi('asgn');
+    fbSet('assignments/'+aid,{id:aid,date,type:'gameday',opponent:opp,courts:[],oppLineup:oppCourts,notes:null,createdAt:new Date().toISOString()});
+  }
+  toast('Opponent lineup saved to Scouts + Live Scoring!');
+  // Show the modal save button again before closing
+  const saveBtn=document.getElementById('edit-save');if(saveBtn)saveBtn.style.display='';
   closeEdit();
 }
 
