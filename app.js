@@ -6899,18 +6899,18 @@ function renderDuals(){
     const exhib=(d.courts||[]).filter(c=>c.isExhibition).sort((a,b)=>(a.court||0)-(b.court||0));
     const reopenBtn=d._isStructured&&currentRole==='coach'?'<button class="match-action-btn" onclick="reopenDual(\''+d.id+'\')" title="Reopen dual" style="color:var(--gold);font-weight:700;">&#x21BA;</button>':'';
     h+=`<div class="dual-card ${win?'win':loss?'loss':''}">
-      <div class="dual-header" style="align-items:center;">
-        <div style="flex:1;min-width:0;">
+      <div style="display:flex;justify-content:flex-end;gap:4px;margin-bottom:4px;">
+        <button class="match-action-btn" onclick="dhScanOppModal('${d.date||''}','${(d.opponent||'').replace(/'/g,"\\'")}','${d.location||'home'}')" title="Scan opponent lineup">📷</button>
+        <button class="match-action-btn edit-btn" onclick="openDualEditModal('${d.id}','${d.opponent||''}','${d.date||''}','${d.location||'home'}')" title="Edit">&#x270E;</button>
+        ${reopenBtn}
+        <button class="match-action-btn" onclick="deleteDual('${d.id}')" title="Delete">&#x2715;</button>
+      </div>
+      <div class="dual-header">
+        <div>
           <div style="font-size:12px;color:var(--gray);font-weight:600;">${fD(d.date)}</div>
           <div style="font-weight:700;font-size:17px;margin-top:2px;">${locLabel}${d.opponent||'TBD'}</div>
         </div>
-        <div style="display:flex;gap:4px;align-items:center;margin:0 8px;">
-          <button class="match-action-btn" onclick="dhScanOppModal('${d.date||''}','${(d.opponent||'').replace(/'/g,"\\'")}','${d.location||'home'}')" title="Scan opponent lineup">📷</button>
-          <button class="match-action-btn edit-btn" onclick="openDualEditModal('${d.id}','${d.opponent||''}','${d.date||''}','${d.location||'home'}')" title="Edit">&#x270E;</button>
-          ${reopenBtn}
-          <button class="match-action-btn" onclick="deleteDual('${d.id}')" title="Delete">&#x2715;</button>
-        </div>
-        <div style="text-align:right;flex-shrink:0;">
+        <div style="text-align:right;">
           <div class="dual-result-badge ${win?'win':loss?'loss':''}">${win?'W':loss?'L':'&#8212;'} ${d.leonCourts||0}-${d.oppCourts||0}</div>
           <div style="font-size:10px;color:var(--gray);margin-top:2px;">${win?'Dual Win':loss?'Dual Loss':'Tied'}</div>
         </div>
@@ -6922,8 +6922,6 @@ function renderDuals(){
         const sets=c.sets||[];let sw=0,sl=0;sets.forEach(s=>{(s.scoreUs||0)>(s.scoreThem||0)?sw++:sl++;});
         const cWin=sw>sl;
         const mid=c.id||'';
-        const pairBtns=mid?'<button onclick="dhEditPairModal(\''+mid+'\')" style="font-size:10px;padding:1px 5px;border:1px solid var(--gray-lighter);border-radius:3px;background:var(--white);color:var(--gray);cursor:pointer;" title="Edit pair/court">✎</button> <button onclick="dhDeletePair(\''+mid+'\')" style="font-size:10px;padding:1px 5px;border:1px solid var(--gray-lighter);border-radius:3px;background:var(--white);color:var(--loss-red);cursor:pointer;" title="Delete pair">✕</button>':'';
-        const addSetBtn=mid?'<button onclick="dhAddSet(\''+mid+'\')" style="font-size:10px;padding:1px 7px;border:1px dashed var(--gray-lighter);border-radius:3px;background:none;color:var(--gray);cursor:pointer;margin-top:2px;">+ Add Set</button>':'';
         const setsHtml=sets.map((s,si)=>{
           const win=(s.scoreUs||0)>(s.scoreThem||0);
           const enteredByName=s.enteredBy?(gP(s.enteredBy)||{}).firstName||null:null;
@@ -6943,9 +6941,9 @@ function renderDuals(){
         h+=`<div class="dual-court-row" style="flex-wrap:wrap;align-items:flex-start;">
           <span class="court-badge court-${c.court}" style="min-width:28px;text-align:center;margin-top:3px;">${c.court}</span>
           <span style="flex:1;font-weight:600;font-size:12px;padding-top:3px;">${pair}</span>
-          ${pairBtns}
+          ${mid?`<button onclick="dhEditPairModal('${mid}')" style="font-size:10px;padding:1px 5px;border:1px solid var(--gray-lighter);border-radius:3px;background:var(--white);color:var(--gray);cursor:pointer;" title="Edit pair/court">✎</button><button onclick="dhDeletePair('${mid}')" style="font-size:10px;padding:1px 5px;border:1px solid var(--gray-lighter);border-radius:3px;background:var(--white);color:var(--gray);cursor:pointer;" title="Delete pair">✕</button>`:''}
           <span style="font-family:'Bebas Neue';font-size:14px;color:${cWin?'var(--green)':'var(--loss-red)'};">${sw}-${sl}</span>
-          <div style="width:100%;padding-left:36px;margin-top:4px;">${setsHtml}${addSetBtn}</div>
+          <div style="width:100%;padding-left:36px;margin-top:4px;">${setsHtml}${mid?`<button onclick="dhAddSet('${mid}')" style="font-size:10px;padding:1px 7px;border:1px dashed var(--gray-lighter);border-radius:3px;background:none;color:var(--gray);cursor:pointer;margin-top:2px;">+ Add Set</button>`:''}</div>
         </div>`;
       });
       h+='</div>';
