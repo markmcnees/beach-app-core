@@ -6897,9 +6897,9 @@ function renderDuals(){
     const locLabel=d.location==='away'?'@ ':d.location==='neutral'?'(N) ':'vs ';
     const scored=(d.courts||[]).filter(c=>!c.isExhibition).sort((a,b)=>(a.court||0)-(b.court||0));
     const exhib=(d.courts||[]).filter(c=>c.isExhibition).sort((a,b)=>(a.court||0)-(b.court||0));
-    const reopenBtn=d._isStructured&&currentRole==='coach'?'<button class="match-action-btn" onclick="reopenDual(\''+d.id+'\')" title="Reopen dual">&#x21BA;</button>':'';
+    const reopenBtn=d._isStructured&&currentRole==='coach'?'<button class="match-action-btn" onclick="reopenDual(\''+d.id+'\')" title="Reopen dual" style="color:var(--gold);font-weight:700;">&#x21BA;</button>':'';
     h+=`<div class="dual-card ${win?'win':loss?'loss':''}">
-      <div style="position:absolute;top:8px;right:8px;display:flex;gap:4px;">
+      <div style="display:flex;justify-content:flex-end;gap:4px;margin-bottom:4px;">
         <button class="match-action-btn" onclick="dhScanOppModal('${d.date||''}','${(d.opponent||'').replace(/'/g,"\\'")}','${d.location||'home'}')" title="Scan opponent lineup">📷</button>
         <button class="match-action-btn edit-btn" onclick="openDualEditModal('${d.id}','${d.opponent||''}','${d.date||''}','${d.location||'home'}')" title="Edit">&#x270E;</button>
         ${reopenBtn}
@@ -6941,7 +6941,7 @@ function renderDuals(){
         h+=`<div class="dual-court-row" style="flex-wrap:wrap;align-items:flex-start;">
           <span class="court-badge court-${c.court}" style="min-width:28px;text-align:center;margin-top:3px;">${c.court}</span>
           <span style="flex:1;font-weight:600;font-size:12px;padding-top:3px;">${pair}</span>
-          ${mid?`<button onclick="dhEditPairModal('${mid}')" style="font-size:10px;padding:1px 5px;border:1px solid var(--gray-lighter);border-radius:3px;background:var(--white);color:var(--gray);cursor:pointer;" title="Edit pair/court">✎</button>`:''}
+          ${mid?`<button onclick="dhEditPairModal('${mid}')" style="font-size:10px;padding:1px 5px;border:1px solid var(--gray-lighter);border-radius:3px;background:var(--white);color:var(--gray);cursor:pointer;" title="Edit pair/court">✎</button><button onclick="dhDeletePair('${mid}')" style="font-size:10px;padding:1px 5px;border:1px solid var(--gray-lighter);border-radius:3px;background:var(--white);color:var(--gray);cursor:pointer;" title="Delete pair">✕</button>`:''}
           <span style="font-family:'Bebas Neue';font-size:14px;color:${cWin?'var(--green)':'var(--loss-red)'};">${sw}-${sl}</span>
           <div style="width:100%;padding-left:36px;margin-top:4px;">${setsHtml}${mid?`<button onclick="dhAddSet('${mid}')" style="font-size:10px;padding:1px 7px;border:1px dashed var(--gray-lighter);border-radius:3px;background:none;color:var(--gray);cursor:pointer;margin-top:2px;">+ Add Set</button>`:''}</div>
         </div>`;
@@ -7058,6 +7058,12 @@ function reopenDual(id){
   fbRemove('duals/'+id);
   toast('Dual reopened');
   renderDuals();
+}
+
+let _delPairArmed={};
+function dhDeletePair(mid){
+  if(_delPairArmed[mid]){clearTimeout(_delPairArmed[mid]);delete _delPairArmed[mid];fbRemove('matches/'+mid);toast('Pair deleted');renderDuals();}
+  else{_delPairArmed[mid]=setTimeout(()=>{delete _delPairArmed[mid];},3000);toast('Tap again to confirm delete');}
 }
 
 // ── DUAL SCORESHEET UPLOAD ──────────────────────────────────
