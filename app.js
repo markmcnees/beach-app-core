@@ -6897,11 +6897,12 @@ function renderDuals(){
     const locLabel=d.location==='away'?'@ ':d.location==='neutral'?'(N) ':'vs ';
     const scored=(d.courts||[]).filter(c=>!c.isExhibition).sort((a,b)=>(a.court||0)-(b.court||0));
     const exhib=(d.courts||[]).filter(c=>c.isExhibition).sort((a,b)=>(a.court||0)-(b.court||0));
+    const reopenBtn=d._isStructured&&currentRole==='coach'?'<button class="match-action-btn" onclick="reopenDual(\''+d.id+'\')" title="Reopen dual">&#x21BA;</button>':'';
     h+=`<div class="dual-card ${win?'win':loss?'loss':''}">
       <div style="position:absolute;top:8px;right:8px;display:flex;gap:4px;">
         <button class="match-action-btn" onclick="dhScanOppModal('${d.date||''}','${(d.opponent||'').replace(/'/g,"\\'")}','${d.location||'home'}')" title="Scan opponent lineup">📷</button>
         <button class="match-action-btn edit-btn" onclick="openDualEditModal('${d.id}','${d.opponent||''}','${d.date||''}','${d.location||'home'}')" title="Edit">&#x270E;</button>
-        ${d._isStructured&&currentRole==='coach'?`<button class="match-action-btn" onclick="reopenDual('${d.id}')" title="Reopen dual">&#x21BA;</button>`:''}
+        ${reopenBtn}
         <button class="match-action-btn" onclick="deleteDual('${d.id}')" title="Delete">&#x2715;</button>
       </div>
       <div class="dual-header">
