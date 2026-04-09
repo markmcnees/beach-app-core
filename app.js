@@ -6922,6 +6922,9 @@ function renderDuals(){
         const sets=c.sets||[];let sw=0,sl=0;sets.forEach(s=>{(s.scoreUs||0)>(s.scoreThem||0)?sw++:sl++;});
         const cWin=sw>sl;
         const mid=c.id||'';
+        const pairEditBtn=mid?'<button onclick="dhEditPairModal(\''+mid+'\')" style="font-size:10px;padding:1px 5px;border:1px solid var(--gray-lighter);border-radius:3px;background:var(--white);color:var(--gray);cursor:pointer;" title="Edit pair/court">✎</button>':'';
+        const pairDeleteBtn=mid?'<button onclick="dhDeletePair(\''+mid+'\')" style="font-size:10px;padding:1px 5px;border:1px solid var(--gray-lighter);border-radius:3px;background:var(--white);color:var(--loss-red);cursor:pointer;" title="Delete pair">✕</button>':'';
+        const addSetBtn=mid?'<button onclick="dhAddSet(\''+mid+'\')" style="font-size:10px;padding:1px 7px;border:1px dashed var(--gray-lighter);border-radius:3px;background:none;color:var(--gray);cursor:pointer;margin-top:2px;">+ Add Set</button>':'';
         const setsHtml=sets.map((s,si)=>{
           const win=(s.scoreUs||0)>(s.scoreThem||0);
           const enteredByName=s.enteredBy?(gP(s.enteredBy)||{}).firstName||null:null;
@@ -6941,9 +6944,9 @@ function renderDuals(){
         h+=`<div class="dual-court-row" style="flex-wrap:wrap;align-items:flex-start;">
           <span class="court-badge court-${c.court}" style="min-width:28px;text-align:center;margin-top:3px;">${c.court}</span>
           <span style="flex:1;font-weight:600;font-size:12px;padding-top:3px;">${pair}</span>
-          ${mid?`<button onclick="dhEditPairModal('${mid}')" style="font-size:10px;padding:1px 5px;border:1px solid var(--gray-lighter);border-radius:3px;background:var(--white);color:var(--gray);cursor:pointer;" title="Edit pair/court">✎</button><button onclick="dhDeletePair('${mid}')" style="font-size:10px;padding:1px 5px;border:1px solid var(--gray-lighter);border-radius:3px;background:var(--white);color:var(--gray);cursor:pointer;" title="Delete pair">✕</button>`:''}
+          ${pairEditBtn}${pairDeleteBtn}
           <span style="font-family:'Bebas Neue';font-size:14px;color:${cWin?'var(--green)':'var(--loss-red)'};">${sw}-${sl}</span>
-          <div style="width:100%;padding-left:36px;margin-top:4px;">${setsHtml}${mid?`<button onclick="dhAddSet('${mid}')" style="font-size:10px;padding:1px 7px;border:1px dashed var(--gray-lighter);border-radius:3px;background:none;color:var(--gray);cursor:pointer;margin-top:2px;">+ Add Set</button>`:''}</div>
+          <div style="width:100%;padding-left:36px;margin-top:4px;">${setsHtml}${addSetBtn}</div>
         </div>`;
       });
       h+='</div>';
