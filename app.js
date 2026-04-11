@@ -5614,7 +5614,10 @@ function closeDual(){
   const id=existing?existing.id:dualId;
 
   fbSet('duals/'+id,{id,date,opponent,location:loc,leonCourts,oppCourts,dualWin,createdAt:existing?existing.createdAt:td()});
-  const schedMatch=(D.schedule||[]).find(g=>g.date===date&&(g.opponent||'').toLowerCase()===opponent.toLowerCase());
+  const _normOpp=s=>(s||'').toLowerCase().replace(/^[@\s]+/,'').replace(/[^a-z0-9]/g,'');
+  const _oppNorm=_normOpp(opponent);
+  let schedMatch=(D.schedule||[]).find(g=>g.date===date&&_normOpp(g.opponent)===_oppNorm);
+  if(!schedMatch){const byDate=(D.schedule||[]).filter(g=>g.date===date&&g.scoreUs==null);if(byDate.length===1)schedMatch=byDate[0];}
   if(schedMatch){
     fbSet('schedule/'+schedMatch.id+'/scoreUs',leonCourts);
     fbSet('schedule/'+schedMatch.id+'/scoreThem',oppCourts);
