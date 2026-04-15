@@ -6893,6 +6893,23 @@ function renderDuals(){
   ].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
 
   const duals=merged;
+
+  // Auto-sync: write dual results back to schedule if schedule entry is missing scores
+  if(currentRole==='coach'&&db){
+    const _normOpp=s=>(s||'').toLowerCase().replace(/^[@\s]+/,'').replace(/[^a-z0-9]/g,'');
+    duals.forEach(d=>{
+      const lc=d.leonCourts||0,oc=d.oppCourts||0;
+      if(lc===0&&oc===0)return;
+      const hasCourts=(d.courts||[]).some(c=>!c.isExhibition&&(c.sets||[]).length>0);
+      if(!hasCourts)return;
+      const dOppNorm=_normOpp(d.opponent);
+      const schedMatch=D.schedule.find(g=>g.date===d.date&&_normOpp(g.opponent)===dOppNorm&&g.type!=='scrimmage');
+      if(schedMatch&&(schedMatch.scoreUs==null||schedMatch.scoreThem==null)){
+        fbSet('schedule/'+schedMatch.id,Object.assign({},schedMatch,{scoreUs:lc,scoreThem:oc}));
+      }
+    });
+  }
+
   if(!duals.length){container.innerHTML='<div class="empty-state"><div class="emoji">&#127942;</div><p>No dual matches recorded yet.</p></div>';return;}
   let h='';
   duals.forEach(d=>{
