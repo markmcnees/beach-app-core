@@ -2,9 +2,11 @@
 
 ## What this repo is
 
-`app.js` in this repo is the single source of truth for all schools on the CourtSense platform. It is served via jsDelivr CDN and loaded by a thin `index.html` shell at each school. Every change here deploys to all schools simultaneously.
+`app.js` in this repo is the single source of truth for all schools on the CourtSense platform. On every deploy, it is copied into the `courtsense` repo and served directly from GitHub Pages at `courtsense.app/app.js`. The school shells (`/leon/`, `/south-walton/`) load it with `<script src="/app.js"></script>`. Every change here deploys to all schools simultaneously.
 
 **Do not touch school repos (`leon-beach`, `south-walton`) for logic changes. All logic lives here.**
+
+**Do not hand-edit `courtsense/app.js`.** It is overwritten on every deploy. If you need to fix something, fix it here in `beach-app-core/app.js` and run `./deploy.sh`.
 
 ---
 
@@ -13,39 +15,30 @@
 | School | Shell URL | Firebase nodes | Coach PIN | Player PW |
 |--------|-----------|----------------|-----------|-----------|
 | Leon Queens | courtsense.app/leon/ | `leon_queens` / `leon_queens_matches` | 8675 | Pride2026 |
-| South Walton Seahawks | markmcnees.github.io/south-walton/ | `south_walton` / `south_walton_matches` | 1234 | Sideout |
+| South Walton Seahawks | courtsense.app/south-walton/ | `south_walton` / `south_walton_matches` | 1234 | Sideout |
 
 ---
 
 ## Deploy workflow
 
+One command:
+
 ```bash
-# 1. Make changes to app.js
-# 2. Syntax check before every commit
-node --check app.js
-
-# 3. Commit and push
-git add app.js
-git commit -m "describe the change"
-git push
-
-# 4. Purge CDN (open in browser or curl)
-# https://purge.jsdelivr.net/gh/markmcnees/beach-app-core@main/app.js
-
-# 5. Wait 5-10 minutes, hard reload both apps to verify
+./deploy.sh "describe the change"
 ```
 
-**Always run `node --check app.js` before committing. Never push code that fails the syntax check.**
+`deploy.sh` runs `node --check app.js`, bumps the patch version tag, commits and pushes `beach-app-core`, copies `app.js` into the local `courtsense` checkout (expected at `../courtsense`), and commits and pushes `courtsense`. After push, GitHub Pages serves the new `courtsense.app/app.js` within about a minute. Hard reload the school apps to verify.
+
+**Always run `node --check app.js` before committing. Never push code that fails the syntax check.** (`deploy.sh` does this automatically and halts on failure.)
 
 ---
 
-## CDN
+## Serving
 
-- Serve URL: `https://cdn.jsdelivr.net/gh/markmcnees/beach-app-core@main/app.js`
-- Purge URL: `https://purge.jsdelivr.net/gh/markmcnees/beach-app-core@main/app.js`
-- Propagation: 5–30 minutes after purge
-- If functions appear "not defined" in the console after a deploy, wait and hard reload before doing anything else. Do not rebuild.
-- Shell files should reference specific version tags (e.g. `@v1.0.6`), not `@main`
+- Production URL: `https://courtsense.app/app.js` (served by GitHub Pages from the `courtsense` repo)
+- Cache: GitHub Pages sets a short browser cache; a hard reload picks up changes within a minute of push. No manual purge needed.
+- If functions appear "not defined" in the console after a deploy, hard reload before doing anything else. Do not rebuild.
+- The legacy jsDelivr path (`cdn.jsdelivr.net/gh/markmcnees/beach-app-core@...`) is no longer used by the shells. Tags are still cut on every deploy for history/rollback, but shell HTML should not reference CDN version tags.
 
 ---
 

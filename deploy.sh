@@ -86,4 +86,4 @@ fi
 
 echo ""
 echo "Deploy complete: $NEW_TAG"
-echo "Purge CDN: https://purge.jsdelivr.net/gh/markmcnees/beach-app-core@main/app.js"
+echo "Live at: https://courtsense.app/app.js (hard reload school apps to verify)"
