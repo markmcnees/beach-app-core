@@ -4374,7 +4374,8 @@ function renderManualOppEntry(){
 const OPPONENT_ID_ALIASES={
   'leap_bk':'bishop_kelly',
   'bk':'bishop_kelly',
-  'bishop_k':'bishop_kelly'
+  'bishop_k':'bishop_kelly',
+  'wakalla':'wakulla'
 };
 
 // Normalizes a school name to a stable Firebase key.
