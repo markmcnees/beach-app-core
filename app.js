@@ -7083,10 +7083,9 @@ function reopenDual(id){
   renderDuals();
 }
 
-let _delPairArmed={};
 function dhDeletePair(mid){
-  if(_delPairArmed[mid]){clearTimeout(_delPairArmed[mid]);delete _delPairArmed[mid];fbRemove('matches/'+mid);toast('Pair deleted');renderDuals();}
-  else{_delPairArmed[mid]=setTimeout(()=>{delete _delPairArmed[mid];},3000);toast('Tap again to confirm delete');}
+  if(!confirm('Delete this pair?'))return;
+  fbRemove('gamedays/'+mid);toast('Pair deleted');renderDuals();
 }
 
 // ── DUAL SCORESHEET UPLOAD ──────────────────────────────────
