@@ -4368,12 +4368,22 @@ function renderManualOppEntry(){
 }
 
 // ── OPPONENT INTEL — shared cross-school scouting node ──────────────────────
+// Alias map: normalized variants that should collapse to a canonical school id.
+// Add entries here whenever the scanner or a user picks up an abbreviation or
+// nickname that should file under an existing school.
+const OPPONENT_ID_ALIASES={
+  'leap_bk':'bishop_kelly',
+  'bk':'bishop_kelly',
+  'bishop_k':'bishop_kelly'
+};
+
 // Normalizes a school name to a stable Firebase key.
 // "Chiles HS", "W.T. Chiles", "Chiles High School" → "chiles"
 // "Lincoln HS" → "lincoln_hs", "Rickards High" → "rickards"
+// "Leap BK", "BK", "Bishop K" → "bishop_kelly" (via OPPONENT_ID_ALIASES)
 function normalizeOpponentId(name){
   if(!name)return'unknown';
-  return name
+  const id=name
     .toLowerCase()
     .replace(/\bw\.?t\.?\b/g,'wt')           // W.T. → wt
     .replace(/\bhigh school\b/g,'')           // remove "high school"
@@ -4383,6 +4393,7 @@ function normalizeOpponentId(name){
     .replace(/^_+|_+$/g,'')                  // trim leading/trailing underscores
     .replace(/_+/g,'_')                      // collapse repeated underscores
     ||'unknown';
+  return OPPONENT_ID_ALIASES[id]||id;
 }
 
 // Writes one appearance record to the shared top-level opponent_intel node.
