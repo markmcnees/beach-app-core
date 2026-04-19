@@ -389,7 +389,7 @@ body{font-family:'Barlow',sans-serif;background:var(--cream);color:var(--black);
 <!-- LOGIN SCREEN -->
 <div class="login-overlay" id="login-overlay">
   <div class="login-box">
-    <div class="login-logo" style="flex-direction:column;align-items:center;gap:6px;"><img src="${SC.logo}" style="height:64px;width:auto;" alt="${SC.logoAlt}"><span>${SC.displayName}</span></div>
+    <div class="login-logo" style="flex-direction:column;align-items:center;gap:6px;"><img src="${SC.logo}" style="height:64px;width:auto;" alt="${SC.logoAlt}" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<span style=&quot;font-size:64px;line-height:1;&quot;>${SC.teamEmoji}</span>')"><span>${SC.displayName}</span></div>
     <div class="login-sub">2026 Beach Volleyball Season</div>
     <div class="login-toggle">
       <button class="login-toggle-btn active" onclick="switchLogin('coach')">Coach</button>
@@ -437,7 +437,7 @@ body{font-family:'Barlow',sans-serif;background:var(--cream);color:var(--black);
 <div id="app-wrapper" style="display:none;">
 <div class="header">
   <div class="header-top">
-    <h1><span class="crown"><img src="${SC.logo}" style="height:28px;width:auto;vertical-align:middle;" alt="${SC.abbrev}"></span> ${SC.displayName} <span class="sync-dot" id="sync-dot"></span></h1>
+    <h1><span class="crown"><img src="${SC.logo}" style="height:28px;width:auto;vertical-align:middle;" alt="${SC.abbrev}" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<span style=&quot;font-size:28px;line-height:1;vertical-align:middle;&quot;>${SC.teamEmoji}</span>')"></span> ${SC.displayName} <span class="sync-dot" id="sync-dot"></span></h1>
     <div class="header-user">
       <span class="header-username" id="header-username"></span>
       <button class="logout-btn" onclick="logout()">Logout</button>
@@ -1092,7 +1092,7 @@ body{font-family:'Barlow',sans-serif;background:var(--cream);color:var(--black);
     <div id="ca-result" style="margin-top:10px;"></div><div id="school-fans-overlay" style="display:none;position:fixed;inset:0;background:linear-gradient(160deg,${SC.colors.primaryDeeper} 0%,${SC.colors.primary} 50%,${SC.colors.primaryDark} 100%);z-index:10000;overflow-y:auto;-webkit-overflow-scrolling:touch;">
   <div style="max-width:480px;margin:0 auto;padding:16px 14px 40px;">
     <div style="text-align:center;padding:24px 0 12px;">
-      <div style="margin-bottom:8px;"><img src="${SC.logo}" style="height:80px;width:auto;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.4));" alt="${SC.logoAlt}"></div>
+      <div style="margin-bottom:8px;"><img src="${SC.logo}" style="height:80px;width:auto;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.4));" alt="${SC.logoAlt}" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<span style=&quot;font-size:80px;line-height:1;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.4));&quot;>${SC.teamEmoji}</span>')"></div>
       <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:3px;color:#fff;">${SC.schoolName}</div>
       <div style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:2px;color:rgba(255,255,255,0.65);margin-top:2px;">Beach Volleyball &middot; 2026 Season</div>
       <div id="lf-record" style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:#d4a843;margin-top:8px;"></div>
