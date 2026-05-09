@@ -59,10 +59,18 @@ if [ ! -d "$COURTSENSE_DIR" ]; then
 fi
 
 cd "$COURTSENSE_DIR"
+
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [ "$CURRENT_BRANCH" != "main" ]; then
+  echo "Error: courtsense repo is on branch '$CURRENT_BRANCH', expected 'main'."
+  echo "Switch courtsense to main and re-run, or this deploy will land on the wrong branch."
+  exit 1
+fi
+
 echo "Syncing app.js from beach-app-core to courtsense..."
 
 # Pull latest so our commit lands cleanly
-git pull --rebase
+git pull --rebase origin main
 
 # Copy the source-of-truth app.js into the courtsense repo
 cp "$REPO_DIR/app.js" "$COURTSENSE_DIR/app.js"
@@ -75,12 +83,18 @@ while IFS= read -r -d '' file; do
   fi
 done < <(find . -name "index.html" -print0)
 
-if git diff --quiet && git diff --cached --quiet; then
+# Stage only app.js plus any HTML files the sed-replace block touched.
+# Never use git add -A here; courtsense often has untracked notes files
+# in its working tree that should not be swept into a deploy commit.
+git add app.js
+# Re-stage any tracked HTML files modified by the legacy CDN-tag bump above
+git diff --name-only | grep '\.html$' | xargs -r git add
+
+if git diff --cached --quiet; then
   echo "courtsense already in sync, nothing to commit"
 else
-  git add -A
   git commit -m "sync app.js to $NEW_TAG"
-  git push
+  git push origin main
   echo "Courtsense repo updated and pushed"
 fi
 
