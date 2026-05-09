@@ -1,6 +1,138 @@
 const SC=window.SCHOOL_CONFIG;
 
 // ============================================================
+// DEMO FIXTURE — only consumed when SC.demoMode === true
+// ============================================================
+const _DEMO = {
+  players: [
+    {id:'sd01', firstName:'Suzie',  lastName:'Spiker',     classYear:'SR', court:1, jersey:1,  active:true},
+    {id:'sd02', firstName:'Debby',  lastName:'Digger',     classYear:'SR', court:1, jersey:2,  active:true},
+    {id:'sd03', firstName:'Bonnie', lastName:'Blocker',    classYear:'JR', court:2, jersey:3,  active:true},
+    {id:'sd04', firstName:'Sammy',  lastName:'Setter',     classYear:'JR', court:2, jersey:4,  active:true},
+    {id:'sd05', firstName:'Penny',  lastName:'Passer',     classYear:'JR', court:3, jersey:5,  active:true},
+    {id:'sd06', firstName:'Sandy',  lastName:'Server',     classYear:'SO', court:3, jersey:6,  active:true},
+    {id:'sd07', firstName:'Sarah',  lastName:'Sandbagger', classYear:'SO', court:4, jersey:7,  active:true},
+    {id:'sd08', firstName:'Holly',  lastName:'Hitter',     classYear:'SO', court:4, jersey:8,  active:true},
+    {id:'sd09', firstName:'Riley',  lastName:'Receiver',   classYear:'FR', court:5, jersey:9,  active:true},
+    {id:'sd10', firstName:'Olivia', lastName:'Option',     classYear:'FR', court:5, jersey:10, active:true}
+  ],
+  schedule: [
+    {id:'sch01', date:'2026-04-08', opponent:'Coastal Prep',     location:'home', time:'4:00 PM', scoreUs:3, scoreThem:2},
+    {id:'sch02', date:'2026-04-15', opponent:'Bayshore Academy', location:'away', time:'4:00 PM', scoreUs:4, scoreThem:1},
+    {id:'sch03', date:'2026-04-22', opponent:'Riptide High',     location:'home', time:'4:00 PM', scoreUs:2, scoreThem:3},
+    {id:'sch04', date:'2026-04-29', opponent:'Dune Valley',      location:'away', time:'4:00 PM', scoreUs:3, scoreThem:2},
+    {id:'sch05', date:'2026-05-13', opponent:'Coastal Prep',     location:'away', time:'4:00 PM'},
+    {id:'sch06', date:'2026-05-20', opponent:'Riptide High',     location:'home', time:'4:00 PM'}
+  ],
+  duals: [
+    {
+      id:'dl01', date:'2026-04-08', opponent:'Coastal Prep', location:'home',
+      leonCourts:3, oppCourts:2, dualWin:true, createdAt:'2026-04-08',
+      courts:[
+        {court:1, pair:['sd01','sd02'], isExhibition:false, courtResult:'W',
+          sets:[{scoreUs:21,scoreThem:18},{scoreUs:21,scoreThem:19}]},
+        {court:2, pair:['sd03','sd04'], isExhibition:false, courtResult:'W',
+          sets:[{scoreUs:19,scoreThem:21},{scoreUs:21,scoreThem:18},{scoreUs:15,scoreThem:12}]},
+        {court:3, pair:['sd05','sd06'], isExhibition:false, courtResult:'W',
+          sets:[{scoreUs:21,scoreThem:15},{scoreUs:21,scoreThem:17}]},
+        {court:4, pair:['sd07','sd08'], isExhibition:false, courtResult:'L',
+          sets:[{scoreUs:18,scoreThem:21},{scoreUs:19,scoreThem:21}]},
+        {court:5, pair:['sd09','sd10'], isExhibition:false, courtResult:'L',
+          sets:[{scoreUs:21,scoreThem:19},{scoreUs:18,scoreThem:21},{scoreUs:12,scoreThem:15}]}
+      ]
+    },
+    {
+      id:'dl02', date:'2026-04-15', opponent:'Bayshore Academy', location:'away',
+      leonCourts:4, oppCourts:1, dualWin:true, createdAt:'2026-04-15',
+      courts:[
+        {court:1, pair:['sd01','sd02'], isExhibition:false, courtResult:'W',
+          sets:[{scoreUs:21,scoreThem:15},{scoreUs:21,scoreThem:18}]},
+        {court:2, pair:['sd03','sd04'], isExhibition:false, courtResult:'W',
+          sets:[{scoreUs:21,scoreThem:19},{scoreUs:21,scoreThem:17}]},
+        {court:3, pair:['sd05','sd06'], isExhibition:false, courtResult:'W',
+          sets:[{scoreUs:21,scoreThem:18},{scoreUs:19,scoreThem:21},{scoreUs:15,scoreThem:13}]},
+        {court:4, pair:['sd07','sd08'], isExhibition:false, courtResult:'W',
+          sets:[{scoreUs:21,scoreThem:19},{scoreUs:21,scoreThem:18}]},
+        {court:5, pair:['sd09','sd10'], isExhibition:false, courtResult:'L',
+          sets:[{scoreUs:19,scoreThem:21},{scoreUs:17,scoreThem:21}]}
+      ]
+    },
+    {
+      id:'dl03', date:'2026-04-22', opponent:'Riptide High', location:'home',
+      leonCourts:2, oppCourts:3, dualWin:false, createdAt:'2026-04-22',
+      courts:[
+        {court:1, pair:['sd01','sd02'], isExhibition:false, courtResult:'W',
+          sets:[{scoreUs:21,scoreThem:19},{scoreUs:19,scoreThem:21},{scoreUs:15,scoreThem:13}]},
+        {court:2, pair:['sd03','sd04'], isExhibition:false, courtResult:'L',
+          sets:[{scoreUs:18,scoreThem:21},{scoreUs:21,scoreThem:19},{scoreUs:12,scoreThem:15}]},
+        {court:3, pair:['sd05','sd06'], isExhibition:false, courtResult:'L',
+          sets:[{scoreUs:17,scoreThem:21},{scoreUs:19,scoreThem:21}]},
+        {court:4, pair:['sd07','sd08'], isExhibition:false, courtResult:'W',
+          sets:[{scoreUs:21,scoreThem:18},{scoreUs:21,scoreThem:19}]},
+        {court:5, pair:['sd09','sd10'], isExhibition:false, courtResult:'L',
+          sets:[{scoreUs:18,scoreThem:21},{scoreUs:19,scoreThem:21}]}
+      ]
+    },
+    {
+      id:'dl04', date:'2026-04-29', opponent:'Dune Valley', location:'away',
+      leonCourts:3, oppCourts:2, dualWin:true, createdAt:'2026-04-29',
+      courts:[
+        {court:1, pair:['sd01','sd02'], isExhibition:false, courtResult:'W',
+          sets:[{scoreUs:21,scoreThem:17},{scoreUs:21,scoreThem:19}]},
+        {court:2, pair:['sd03','sd04'], isExhibition:false, courtResult:'W',
+          sets:[{scoreUs:21,scoreThem:18},{scoreUs:19,scoreThem:21},{scoreUs:15,scoreThem:12}]},
+        {court:3, pair:['sd05','sd06'], isExhibition:false, courtResult:'L',
+          sets:[{scoreUs:19,scoreThem:21},{scoreUs:17,scoreThem:21}]},
+        {court:4, pair:['sd07','sd08'], isExhibition:false, courtResult:'L',
+          sets:[{scoreUs:18,scoreThem:21},{scoreUs:21,scoreThem:19},{scoreUs:13,scoreThem:15}]},
+        {court:5, pair:['sd09','sd10'], isExhibition:false, courtResult:'W',
+          sets:[{scoreUs:21,scoreThem:19},{scoreUs:21,scoreThem:18}]}
+      ]
+    }
+  ],
+  standings: {
+    'Sand Sharks':       {w:3, l:1, auto:true},
+    'Coastal Prep':      {w:2, l:2, auto:false},
+    'Bayshore Academy':  {w:1, l:3, auto:false},
+    'Riptide High':      {w:3, l:1, auto:false},
+    'Dune Valley':       {w:1, l:3, auto:false},
+    'Tidewater HS':      {w:2, l:2, auto:false}
+  },
+  assignments: {
+    asg01: {
+      id:'asg01', date:'2026-05-13', type:'gameday', opponent:'Coastal Prep',
+      location:'away', time:'4:00 PM',
+      courts:[
+        {court:1, pair:['sd01','sd02']},
+        {court:2, pair:['sd03','sd04']},
+        {court:3, pair:['sd05','sd06']},
+        {court:4, pair:['sd07','sd08']},
+        {court:5, pair:['sd09','sd10']}
+      ],
+      notes:null, createdAt:'2026-05-09'
+    },
+    asg02: {
+      id:'asg02', date:'2026-05-20', type:'gameday', opponent:'Riptide High',
+      location:'home', time:'4:00 PM',
+      courts:[
+        {court:1, pair:['sd01','sd02']},
+        {court:2, pair:['sd03','sd04']},
+        {court:3, pair:['sd05','sd06']},
+        {court:4, pair:['sd07','sd08']},
+        {court:5, pair:['sd09','sd10']}
+      ],
+      notes:null, createdAt:'2026-05-09'
+    }
+  },
+  opponents: {
+    'Coastal Prep':     {name:'Coastal Prep',     location:'Coastal Beach Club', notes:'Scrappy team — strong court 5'},
+    'Bayshore Academy': {name:'Bayshore Academy', location:'Bayshore High',      notes:'Young roster, improving fast'},
+    'Riptide High':     {name:'Riptide High',     location:'Riptide Beach',      notes:'Strong court 2-3 — watch the angles'},
+    'Dune Valley':      {name:'Dune Valley',      location:'Dune Valley HS',     notes:'Defensive-minded team'}
+  }
+};
+
+// ============================================================
 // THIN SHELL INJECTION — builds CSS and HTML from SCHOOL_CONFIG
 // ============================================================
 (function injectApp(){
@@ -226,6 +358,8 @@ body{font-family:'Barlow',sans-serif;background:var(--cream);color:var(--black);
 .date-filter{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;}
 .date-filter input[type="date"]{padding:8px 12px;border:2px solid var(--gray-lighter);border-radius:8px;font-family:'Barlow',sans-serif;font-size:14px;color:var(--black);}
 .date-filter input:focus{outline:none;border-color:var(--red);}
+.demo-banner{position:fixed;top:0;left:0;right:0;z-index:99999;background:#f59e0b;color:#1a1a1a;text-align:center;padding:8px 12px;font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:2px;box-shadow:0 2px 8px rgba(0,0,0,0.15);pointer-events:none;}
+body.demo{padding-top:34px;}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--charcoal);color:var(--white);padding:12px 24px;border-radius:8px;font-weight:700;font-size:14px;box-shadow:var(--shadow-lg);z-index:1000;transition:transform 0.3s ease;white-space:nowrap;}.toast.show{transform:translateX(-50%) translateY(0);}
 .empty-state{text-align:center;padding:40px 20px;color:var(--gray);}.empty-state .emoji{font-size:40px;margin-bottom:12px;}.empty-state p{font-size:14px;line-height:1.6;}
 .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -18px;padding:0 18px;}
@@ -386,6 +520,7 @@ body{font-family:'Barlow',sans-serif;background:var(--cream);color:var(--black);
   <meta name="build-version" content="20260314030338">
 </head>
 <body>
+${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — Nothing saves — Refresh to reset</div>' : ''}
 <!-- LOGIN SCREEN -->
 <div class="login-overlay" id="login-overlay">
   <div class="login-box">
@@ -1143,6 +1278,7 @@ body{font-family:'Barlow',sans-serif;background:var(--cream);color:var(--black);
     </div>
   </div>
 </div>`;
+if(SC.demoMode) document.body.classList.add('demo');
 })();
 
 
@@ -1550,6 +1686,19 @@ let _autoLoginDone=false;
 // FIREBASE
 // ============================================================
 function initFB(){
+  if(SC.demoMode){
+    // DEMO MODE: hydrate D from _DEMO fixture, no Firebase touched.
+    D.players     = JSON.parse(JSON.stringify(_DEMO.players));
+    D.duals       = JSON.parse(JSON.stringify(_DEMO.duals));
+    D.schedule    = JSON.parse(JSON.stringify(_DEMO.schedule));
+    D.standings   = JSON.parse(JSON.stringify(_DEMO.standings));
+    D.assignments = JSON.parse(JSON.stringify(_DEMO.assignments));
+    D.opponents   = JSON.parse(JSON.stringify(_DEMO.opponents));
+    setSS(true);
+    refreshCurrent();
+    if(!_autoLoginDone){_autoLoginDone=true;autoLogin();}
+    return;
+  }
   try{if(!firebase.apps.length)firebase.initializeApp(FB_CONFIG);
     db=firebase.database();setSS(true);listenData();
   }catch(e){console.error(e);setSS(false);}
