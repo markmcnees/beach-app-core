@@ -1,6 +1,138 @@
 const SC=window.SCHOOL_CONFIG;
 
 // ============================================================
+// DEMO FIXTURE — only consumed when SC.demoMode === true
+// ============================================================
+const _DEMO = {
+  players: [
+    {id:'sd01', firstName:'Suzie',  lastName:'Spiker',     classYear:'SR', court:1, jersey:1,  active:true},
+    {id:'sd02', firstName:'Debby',  lastName:'Digger',     classYear:'SR', court:1, jersey:2,  active:true},
+    {id:'sd03', firstName:'Bonnie', lastName:'Blocker',    classYear:'JR', court:2, jersey:3,  active:true},
+    {id:'sd04', firstName:'Sammy',  lastName:'Setter',     classYear:'JR', court:2, jersey:4,  active:true},
+    {id:'sd05', firstName:'Penny',  lastName:'Passer',     classYear:'JR', court:3, jersey:5,  active:true},
+    {id:'sd06', firstName:'Sandy',  lastName:'Server',     classYear:'SO', court:3, jersey:6,  active:true},
+    {id:'sd07', firstName:'Sarah',  lastName:'Sandbagger', classYear:'SO', court:4, jersey:7,  active:true},
+    {id:'sd08', firstName:'Holly',  lastName:'Hitter',     classYear:'SO', court:4, jersey:8,  active:true},
+    {id:'sd09', firstName:'Riley',  lastName:'Receiver',   classYear:'FR', court:5, jersey:9,  active:true},
+    {id:'sd10', firstName:'Olivia', lastName:'Option',     classYear:'FR', court:5, jersey:10, active:true}
+  ],
+  schedule: [
+    {id:'sch01', date:'2026-04-08', opponent:'Coastal Prep',     location:'home', time:'4:00 PM', scoreUs:3, scoreThem:2},
+    {id:'sch02', date:'2026-04-15', opponent:'Bayshore Academy', location:'away', time:'4:00 PM', scoreUs:4, scoreThem:1},
+    {id:'sch03', date:'2026-04-22', opponent:'Riptide High',     location:'home', time:'4:00 PM', scoreUs:2, scoreThem:3},
+    {id:'sch04', date:'2026-04-29', opponent:'Dune Valley',      location:'away', time:'4:00 PM', scoreUs:3, scoreThem:2},
+    {id:'sch05', date:'2026-05-13', opponent:'Coastal Prep',     location:'away', time:'4:00 PM'},
+    {id:'sch06', date:'2026-05-20', opponent:'Riptide High',     location:'home', time:'4:00 PM'}
+  ],
+  duals: [
+    {
+      id:'dl01', date:'2026-04-08', opponent:'Coastal Prep', location:'home',
+      leonCourts:3, oppCourts:2, dualWin:true, createdAt:'2026-04-08',
+      courts:[
+        {court:1, pair:['sd01','sd02'], isExhibition:false, courtResult:'W',
+          sets:[{scoreUs:21,scoreThem:18},{scoreUs:21,scoreThem:19}]},
+        {court:2, pair:['sd03','sd04'], isExhibition:false, courtResult:'W',
+          sets:[{scoreUs:19,scoreThem:21},{scoreUs:21,scoreThem:18},{scoreUs:15,scoreThem:12}]},
+        {court:3, pair:['sd05','sd06'], isExhibition:false, courtResult:'W',
+          sets:[{scoreUs:21,scoreThem:15},{scoreUs:21,scoreThem:17}]},
+        {court:4, pair:['sd07','sd08'], isExhibition:false, courtResult:'L',
+          sets:[{scoreUs:18,scoreThem:21},{scoreUs:19,scoreThem:21}]},
+        {court:5, pair:['sd09','sd10'], isExhibition:false, courtResult:'L',
+          sets:[{scoreUs:21,scoreThem:19},{scoreUs:18,scoreThem:21},{scoreUs:12,scoreThem:15}]}
+      ]
+    },
+    {
+      id:'dl02', date:'2026-04-15', opponent:'Bayshore Academy', location:'away',
+      leonCourts:4, oppCourts:1, dualWin:true, createdAt:'2026-04-15',
+      courts:[
+        {court:1, pair:['sd01','sd02'], isExhibition:false, courtResult:'W',
+          sets:[{scoreUs:21,scoreThem:15},{scoreUs:21,scoreThem:18}]},
+        {court:2, pair:['sd03','sd04'], isExhibition:false, courtResult:'W',
+          sets:[{scoreUs:21,scoreThem:19},{scoreUs:21,scoreThem:17}]},
+        {court:3, pair:['sd05','sd06'], isExhibition:false, courtResult:'W',
+          sets:[{scoreUs:21,scoreThem:18},{scoreUs:19,scoreThem:21},{scoreUs:15,scoreThem:13}]},
+        {court:4, pair:['sd07','sd08'], isExhibition:false, courtResult:'W',
+          sets:[{scoreUs:21,scoreThem:19},{scoreUs:21,scoreThem:18}]},
+        {court:5, pair:['sd09','sd10'], isExhibition:false, courtResult:'L',
+          sets:[{scoreUs:19,scoreThem:21},{scoreUs:17,scoreThem:21}]}
+      ]
+    },
+    {
+      id:'dl03', date:'2026-04-22', opponent:'Riptide High', location:'home',
+      leonCourts:2, oppCourts:3, dualWin:false, createdAt:'2026-04-22',
+      courts:[
+        {court:1, pair:['sd01','sd02'], isExhibition:false, courtResult:'W',
+          sets:[{scoreUs:21,scoreThem:19},{scoreUs:19,scoreThem:21},{scoreUs:15,scoreThem:13}]},
+        {court:2, pair:['sd03','sd04'], isExhibition:false, courtResult:'L',
+          sets:[{scoreUs:18,scoreThem:21},{scoreUs:21,scoreThem:19},{scoreUs:12,scoreThem:15}]},
+        {court:3, pair:['sd05','sd06'], isExhibition:false, courtResult:'L',
+          sets:[{scoreUs:17,scoreThem:21},{scoreUs:19,scoreThem:21}]},
+        {court:4, pair:['sd07','sd08'], isExhibition:false, courtResult:'W',
+          sets:[{scoreUs:21,scoreThem:18},{scoreUs:21,scoreThem:19}]},
+        {court:5, pair:['sd09','sd10'], isExhibition:false, courtResult:'L',
+          sets:[{scoreUs:18,scoreThem:21},{scoreUs:19,scoreThem:21}]}
+      ]
+    },
+    {
+      id:'dl04', date:'2026-04-29', opponent:'Dune Valley', location:'away',
+      leonCourts:3, oppCourts:2, dualWin:true, createdAt:'2026-04-29',
+      courts:[
+        {court:1, pair:['sd01','sd02'], isExhibition:false, courtResult:'W',
+          sets:[{scoreUs:21,scoreThem:17},{scoreUs:21,scoreThem:19}]},
+        {court:2, pair:['sd03','sd04'], isExhibition:false, courtResult:'W',
+          sets:[{scoreUs:21,scoreThem:18},{scoreUs:19,scoreThem:21},{scoreUs:15,scoreThem:12}]},
+        {court:3, pair:['sd05','sd06'], isExhibition:false, courtResult:'L',
+          sets:[{scoreUs:19,scoreThem:21},{scoreUs:17,scoreThem:21}]},
+        {court:4, pair:['sd07','sd08'], isExhibition:false, courtResult:'L',
+          sets:[{scoreUs:18,scoreThem:21},{scoreUs:21,scoreThem:19},{scoreUs:13,scoreThem:15}]},
+        {court:5, pair:['sd09','sd10'], isExhibition:false, courtResult:'W',
+          sets:[{scoreUs:21,scoreThem:19},{scoreUs:21,scoreThem:18}]}
+      ]
+    }
+  ],
+  standings: {
+    'Sand Sharks':       {w:3, l:1, auto:true},
+    'Coastal Prep':      {w:2, l:2, auto:false},
+    'Bayshore Academy':  {w:1, l:3, auto:false},
+    'Riptide High':      {w:3, l:1, auto:false},
+    'Dune Valley':       {w:1, l:3, auto:false},
+    'Tidewater HS':      {w:2, l:2, auto:false}
+  },
+  assignments: {
+    asg01: {
+      id:'asg01', date:'2026-05-13', type:'gameday', opponent:'Coastal Prep',
+      location:'away', time:'4:00 PM',
+      courts:[
+        {court:1, pair:['sd01','sd02']},
+        {court:2, pair:['sd03','sd04']},
+        {court:3, pair:['sd05','sd06']},
+        {court:4, pair:['sd07','sd08']},
+        {court:5, pair:['sd09','sd10']}
+      ],
+      notes:null, createdAt:'2026-05-09'
+    },
+    asg02: {
+      id:'asg02', date:'2026-05-20', type:'gameday', opponent:'Riptide High',
+      location:'home', time:'4:00 PM',
+      courts:[
+        {court:1, pair:['sd01','sd02']},
+        {court:2, pair:['sd03','sd04']},
+        {court:3, pair:['sd05','sd06']},
+        {court:4, pair:['sd07','sd08']},
+        {court:5, pair:['sd09','sd10']}
+      ],
+      notes:null, createdAt:'2026-05-09'
+    }
+  },
+  opponents: {
+    'Coastal Prep':     {name:'Coastal Prep',     location:'Coastal Beach Club', notes:'Scrappy team — strong court 5'},
+    'Bayshore Academy': {name:'Bayshore Academy', location:'Bayshore High',      notes:'Young roster, improving fast'},
+    'Riptide High':     {name:'Riptide High',     location:'Riptide Beach',      notes:'Strong court 2-3 — watch the angles'},
+    'Dune Valley':      {name:'Dune Valley',      location:'Dune Valley HS',     notes:'Defensive-minded team'}
+  }
+};
+
+// ============================================================
 // THIN SHELL INJECTION — builds CSS and HTML from SCHOOL_CONFIG
 // ============================================================
 (function injectApp(){
@@ -226,6 +358,32 @@ body{font-family:'Barlow',sans-serif;background:var(--cream);color:var(--black);
 .date-filter{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;}
 .date-filter input[type="date"]{padding:8px 12px;border:2px solid var(--gray-lighter);border-radius:8px;font-family:'Barlow',sans-serif;font-size:14px;color:var(--black);}
 .date-filter input:focus{outline:none;border-color:var(--red);}
+.demo-banner{position:fixed;top:0;left:0;right:0;z-index:99999;background:#f59e0b;color:#1a1a1a;text-align:center;padding:8px 12px;font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:2px;box-shadow:0 2px 8px rgba(0,0,0,0.15);pointer-events:none;}
+.demo-creds strong{font-family:'Courier New',monospace;font-size:14px;background:rgba(0,0,0,0.06);padding:2px 8px;border-radius:4px;margin:0 4px;}
+.demo-creds .sep{margin:0 12px;color:var(--gray);}
+.demo-creds-inline{background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:10px 14px;margin:0 0 16px;font-size:13px;color:var(--charcoal);text-align:center;letter-spacing:0.3px;line-height:1.6;}
+body.demo{padding-top:32px;}
+.demo-guide-btn{position:fixed;bottom:20px;right:20px;z-index:99996;background:var(--red);color:var(--white);padding:12px 20px;border-radius:50px;font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:1.5px;box-shadow:0 4px 16px rgba(0,0,0,0.2);cursor:pointer;border:none;display:flex;align-items:center;gap:8px;transition:transform 0.2s,box-shadow 0.2s;}
+.demo-guide-btn:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,0.25);}
+.demo-guide-btn .icon{font-size:18px;}
+.demo-guide-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99997;display:none;align-items:flex-end;justify-content:center;padding:20px;}
+.demo-guide-overlay.show{display:flex;animation:fadeIn 0.2s ease;}
+.demo-guide-modal{background:var(--white);border-radius:16px 16px 0 0;max-width:600px;width:100%;max-height:85vh;overflow-y:auto;padding:0;animation:slideUp 0.3s ease;}
+@media(min-width:640px){.demo-guide-overlay{align-items:center;}.demo-guide-modal{border-radius:16px;}}
+@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+@keyframes slideUp{from{transform:translateY(40px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+.demo-guide-header{position:sticky;top:0;background:var(--white);padding:20px 24px 12px;border-bottom:1px solid var(--gray-light);display:flex;justify-content:space-between;align-items:center;}
+.demo-guide-header h2{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:2px;color:var(--red-dark);margin:0;}
+.demo-guide-close{background:none;border:none;font-size:24px;cursor:pointer;color:var(--gray);padding:4px 8px;line-height:1;}
+.demo-guide-close:hover{color:var(--charcoal);}
+.demo-guide-intro{padding:8px 24px 16px;color:var(--gray-dark);font-size:14px;line-height:1.5;}
+.demo-guide-list{padding:0 24px 24px;list-style:none;margin:0;}
+.demo-guide-list li{padding:14px 0;border-bottom:1px solid var(--gray-lighter);display:flex;gap:12px;align-items:flex-start;}
+.demo-guide-list li:last-child{border-bottom:none;}
+.demo-guide-num{flex-shrink:0;width:28px;height:28px;background:var(--red);color:var(--white);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:14px;}
+.demo-guide-content{flex:1;}
+.demo-guide-content h3{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:1px;margin:0 0 4px;color:var(--charcoal);}
+.demo-guide-content p{font-size:14px;line-height:1.5;color:var(--gray-dark);margin:0;}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--charcoal);color:var(--white);padding:12px 24px;border-radius:8px;font-weight:700;font-size:14px;box-shadow:var(--shadow-lg);z-index:1000;transition:transform 0.3s ease;white-space:nowrap;}.toast.show{transform:translateX(-50%) translateY(0);}
 .empty-state{text-align:center;padding:40px 20px;color:var(--gray);}.empty-state .emoji{font-size:40px;margin-bottom:12px;}.empty-state p{font-size:14px;line-height:1.6;}
 .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -18px;padding:0 18px;}
@@ -285,9 +443,21 @@ body{font-family:'Barlow',sans-serif;background:var(--cream);color:var(--black);
 }
 /* LOGIN SCREEN */
 .login-overlay{position:fixed;top:0;left:0;width:100%;height:100%;min-height:100dvh;background:linear-gradient(135deg,var(--red-deeper) 0%,var(--red) 50%,var(--red-dark) 100%);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;}
+body.demo .login-overlay{align-items:flex-start;padding-top:60px;padding-bottom:40px;overflow-y:auto;}
+body.demo .login-box{padding:20px 28px;}
+body.demo .login-logo > span[style*="font-size"]{margin-bottom:4px;}
+body.demo .login-sub{margin-bottom:12px;}
+body.demo .login-toggle{margin-bottom:12px;}
+body.demo .login-fans{margin-top:8px !important;padding-top:8px !important;}
+body.demo .login-fans > button{padding:6px 18px !important;}
+body.demo .login-fans > div{margin-top:3px !important;}
+body.demo .login-numpad-btn{padding:10px;}
+body.demo .login-pin-dots{margin:10px 0;}
+body.demo .login-error{margin-top:4px;min-height:14px;}
 .login-overlay.hidden{display:none;}
 .login-box{background:var(--white);border-radius:16px;padding:36px 28px;width:100%;max-width:380px;box-shadow:var(--shadow-lg);text-align:center;}
 .login-logo{font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:4px;color:var(--red);margin-bottom:4px;display:flex;flex-direction:column;align-items:center;gap:6px;}
+.login-logo > span[style*="font-size"]{margin-bottom:20px;}
 .login-logo .crown{font-size:30px;}
 .login-sub{font-size:13px;color:var(--gray);margin-bottom:24px;letter-spacing:0.5px;}
 .login-toggle{display:flex;gap:2px;background:var(--gray-lighter);border-radius:8px;padding:2px;margin-bottom:20px;}
@@ -386,11 +556,13 @@ body{font-family:'Barlow',sans-serif;background:var(--cream);color:var(--black);
   <meta name="build-version" content="20260314030338">
 </head>
 <body>
+${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — Nothing saves — Refresh to reset</div>' : ''}
 <!-- LOGIN SCREEN -->
 <div class="login-overlay" id="login-overlay">
   <div class="login-box">
-    <div class="login-logo" style="flex-direction:column;align-items:center;gap:6px;"><img src="${SC.logo}" style="height:64px;width:auto;" alt="${SC.logoAlt}" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<span style=&quot;font-size:64px;line-height:1;&quot;>${SC.teamEmoji}</span>')"><span>${SC.displayName}</span></div>
+    <div class="login-logo" style="flex-direction:column;align-items:center;gap:6px;"><img src="${SC.logo}" style="height:64px;width:auto;" alt="${SC.logoAlt}" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<span style=&quot;font-size:64px;line-height:1.2;&quot;>${SC.teamEmoji}</span>')"><span>${SC.displayName}</span></div>
     <div class="login-sub">2026 Beach Volleyball Season</div>
+    ${SC.demoMode ? '<div class="demo-creds-inline">Coach PIN: <strong>'+SC.coachPin+'</strong><span class="sep">·</span>Player password: <strong>'+SC.defaultPw+'</strong></div>' : ''}
     <div class="login-toggle">
       <button class="login-toggle-btn active" onclick="switchLogin('coach')">Coach</button>
       <button class="login-toggle-btn" onclick="switchLogin('player')">Player</button>
@@ -424,7 +596,7 @@ body{font-family:'Barlow',sans-serif;background:var(--cream);color:var(--black);
       <div class="login-error" id="pw-error"></div>
       <button class="login-btn" id="player-login-btn" onclick="playerLogin()">View My Stats</button>
     </div>
-    <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--gray-lighter);text-align:center;">
+    <div class="login-fans" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--gray-lighter);text-align:center;">
       <button onclick="showLeonFans()" style="display:inline-flex;align-items:center;gap:6px;font-family:'Bebas Neue';font-size:14px;letter-spacing:1.5px;color:var(--white);border:none;cursor:pointer;padding:9px 20px;border-radius:8px;background:var(--red);transition:background 0.2s;" onmouseover="this.style.background='var(--red-dark)';" onmouseout="this.style.background='var(--red)';">
         🏐 ${SC.displayName} Fan Page
       </button>
@@ -437,7 +609,7 @@ body{font-family:'Barlow',sans-serif;background:var(--cream);color:var(--black);
 <div id="app-wrapper" style="display:none;">
 <div class="header">
   <div class="header-top">
-    <h1><span class="crown"><img src="${SC.logo}" style="height:28px;width:auto;vertical-align:middle;" alt="${SC.abbrev}" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<span style=&quot;font-size:28px;line-height:1;vertical-align:middle;&quot;>${SC.teamEmoji}</span>')"></span> ${SC.displayName} <span class="sync-dot" id="sync-dot"></span></h1>
+    <h1><span class="crown"><img src="${SC.logo}" style="height:28px;width:auto;vertical-align:middle;" alt="${SC.abbrev}" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<span style=&quot;font-size:28px;line-height:1.2;vertical-align:middle;&quot;>${SC.teamEmoji}</span>')"></span> ${SC.displayName} <span class="sync-dot" id="sync-dot"></span></h1>
     <div class="header-user">
       <span class="header-username" id="header-username"></span>
       <button class="logout-btn" onclick="logout()">Logout</button>
@@ -1092,7 +1264,7 @@ body{font-family:'Barlow',sans-serif;background:var(--cream);color:var(--black);
     <div id="ca-result" style="margin-top:10px;"></div><div id="school-fans-overlay" style="display:none;position:fixed;inset:0;background:linear-gradient(160deg,${SC.colors.primaryDeeper} 0%,${SC.colors.primary} 50%,${SC.colors.primaryDark} 100%);z-index:10000;overflow-y:auto;-webkit-overflow-scrolling:touch;">
   <div style="max-width:480px;margin:0 auto;padding:16px 14px 40px;">
     <div style="text-align:center;padding:24px 0 12px;">
-      <div style="margin-bottom:8px;"><img src="${SC.logo}" style="height:80px;width:auto;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.4));" alt="${SC.logoAlt}" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<span style=&quot;font-size:80px;line-height:1;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.4));&quot;>${SC.teamEmoji}</span>')"></div>
+      <div style="margin-bottom:8px;"><img src="${SC.logo}" style="height:80px;width:auto;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.4));" alt="${SC.logoAlt}" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<span style=&quot;font-size:80px;line-height:1.2;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.4));&quot;>${SC.teamEmoji}</span>')"></div>
       <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:3px;color:#fff;">${SC.schoolName}</div>
       <div style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:2px;color:rgba(255,255,255,0.65);margin-top:2px;">Beach Volleyball &middot; 2026 Season</div>
       <div id="lf-record" style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:#d4a843;margin-top:8px;"></div>
@@ -1142,7 +1314,29 @@ body{font-family:'Barlow',sans-serif;background:var(--cream);color:var(--black);
       </div>
     </div>
   </div>
-</div>`;
+</div>
+${SC.demoMode ? `
+<button class="demo-guide-btn" id="demo-guide-btn" onclick="document.getElementById('demo-guide-overlay').classList.add('show')"><span class="icon">📖</span>Demo Guide</button>
+<div class="demo-guide-overlay" id="demo-guide-overlay" onclick="if(event.target===this)this.classList.remove('show')">
+  <div class="demo-guide-modal">
+    <div class="demo-guide-header">
+      <h2>Try These Things</h2>
+      <button class="demo-guide-close" onclick="document.getElementById('demo-guide-overlay').classList.remove('show')">×</button>
+    </div>
+    <p class="demo-guide-intro">Sand Sharks is a fictional team with sample data. Click around — nothing saves, refresh resets everything. Here is what is worth looking at:</p>
+    <ol class="demo-guide-list">
+      <li><span class="demo-guide-num">1</span><div class="demo-guide-content"><h3>See the team standings</h3><p>Click the Standings tab. Sand Sharks are 3-1 in district. Tap any opponent for head-to-head.</p></div></li>
+      <li><span class="demo-guide-num">2</span><div class="demo-guide-content"><h3>Look at a player's profile</h3><p>Tap any player name. Stats, partner history, and season trajectory.</p></div></li>
+      <li><span class="demo-guide-num">3</span><div class="demo-guide-content"><h3>Check partner chemistry</h3><p>Standings → tap a player → Partners. Shows W/L by partner across the season — which pairings are working, which aren't.</p></div></li>
+      <li><span class="demo-guide-num">4</span><div class="demo-guide-content"><h3>View a played dual</h3><p>Schedule tab → tap a past dual. Court-by-court set scores, who played who.</p></div></li>
+      <li><span class="demo-guide-num">5</span><div class="demo-guide-content"><h3>Open the planner</h3><p>Planner tab → enter Coach PIN 1234. Set lineups for upcoming matches. Try the auto-pair feature.</p></div></li>
+      <li><span class="demo-guide-num">6</span><div class="demo-guide-content"><h3>Try the Excel export</h3><p>Planner → Export. Roster, results, schedule all in one workbook.</p></div></li>
+      <li><span class="demo-guide-num">7</span><div class="demo-guide-content"><h3>Check the live scoring view</h3><p>From any dual, tap "Live Score." Mobile-friendly view for keeping score on the sand.</p></div></li>
+    </ol>
+  </div>
+</div>
+` : ''}`;
+if(SC.demoMode) document.body.classList.add('demo');
 })();
 
 
@@ -1550,6 +1744,19 @@ let _autoLoginDone=false;
 // FIREBASE
 // ============================================================
 function initFB(){
+  if(SC.demoMode){
+    // DEMO MODE: hydrate D from _DEMO fixture, no Firebase touched.
+    D.players     = JSON.parse(JSON.stringify(_DEMO.players));
+    D.duals       = JSON.parse(JSON.stringify(_DEMO.duals));
+    D.schedule    = JSON.parse(JSON.stringify(_DEMO.schedule));
+    D.standings   = JSON.parse(JSON.stringify(_DEMO.standings));
+    D.assignments = JSON.parse(JSON.stringify(_DEMO.assignments));
+    D.opponents   = JSON.parse(JSON.stringify(_DEMO.opponents));
+    setSS(true);
+    refreshCurrent();
+    if(!_autoLoginDone){_autoLoginDone=true;autoLogin();}
+    return;
+  }
   try{if(!firebase.apps.length)firebase.initializeApp(FB_CONFIG);
     db=firebase.database();setSS(true);listenData();
   }catch(e){console.error(e);setSS(false);}
