@@ -87,8 +87,10 @@ done < <(find . -name "index.html" -print0)
 # Never use git add -A here; courtsense often has untracked notes files
 # in its working tree that should not be swept into a deploy commit.
 git add app.js
-# Re-stage any tracked HTML files modified by the legacy CDN-tag bump above
-git diff --name-only | grep '\.html$' | xargs -r git add
+# Re-stage any tracked HTML files modified by the legacy CDN-tag bump above.
+# Use git's own pathspec filter (not grep) so a "no HTML changed" case yields
+# empty output at exit 0 instead of aborting the script under pipefail.
+git diff --name-only -- '*.html' | xargs -r git add
 
 if git diff --cached --quiet; then
   echo "courtsense already in sync, nothing to commit"
