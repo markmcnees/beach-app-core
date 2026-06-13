@@ -6,15 +6,21 @@ const SC=window.SCHOOL_CONFIG;
 const _DEMO = {
   players: [
     {id:'sd01', firstName:'Suzie',  lastName:'Spiker',     classYear:'SR', court:1, jersey:1,  active:true},
-    {id:'sd02', firstName:'Debby',  lastName:'Digger',     classYear:'SR', court:1, jersey:2,  active:true},
-    {id:'sd03', firstName:'Bonnie', lastName:'Blocker',    classYear:'JR', court:2, jersey:3,  active:true},
-    {id:'sd04', firstName:'Sammy',  lastName:'Setter',     classYear:'JR', court:2, jersey:4,  active:true},
-    {id:'sd05', firstName:'Penny',  lastName:'Passer',     classYear:'JR', court:3, jersey:5,  active:true},
-    {id:'sd06', firstName:'Sandy',  lastName:'Server',     classYear:'SO', court:3, jersey:6,  active:true},
-    {id:'sd07', firstName:'Sarah',  lastName:'Sandbagger', classYear:'SO', court:4, jersey:7,  active:true},
-    {id:'sd08', firstName:'Holly',  lastName:'Hitter',     classYear:'SO', court:4, jersey:8,  active:true},
-    {id:'sd09', firstName:'Riley',  lastName:'Receiver',   classYear:'FR', court:5, jersey:9,  active:true},
-    {id:'sd10', firstName:'Olivia', lastName:'Option',     classYear:'FR', court:5, jersey:10, active:true}
+    {id:'sd02', firstName:'Debby',  lastName:'Digger',     classYear:'SR', court:1, jersey:7,  active:true},
+    {id:'sd03', firstName:'Bonnie', lastName:'Blocker',    classYear:'JR', court:2, jersey:12, active:true},
+    {id:'sd04', firstName:'Sammy',  lastName:'Setter',     classYear:'JR', court:2, jersey:3,  active:true},
+    {id:'sd05', firstName:'Penny',  lastName:'Passer',     classYear:'JR', court:3, jersey:24, active:true},
+    {id:'sd06', firstName:'Sandy',  lastName:'Server',     classYear:'SO', court:3, jersey:9,  active:true},
+    {id:'sd07', firstName:'Sarah',  lastName:'Sandbagger', classYear:'SO', court:4, jersey:5,  active:true},
+    {id:'sd08', firstName:'Holly',  lastName:'Hitter',     classYear:'SO', court:4, jersey:15, active:true},
+    {id:'sd09', firstName:'Riley',  lastName:'Receiver',   classYear:'FR', court:5, jersey:21, active:true},
+    {id:'sd10', firstName:'Olivia', lastName:'Option',     classYear:'FR', court:5, jersey:8,  active:true},
+    {id:'sd11', firstName:'Wendy',  lastName:'Wave',       classYear:'SO', court:6, jersey:33, active:true},
+    {id:'sd12', firstName:'Dana',   lastName:'Dune',       classYear:'FR', court:6, jersey:18, active:true},
+    {id:'sd13', firstName:'Tara',   lastName:'Tide',       classYear:'SO', court:7, jersey:2,  active:true},
+    {id:'sd14', firstName:'Cora',   lastName:'Coral',      classYear:'FR', court:7, jersey:44, active:true},
+    {id:'sd15', firstName:'Marina', lastName:'Mist',       classYear:'FR', court:8, jersey:11, active:true},
+    {id:'sd16', firstName:'Shelly', lastName:'Shoal',      classYear:'SO', court:8, jersey:6,  active:true}
   ],
   schedule: [
     {id:'sch01', date:'2026-04-08', opponent:'Coastal Prep',     location:'home', time:'4:00 PM', scoreUs:3, scoreThem:2},
@@ -103,11 +109,11 @@ const _DEMO = {
       id:'asg01', date:'2026-05-13', type:'gameday', opponent:'Coastal Prep',
       location:'away', time:'4:00 PM',
       courts:[
-        {court:1, pair:['sd01','sd02']},
-        {court:2, pair:['sd03','sd04']},
-        {court:3, pair:['sd05','sd06']},
-        {court:4, pair:['sd07','sd08']},
-        {court:5, pair:['sd09','sd10']}
+        {court:1, p1:'sd01', p2:'sd02'},
+        {court:2, p1:'sd03', p2:'sd04'},
+        {court:3, p1:'sd05', p2:'sd06'},
+        {court:4, p1:'sd07', p2:'sd08'},
+        {court:5, p1:'sd09', p2:'sd10'}
       ],
       notes:null, createdAt:'2026-05-09'
     },
@@ -115,20 +121,348 @@ const _DEMO = {
       id:'asg02', date:'2026-05-20', type:'gameday', opponent:'Riptide High',
       location:'home', time:'4:00 PM',
       courts:[
-        {court:1, pair:['sd01','sd02']},
-        {court:2, pair:['sd03','sd04']},
-        {court:3, pair:['sd05','sd06']},
-        {court:4, pair:['sd07','sd08']},
-        {court:5, pair:['sd09','sd10']}
+        {court:1, p1:'sd01', p2:'sd02'},
+        {court:2, p1:'sd03', p2:'sd04'},
+        {court:3, p1:'sd05', p2:'sd06'},
+        {court:4, p1:'sd07', p2:'sd08'},
+        {court:5, p1:'sd09', p2:'sd10'}
       ],
       notes:null, createdAt:'2026-05-09'
     }
   },
   opponents: {
-    'Coastal Prep':     {name:'Coastal Prep',     location:'Coastal Beach Club', notes:'Scrappy team — strong court 5'},
-    'Bayshore Academy': {name:'Bayshore Academy', location:'Bayshore High',      notes:'Young roster, improving fast'},
-    'Riptide High':     {name:'Riptide High',     location:'Riptide Beach',      notes:'Strong court 2-3 — watch the angles'},
-    'Dune Valley':      {name:'Dune Valley',      location:'Dune Valley HS',     notes:'Defensive-minded team'}
+    riptide_high: {
+      info:{displayName:'Riptide High', lastDual:'2026-04-22'},
+      players:{
+        jade_barrow:  {firstName:'Jade',  lastName:'Barrow', fullName:'Jade Barrow',  jersey:'2',  typicalCourt:1, isAlternate:false, firstSeen:'2026-04-22', lastSeen:'2026-04-22'},
+        nova_swell:   {firstName:'Nova',  lastName:'Swell',  fullName:'Nova Swell',   jersey:'5',  typicalCourt:1, isAlternate:false, firstSeen:'2026-04-22', lastSeen:'2026-04-22'},
+        kai_breaker:  {firstName:'Kai',   lastName:'Breaker',fullName:'Kai Breaker',  jersey:'8',  typicalCourt:2, isAlternate:false, firstSeen:'2026-04-22', lastSeen:'2026-04-22'},
+        sage_marsh:   {firstName:'Sage',  lastName:'Marsh',  fullName:'Sage Marsh',   jersey:'11', typicalCourt:2, isAlternate:false, firstSeen:'2026-04-22', lastSeen:'2026-04-22'},
+        remy_cove:    {firstName:'Remy',  lastName:'Cove',   fullName:'Remy Cove',    jersey:'14', typicalCourt:3, isAlternate:true,  firstSeen:'2026-04-22', lastSeen:'2026-04-22'}
+      },
+      pairs:{
+        jade_barrow__nova_swell: {player1:'Jade Barrow', player2:'Nova Swell', court:1, firstSeen:'2026-04-22', lastSeen:'2026-04-22'},
+        kai_breaker__sage_marsh: {player1:'Kai Breaker', player2:'Sage Marsh', court:2, firstSeen:'2026-04-22', lastSeen:'2026-04-22'}
+      },
+      notes:{
+        sn_rip_1:{id:'sn_rip_1', targetType:'player', targetId:'jade_barrow', targetLabel:'Jade Barrow', text:'Big jump serve, goes to the line under pressure. Float her a tough deep ball and make her pass on the move.', tags:['serve','passing'], authorId:'demo_coach', authorName:'Coach Mark', date:'2026-03-18', createdAt:'2026-03-18T15:00:00.000Z'},
+        sn_rip_2:{id:'sn_rip_2', targetType:'player', targetId:'nova_swell', targetLabel:'Nova Swell', text:'Left side hitter who loves the cross. Set the block early and dig the line behind it.', tags:['defense'], authorId:'demo_coach', authorName:'Coach Mark', date:'2026-04-01', createdAt:'2026-04-01T15:00:00.000Z'},
+        sn_rip_3:{id:'sn_rip_3', targetType:'player', targetId:'kai_breaker', targetLabel:'Kai Breaker', text:'Tall and blocks well, but slow to transition off the net. Push the second ball to open court.', tags:['transition','block'], authorId:'demo_coach', authorName:'Coach Mark', date:'2026-04-09', createdAt:'2026-04-09T15:00:00.000Z'},
+        sn_rip_4:{id:'sn_rip_4', targetType:'player', targetId:'sage_marsh', targetLabel:'Sage Marsh', text:'Streaky server who shanks the first pass when rushed. Serve her early and often.', tags:['serve'], authorId:'demo_coach', authorName:'Coach Mark', date:'2026-04-22', createdAt:'2026-04-22T15:00:00.000Z'},
+        sn_rip_5:{id:'sn_rip_5', targetType:'pair', targetId:'jade_barrow__nova_swell', targetLabel:'Jade Barrow & Nova Swell', text:'Top pair runs the offense through the right side. Serve the off blocker and make the weaker passer move.', tags:['serve'], authorId:'demo_coach', authorName:'Coach Mark', date:'2026-04-22', createdAt:'2026-04-22T15:30:00.000Z'}
+      }
+    },
+    coastal_prep: {
+      info:{displayName:'Coastal Prep', lastDual:'2026-04-08', notes:'Scrappy team, strongest at court 5. Run their offense through the left side.'},
+      players:{
+        della_pier:   {firstName:'Della',   lastName:'Pier',   fullName:'Della Pier',   jersey:'3',  typicalCourt:1, isAlternate:false, firstSeen:'2026-03-15', lastSeen:'2026-04-08'},
+        brett_shore:  {firstName:'Brett',   lastName:'Shore',  fullName:'Brett Shore',  jersey:'10', typicalCourt:1, isAlternate:false, firstSeen:'2026-03-15', lastSeen:'2026-04-08'},
+        kelp_jensen:  {firstName:'Kelp',    lastName:'Jensen', fullName:'Kelp Jensen',  jersey:'6',  typicalCourt:3, isAlternate:false, firstSeen:'2026-03-29', lastSeen:'2026-04-08'},
+        marlowe_reef: {firstName:'Marlowe', lastName:'Reef',   fullName:'Marlowe Reef', jersey:'7',  typicalCourt:5, isAlternate:false, firstSeen:'2026-04-08', lastSeen:'2026-04-08'},
+        wren_tidal:   {firstName:'Wren',    lastName:'Tidal',  fullName:'Wren Tidal',   jersey:'14', typicalCourt:4, isAlternate:true,  firstSeen:'2026-04-08', lastSeen:'2026-04-08'}
+      },
+      pairs:{
+        brett_shore__della_pier: {player1:'Della Pier', player2:'Brett Shore', court:1, firstSeen:'2026-03-15', lastSeen:'2026-04-08'},
+        kelp_jensen__marlowe_reef: {player1:'Kelp Jensen', player2:'Marlowe Reef', court:3, firstSeen:'2026-03-29', lastSeen:'2026-04-08'}
+      },
+      notes:{
+        sn_cos_1:{id:'sn_cos_1', targetType:'player', targetId:'della_pier', targetLabel:'Della Pier', text:'Steady ball control, very hard to ace. Beats you with placement, not power. Stay disciplined and grind the rally.', tags:['passing'], authorId:'demo_coach', authorName:'Coach Mark', date:'2026-03-15', createdAt:'2026-03-15T15:00:00.000Z'},
+        sn_cos_2:{id:'sn_cos_2', targetType:'player', targetId:'marlowe_reef', targetLabel:'Marlowe Reef', text:'Their best at court 5, aggressive hitter. Do not give her a clean approach, serve deep to take away her tempo.', tags:['defense','serve'], authorId:'demo_coach', authorName:'Coach Mark', date:'2026-04-08', createdAt:'2026-04-08T15:00:00.000Z'},
+        sn_cos_3:{id:'sn_cos_3', targetType:'pair', targetId:'brett_shore__della_pier', targetLabel:'Della Pier & Brett Shore', text:'Veteran pair, patient in long rallies. Speed up the tempo and attack the seam between them.', tags:['transition'], authorId:'demo_coach', authorName:'Coach Mark', date:'2026-03-29', createdAt:'2026-03-29T15:00:00.000Z'}
+      }
+    },
+    bayshore_academy: {
+      info:{displayName:'Bayshore Academy', lastDual:'2026-04-15', notes:'Young roster, improving fast. Inconsistent serve receive, attack their court 5.'},
+      players:{
+        opal_bay:     {firstName:'Opal',  lastName:'Bay',    fullName:'Opal Bay',    jersey:'2',  typicalCourt:1, isAlternate:false, firstSeen:'2026-04-01', lastSeen:'2026-04-15'},
+        skye_harbor:  {firstName:'Skye',  lastName:'Harbor', fullName:'Skye Harbor', jersey:'9',  typicalCourt:2, isAlternate:false, firstSeen:'2026-04-15', lastSeen:'2026-04-15'},
+        marin_quill:  {firstName:'Marin', lastName:'Quill',  fullName:'Marin Quill', jersey:'11', typicalCourt:3, isAlternate:false, firstSeen:'2026-04-15', lastSeen:'2026-04-15'},
+        cove_addy:    {firstName:'Cove',  lastName:'Addy',   fullName:'Cove Addy',   jersey:'5',  typicalCourt:5, isAlternate:true,  firstSeen:'2026-04-15', lastSeen:'2026-04-15'}
+      },
+      pairs:{
+        opal_bay__skye_harbor: {player1:'Opal Bay', player2:'Skye Harbor', court:1, firstSeen:'2026-04-15', lastSeen:'2026-04-15'}
+      },
+      notes:{
+        sn_bay_1:{id:'sn_bay_1', targetType:'player', targetId:'opal_bay', targetLabel:'Opal Bay', text:'Young but athletic, big arm swing with timing that is still inconsistent. Serve tough and rush her approach.', tags:['serve'], authorId:'demo_coach', authorName:'Coach Mark', date:'2026-04-01', createdAt:'2026-04-01T15:00:00.000Z'},
+        sn_bay_2:{id:'sn_bay_2', targetType:'pair', targetId:'opal_bay__skye_harbor', targetLabel:'Opal Bay & Skye Harbor', text:'Shaky serve receive between them. Serve the seam and they tend to collide or leave it.', tags:['serve','passing'], authorId:'demo_coach', authorName:'Coach Mark', date:'2026-04-15', createdAt:'2026-04-15T15:00:00.000Z'}
+      }
+    },
+    dune_valley: {
+      info:{displayName:'Dune Valley', lastDual:'2026-04-29', notes:'Defensive-minded, digs everything. Be patient and finish at the net.'},
+      players:{
+        rilla_sands:  {firstName:'Rilla', lastName:'Sands',  fullName:'Rilla Sands',  jersey:'4',  typicalCourt:1, isAlternate:false, firstSeen:'2026-03-22', lastSeen:'2026-04-29'},
+        june_marsh:   {firstName:'June',  lastName:'Marsh',  fullName:'June Marsh',   jersey:'8',  typicalCourt:1, isAlternate:false, firstSeen:'2026-03-22', lastSeen:'2026-04-29'},
+        cleo_grove:   {firstName:'Cleo',  lastName:'Grove',  fullName:'Cleo Grove',   jersey:'13', typicalCourt:2, isAlternate:false, firstSeen:'2026-04-12', lastSeen:'2026-04-29'},
+        faye_dunn:    {firstName:'Faye',  lastName:'Dunn',   fullName:'Faye Dunn',    jersey:'1',  typicalCourt:4, isAlternate:false, firstSeen:'2026-04-29', lastSeen:'2026-04-29'}
+      },
+      pairs:{
+        june_marsh__rilla_sands: {player1:'Rilla Sands', player2:'June Marsh', court:1, firstSeen:'2026-03-22', lastSeen:'2026-04-29'}
+      },
+      notes:{
+        sn_dun_1:{id:'sn_dun_1', targetType:'player', targetId:'rilla_sands', targetLabel:'Rilla Sands', text:'Digs everything, will not give you a free ball. Be patient and finish high at the net instead of forcing it.', tags:['defense'], authorId:'demo_coach', authorName:'Coach Mark', date:'2026-03-22', createdAt:'2026-03-22T15:00:00.000Z'},
+        sn_dun_2:{id:'sn_dun_2', targetType:'player', targetId:'cleo_grove', targetLabel:'Cleo Grove', text:'Strong defender but a weaker attacker. Let her swing, her kill is a low percentage shot.', tags:['defense'], authorId:'demo_coach', authorName:'Coach Mark', date:'2026-04-12', createdAt:'2026-04-12T15:00:00.000Z'},
+        sn_dun_3:{id:'sn_dun_3', targetType:'pair', targetId:'june_marsh__rilla_sands', targetLabel:'Rilla Sands & June Marsh', text:'Grind-it-out defensive pair. Win the long rallies by staying aggressive and closing at the net.', tags:['transition'], authorId:'demo_coach', authorName:'Coach Mark', date:'2026-04-29', createdAt:'2026-04-29T15:00:00.000Z'}
+      }
+    }
+  },
+  gamedays: [
+    // ---- Official dual stat lines (courts 1-5), set scores mirror _DEMO.duals ----
+    {id:'gd01', date:'2026-04-08', opponent:'Coastal Prep', court:1, pair:['sd01','sd02'], sets:[
+      {scoreUs:21, scoreThem:18, stats:{sd01:{k:8,b:1,a:1,se:0,re:0,he:1,de:1}, sd02:{k:3,b:0,a:4,se:1,re:0,he:0,de:3}}},
+      {scoreUs:21, scoreThem:19, stats:{sd01:{k:7,b:2,a:2,se:1,re:0,he:1,de:0}, sd02:{k:4,b:0,a:3,se:0,re:1,he:1,de:4}}}
+    ]},
+    {id:'gd02', date:'2026-04-08', opponent:'Coastal Prep', court:2, pair:['sd03','sd04'], sets:[
+      {scoreUs:19, scoreThem:21, stats:{sd03:{k:4,b:4,a:0,se:1,re:0,he:2,de:1}, sd04:{k:3,b:1,a:5,se:0,re:1,he:1,de:1}}},
+      {scoreUs:21, scoreThem:18, stats:{sd03:{k:5,b:5,a:1,se:0,re:0,he:1,de:0}, sd04:{k:4,b:0,a:6,se:1,re:0,he:0,de:2}}},
+      {scoreUs:15, scoreThem:12, stats:{sd03:{k:3,b:3,a:0,se:0,re:0,he:1,de:1}, sd04:{k:2,b:0,a:4,se:0,re:0,he:1,de:1}}}
+    ]},
+    {id:'gd03', date:'2026-04-08', opponent:'Coastal Prep', court:3, pair:['sd05','sd06'], sets:[
+      {scoreUs:21, scoreThem:15, stats:{sd05:{k:4,b:1,a:3,se:1,re:1,he:1,de:2}, sd06:{k:3,b:1,a:2,se:1,re:1,he:1,de:2}}},
+      {scoreUs:21, scoreThem:17, stats:{sd05:{k:3,b:0,a:4,se:1,re:0,he:2,de:1}, sd06:{k:4,b:1,a:1,se:2,re:1,he:1,de:2}}}
+    ]},
+    {id:'gd04', date:'2026-04-08', opponent:'Coastal Prep', court:4, pair:['sd07','sd08'], sets:[
+      {scoreUs:18, scoreThem:21, stats:{sd07:{k:2,b:0,a:1,se:2,re:2,he:3,de:1}, sd08:{k:3,b:1,a:0,se:1,re:1,he:2,de:1}}},
+      {scoreUs:19, scoreThem:21, stats:{sd07:{k:3,b:0,a:1,se:1,re:2,he:2,de:2}, sd08:{k:2,b:1,a:1,se:2,re:1,he:3,de:1}}}
+    ]},
+    {id:'gd05', date:'2026-04-08', opponent:'Coastal Prep', court:5, pair:['sd09','sd10'], sets:[
+      {scoreUs:21, scoreThem:19, stats:{sd09:{k:2,b:0,a:2,se:1,re:2,he:2,de:2}, sd10:{k:2,b:0,a:1,se:2,re:1,he:2,de:1}}},
+      {scoreUs:18, scoreThem:21, stats:{sd09:{k:1,b:0,a:1,se:2,re:2,he:3,de:1}, sd10:{k:2,b:1,a:0,se:1,re:2,he:2,de:2}}},
+      {scoreUs:12, scoreThem:15, stats:{sd09:{k:1,b:0,a:1,se:1,re:1,he:2,de:1}, sd10:{k:1,b:0,a:1,se:2,re:1,he:2,de:1}}}
+    ]},
+    {id:'gd06', date:'2026-04-22', opponent:'Riptide High', court:1, pair:['sd01','sd02'], sets:[
+      {scoreUs:21, scoreThem:19, stats:{sd01:{k:6,b:1,a:1,se:1,re:0,he:2,de:1}, sd02:{k:2,b:0,a:5,se:0,re:1,he:0,de:3}}},
+      {scoreUs:19, scoreThem:21, stats:{sd01:{k:5,b:0,a:1,se:2,re:1,he:3,de:1}, sd02:{k:1,b:0,a:3,se:1,re:2,he:1,de:2}}},
+      {scoreUs:15, scoreThem:13, stats:{sd01:{k:6,b:1,a:0,se:0,re:0,he:1,de:1}, sd02:{k:2,b:0,a:2,se:0,re:0,he:0,de:2}}}
+    ]},
+    {id:'gd07', date:'2026-04-22', opponent:'Riptide High', court:2, pair:['sd03','sd04'], sets:[
+      {scoreUs:18, scoreThem:21, stats:{sd03:{k:3,b:3,a:1,se:1,re:1,he:2,de:1}, sd04:{k:2,b:0,a:4,se:1,re:1,he:1,de:2}}},
+      {scoreUs:21, scoreThem:19, stats:{sd03:{k:5,b:4,a:0,se:0,re:0,he:1,de:1}, sd04:{k:3,b:1,a:5,se:0,re:0,he:1,de:1}}},
+      {scoreUs:12, scoreThem:15, stats:{sd03:{k:2,b:2,a:0,se:1,re:1,he:2,de:0}, sd04:{k:1,b:0,a:3,se:1,re:1,he:2,de:1}}}
+    ]},
+    {id:'gd08', date:'2026-04-22', opponent:'Riptide High', court:3, pair:['sd05','sd06'], sets:[
+      {scoreUs:17, scoreThem:21, stats:{sd05:{k:2,b:0,a:3,se:2,re:2,he:2,de:1}, sd06:{k:2,b:1,a:1,se:2,re:1,he:2,de:1}}},
+      {scoreUs:19, scoreThem:21, stats:{sd05:{k:3,b:1,a:2,se:1,re:1,he:2,de:2}, sd06:{k:3,b:0,a:1,se:1,re:2,he:2,de:1}}}
+    ]},
+    {id:'gd09', date:'2026-04-22', opponent:'Riptide High', court:4, pair:['sd07','sd08'], sets:[
+      {scoreUs:21, scoreThem:18, stats:{sd07:{k:3,b:1,a:2,se:1,re:1,he:2,de:2}, sd08:{k:4,b:1,a:0,se:1,re:0,he:1,de:2}}},
+      {scoreUs:21, scoreThem:19, stats:{sd07:{k:2,b:0,a:1,se:1,re:1,he:2,de:1}, sd08:{k:3,b:2,a:1,se:0,re:1,he:1,de:1}}}
+    ]},
+    {id:'gd10', date:'2026-04-22', opponent:'Riptide High', court:5, pair:['sd09','sd10'], sets:[
+      {scoreUs:18, scoreThem:21, stats:{sd09:{k:2,b:0,a:1,se:2,re:2,he:3,de:1}, sd10:{k:1,b:0,a:1,se:1,re:2,he:2,de:2}}},
+      {scoreUs:19, scoreThem:21, stats:{sd09:{k:2,b:1,a:1,se:1,re:2,he:2,de:2}, sd10:{k:2,b:0,a:0,se:2,re:1,he:3,de:1}}}
+    ]},
+    // ---- Exhibition stat lines (courts 6-8), development players ----
+    {id:'gd11', date:'2026-04-22', opponent:'Riptide High', court:6, pair:['sd11','sd12'], sets:[
+      {scoreUs:21, scoreThem:17, stats:{sd11:{k:2,b:0,a:1,se:1,re:1,he:2,de:1}, sd12:{k:1,b:1,a:0,se:2,re:1,he:2,de:1}}},
+      {scoreUs:19, scoreThem:21, stats:{sd11:{k:1,b:0,a:1,se:2,re:2,he:3,de:1}, sd12:{k:1,b:0,a:0,se:1,re:2,he:2,de:2}}},
+      {scoreUs:15, scoreThem:11, stats:{sd11:{k:2,b:1,a:0,se:1,re:1,he:1,de:1}, sd12:{k:1,b:0,a:1,se:1,re:1,he:1,de:1}}}
+    ]},
+    {id:'gd12', date:'2026-04-22', opponent:'Riptide High', court:7, pair:['sd13','sd14'], sets:[
+      {scoreUs:18, scoreThem:21, stats:{sd13:{k:1,b:0,a:1,se:2,re:2,he:2,de:1}, sd14:{k:1,b:0,a:0,se:2,re:1,he:3,de:1}}},
+      {scoreUs:21, scoreThem:18, stats:{sd13:{k:2,b:1,a:0,se:1,re:1,he:1,de:2}, sd14:{k:2,b:0,a:1,se:1,re:1,he:1,de:1}}},
+      {scoreUs:12, scoreThem:15, stats:{sd13:{k:1,b:0,a:0,se:2,re:2,he:2,de:1}, sd14:{k:0,b:0,a:1,se:2,re:1,he:2,de:1}}}
+    ]},
+    {id:'gd13', date:'2026-04-22', opponent:'Riptide High', court:8, pair:['sd15','sd16'], sets:[
+      {scoreUs:21, scoreThem:19, stats:{sd15:{k:2,b:0,a:1,se:1,re:1,he:1,de:1}, sd16:{k:1,b:1,a:0,se:1,re:1,he:2,de:1}}},
+      {scoreUs:21, scoreThem:16, stats:{sd15:{k:2,b:1,a:0,se:1,re:0,he:1,de:2}, sd16:{k:1,b:0,a:1,se:1,re:1,he:1,de:1}}}
+    ]},
+    // ---- Court-5 cameo: a development player earns a look on an official court ----
+    {id:'gd14', date:'2026-04-29', opponent:'Dune Valley', court:5, pair:['sd09','sd11'], sets:[
+      {scoreUs:21, scoreThem:18, stats:{sd09:{k:3,b:0,a:2,se:1,re:1,he:1,de:2}, sd11:{k:2,b:0,a:1,se:1,re:1,he:1,de:1}}},
+      {scoreUs:21, scoreThem:19, stats:{sd09:{k:2,b:1,a:2,se:0,re:1,he:1,de:2}, sd11:{k:2,b:1,a:0,se:1,re:1,he:1,de:1}}}
+    ]},
+    // ---- Bayshore Academy 2026-04-15: full courts 1-5 (set scores mirror dl02) ----
+    {id:'gd15', date:'2026-04-15', opponent:'Bayshore Academy', court:1, pair:['sd01','sd02'], sets:[
+      {scoreUs:21, scoreThem:15, stats:{sd01:{k:8,b:1,a:2,se:0,re:0,he:1,de:1}, sd02:{k:3,b:0,a:4,se:0,re:0,he:0,de:3}}},
+      {scoreUs:21, scoreThem:18, stats:{sd01:{k:7,b:1,a:1,se:1,re:0,he:1,de:0}, sd02:{k:4,b:0,a:3,se:0,re:1,he:1,de:3}}}
+    ]},
+    {id:'gd16', date:'2026-04-15', opponent:'Bayshore Academy', court:2, pair:['sd03','sd04'], sets:[
+      {scoreUs:21, scoreThem:19, stats:{sd03:{k:5,b:4,a:0,se:0,re:0,he:1,de:1}, sd04:{k:3,b:1,a:5,se:1,re:0,he:1,de:1}}},
+      {scoreUs:21, scoreThem:17, stats:{sd03:{k:4,b:5,a:1,se:0,re:0,he:1,de:0}, sd04:{k:4,b:0,a:5,se:0,re:0,he:0,de:2}}}
+    ]},
+    {id:'gd17', date:'2026-04-15', opponent:'Bayshore Academy', court:3, pair:['sd05','sd06'], sets:[
+      {scoreUs:21, scoreThem:18, stats:{sd05:{k:4,b:1,a:3,se:1,re:1,he:1,de:2}, sd06:{k:3,b:1,a:2,se:1,re:1,he:1,de:2}}},
+      {scoreUs:19, scoreThem:21, stats:{sd05:{k:3,b:0,a:2,se:2,re:1,he:2,de:1}, sd06:{k:2,b:1,a:1,se:1,re:2,he:2,de:1}}},
+      {scoreUs:15, scoreThem:13, stats:{sd05:{k:3,b:1,a:1,se:0,re:0,he:1,de:1}, sd06:{k:3,b:0,a:1,se:1,re:1,he:1,de:2}}}
+    ]},
+    {id:'gd18', date:'2026-04-15', opponent:'Bayshore Academy', court:4, pair:['sd07','sd08'], sets:[
+      {scoreUs:21, scoreThem:19, stats:{sd07:{k:3,b:1,a:2,se:1,re:1,he:2,de:2}, sd08:{k:4,b:1,a:0,se:1,re:0,he:1,de:1}}},
+      {scoreUs:21, scoreThem:18, stats:{sd07:{k:3,b:0,a:1,se:1,re:1,he:1,de:2}, sd08:{k:4,b:2,a:1,se:0,re:1,he:1,de:1}}}
+    ]},
+    {id:'gd19', date:'2026-04-15', opponent:'Bayshore Academy', court:5, pair:['sd09','sd10'], sets:[
+      {scoreUs:19, scoreThem:21, stats:{sd09:{k:2,b:0,a:1,se:2,re:2,he:3,de:1}, sd10:{k:1,b:0,a:1,se:1,re:2,he:2,de:2}}},
+      {scoreUs:17, scoreThem:21, stats:{sd09:{k:1,b:0,a:1,se:2,re:2,he:2,de:1}, sd10:{k:2,b:0,a:0,se:2,re:1,he:3,de:1}}}
+    ]},
+    // ---- Dune Valley 2026-04-29: courts 1-4 (court 5 already covered by gd14 cameo; scores mirror dl04) ----
+    {id:'gd20', date:'2026-04-29', opponent:'Dune Valley', court:1, pair:['sd01','sd02'], sets:[
+      {scoreUs:21, scoreThem:17, stats:{sd01:{k:7,b:1,a:2,se:0,re:0,he:1,de:1}, sd02:{k:3,b:0,a:4,se:1,re:0,he:0,de:4}}},
+      {scoreUs:21, scoreThem:19, stats:{sd01:{k:8,b:2,a:1,se:1,re:0,he:1,de:0}, sd02:{k:4,b:0,a:3,se:0,re:1,he:1,de:3}}}
+    ]},
+    {id:'gd21', date:'2026-04-29', opponent:'Dune Valley', court:2, pair:['sd03','sd04'], sets:[
+      {scoreUs:21, scoreThem:18, stats:{sd03:{k:5,b:4,a:0,se:0,re:0,he:1,de:1}, sd04:{k:3,b:1,a:5,se:0,re:0,he:1,de:1}}},
+      {scoreUs:19, scoreThem:21, stats:{sd03:{k:3,b:3,a:1,se:1,re:1,he:2,de:1}, sd04:{k:2,b:0,a:4,se:1,re:1,he:2,de:1}}},
+      {scoreUs:15, scoreThem:12, stats:{sd03:{k:4,b:3,a:0,se:0,re:0,he:1,de:0}, sd04:{k:2,b:0,a:3,se:0,re:0,he:1,de:1}}}
+    ]},
+    {id:'gd22', date:'2026-04-29', opponent:'Dune Valley', court:3, pair:['sd05','sd06'], sets:[
+      {scoreUs:19, scoreThem:21, stats:{sd05:{k:3,b:1,a:2,se:1,re:1,he:2,de:2}, sd06:{k:3,b:0,a:1,se:1,re:2,he:2,de:1}}},
+      {scoreUs:17, scoreThem:21, stats:{sd05:{k:2,b:0,a:3,se:2,re:2,he:2,de:1}, sd06:{k:2,b:1,a:1,se:2,re:1,he:2,de:1}}}
+    ]},
+    {id:'gd23', date:'2026-04-29', opponent:'Dune Valley', court:4, pair:['sd07','sd08'], sets:[
+      {scoreUs:18, scoreThem:21, stats:{sd07:{k:2,b:0,a:1,se:2,re:2,he:3,de:1}, sd08:{k:3,b:1,a:0,se:1,re:1,he:2,de:1}}},
+      {scoreUs:21, scoreThem:19, stats:{sd07:{k:3,b:1,a:2,se:1,re:1,he:1,de:2}, sd08:{k:4,b:1,a:1,se:0,re:0,he:1,de:2}}},
+      {scoreUs:13, scoreThem:15, stats:{sd07:{k:2,b:0,a:1,se:2,re:1,he:2,de:1}, sd08:{k:2,b:1,a:0,se:1,re:1,he:2,de:1}}}
+    ]}
+  ],
+  skills: {
+    sd01:{serving:8,passing:7,setting:6,hitting:9,blocking:6,defense:7,courtSense:8,communication:7},
+    sd02:{serving:7,passing:9,setting:7,hitting:6,blocking:5,defense:9,courtSense:8,communication:8},
+    sd03:{serving:7,passing:6,setting:5,hitting:7,blocking:9,defense:6,courtSense:7,communication:7},
+    sd04:{serving:6,passing:8,setting:9,hitting:5,blocking:4,defense:7,courtSense:8,communication:8},
+    sd05:{serving:6,passing:6,setting:6,hitting:5,blocking:5,defense:6,courtSense:5,communication:6},
+    sd06:{serving:6,passing:5,setting:5,hitting:6,blocking:5,defense:5,courtSense:6,communication:5},
+    sd07:{serving:4,passing:5,setting:3,hitting:4,blocking:3,defense:5,courtSense:4,communication:5},
+    sd08:{serving:4,passing:4,setting:3,hitting:5,blocking:4,defense:4,courtSense:3,communication:4},
+    sd09:{serving:3,passing:4,setting:0,hitting:3,blocking:2,defense:4,courtSense:3,communication:0},
+    sd10:{serving:3,passing:3,setting:0,hitting:3,blocking:0,defense:4,courtSense:0,communication:3},
+    sd11:{serving:2,passing:3,setting:0,hitting:2,blocking:0,defense:3,courtSense:0,communication:2},
+    sd12:{serving:2,passing:2,setting:0,hitting:2,blocking:2,defense:2,courtSense:0,communication:0},
+    sd13:{serving:3,passing:2,setting:0,hitting:2,blocking:0,defense:2,courtSense:0,communication:2},
+    sd14:{serving:2,passing:3,setting:0,hitting:1,blocking:0,defense:3,courtSense:0,communication:0},
+    sd15:{serving:2,passing:2,setting:0,hitting:2,blocking:1,defense:2,courtSense:0,communication:2},
+    sd16:{serving:0,passing:2,setting:0,hitting:2,blocking:0,defense:2,courtSense:0,communication:0}
+  },
+  goals: {
+    sd01:{
+      goal_sd01_a:{goalType:'college_any', label:'Play college beach volleyball (any level)', selectedAt:'2026-04-10',
+        aiFeedback:{text:'Suzie, your hitting is already a college level weapon and your numbers back it up. The next step is serving consistency under pressure and tighter shot selection late in sets. Build jump serve reps to a target twice a week and keep leading your pair on the sand. Hold your error count where it is and college coaches will notice the all around game.', generatedAt:'2026-04-12', status:'approved', editedBy:'Coach', approvedAt:'2026-04-13'}}
+    },
+    sd05:{
+      goal_sd05_a:{goalType:'skill_setting', label:'Improve my setting', selectedAt:'2026-04-14',
+        aiFeedback:{text:'Penny, your court sense is solid and you move well to the ball. To raise your setting, get square to your target before the ball arrives and keep your hands high and quiet. Add fifteen minutes of partner setting to your warmup and track clean sets versus misfires.', generatedAt:'2026-04-15', status:'draft', editedBy:null, approvedAt:null}}
+    },
+    sd09:{
+      goal_sd09_a:{goalType:'skill_passing', label:'Improve my passing', selectedAt:'2026-04-20', aiFeedback:null}
+    },
+    sd02:{
+      goal_sd02_a:{goalType:'skill_serving', label:'Improve my serving', selectedAt:'2026-04-11',
+        aiFeedback:{text:'Debby, your defense and ball control are real strengths and your dig numbers prove it. To round out your game, your float serve needs more pace and a tighter target. Spend two short serving blocks each practice aiming deep corners, and you will turn free points into pressure on the other side. Keep at it. Coach Mark.', generatedAt:'2026-04-13', status:'approved', editedBy:'Coach', approvedAt:'2026-04-14'}}
+    },
+    sd03:{
+      goal_sd03_a:{goalType:'d2', label:'Play D2 college beach volleyball', selectedAt:'2026-04-09',
+        aiFeedback:{text:'Bonnie, your blocking is the best on this roster and D2 programs look for exactly that presence at the net. Keep extending your range to the line, and tighten your serve so you are not handing back easy sideouts. Film two matches this month and we will get clips to the coaches on your list. Coach Mark.', generatedAt:'2026-04-11', status:'approved', editedBy:'Coach', approvedAt:'2026-04-12'}}
+    },
+    sd07:{
+      goal_sd07_a:{goalType:'skill_hitting', label:'Improve my hitting', selectedAt:'2026-04-18',
+        aiFeedback:{text:'Sarah, you compete hard and your defense is steady. Your hitting will jump once you slow your approach and finish high through the ball instead of swiping across it. Add ten minutes of approach timing every practice and track clean kills versus hitting errors.', generatedAt:'2026-04-19', status:'draft', editedBy:null, approvedAt:null}}
+    },
+    sd11:{
+      goal_sd11_a:{goalType:'skill_defense', label:'Improve my defense', selectedAt:'2026-04-21', aiFeedback:null}
+    }
+  },
+  liveScoring: {
+    '0':{us:18, them:15, setNum:1, pairLabel:'Suzie S. & Debby D.', court:1, date:'2026-05-13', ts:1747000000000, scoredBy:'Coach'}
+  },
+  scrimmages: [
+    {id:'sc01', date:'2026-04-11', opponent:'Intrasquad', court:1, pair:['sd01','sd04'], sets:[
+      {scoreUs:21, scoreThem:17, stats:{sd01:{k:7,b:1,a:2,se:1,re:0,he:1,de:1}, sd04:{k:3,b:1,a:5,se:0,re:1,he:1,de:1}}},
+      {scoreUs:21, scoreThem:15, stats:{sd01:{k:8,b:2,a:1,se:0,re:0,he:1,de:0}, sd04:{k:4,b:0,a:6,se:1,re:0,he:0,de:1}}}
+    ]},
+    {id:'sc02', date:'2026-04-11', opponent:'Intrasquad', court:2, pair:['sd02','sd05'], sets:[
+      {scoreUs:19, scoreThem:21, stats:{sd02:{k:3,b:0,a:4,se:1,re:1,he:1,de:3}, sd05:{k:4,b:1,a:2,se:1,re:1,he:2,de:1}}},
+      {scoreUs:21, scoreThem:18, stats:{sd02:{k:4,b:0,a:3,se:0,re:0,he:0,de:4}, sd05:{k:5,b:1,a:3,se:1,re:0,he:1,de:2}}}
+    ]},
+    {id:'sc03', date:'2026-04-18', opponent:'Intrasquad', court:1, pair:['sd03','sd06'], sets:[
+      {scoreUs:21, scoreThem:16, stats:{sd03:{k:5,b:4,a:1,se:0,re:0,he:1,de:1}, sd06:{k:3,b:1,a:2,se:1,re:1,he:1,de:2}}},
+      {scoreUs:21, scoreThem:19, stats:{sd03:{k:4,b:5,a:0,se:1,re:0,he:2,de:0}, sd06:{k:4,b:1,a:1,se:1,re:1,he:1,de:2}}}
+    ]},
+    {id:'sc04', date:'2026-04-18', opponent:'Intrasquad', court:3, pair:['sd07','sd09'], sets:[
+      {scoreUs:18, scoreThem:21, stats:{sd07:{k:2,b:0,a:1,se:2,re:2,he:3,de:1}, sd09:{k:2,b:0,a:2,se:1,re:2,he:2,de:2}}},
+      {scoreUs:16, scoreThem:21, stats:{sd07:{k:3,b:0,a:1,se:1,re:2,he:2,de:2}, sd09:{k:1,b:0,a:1,se:2,re:2,he:3,de:1}}}
+    ]},
+    {id:'sc05', date:'2026-04-25', opponent:'Intrasquad', court:2, pair:['sd05','sd08'], sets:[
+      {scoreUs:21, scoreThem:14, stats:{sd05:{k:5,b:1,a:3,se:0,re:0,he:1,de:2}, sd08:{k:4,b:2,a:1,se:1,re:1,he:1,de:1}}},
+      {scoreUs:21, scoreThem:18, stats:{sd05:{k:4,b:0,a:4,se:1,re:1,he:1,de:1}, sd08:{k:5,b:1,a:0,se:1,re:0,he:2,de:1}}}
+    ]}
+  ],
+  matches: [
+    {id:'qm01', date:'2026-04-05', team1:['sd01','sd05'], team2:['sd02','sd06'], score1:21, score2:17},
+    {id:'qm02', date:'2026-04-05', team1:['sd03','sd07'], team2:['sd04','sd08'], score1:21, score2:15},
+    {id:'qm03', date:'2026-04-05', team1:['sd01','sd06'], team2:['sd03','sd09'], score1:21, score2:19},
+    {id:'qm04', date:'2026-04-12', team1:['sd02','sd04'], team2:['sd05','sd10'], score1:21, score2:16},
+    {id:'qm05', date:'2026-04-12', team1:['sd01','sd08'], team2:['sd03','sd05'], score1:19, score2:21},
+    {id:'qm06', date:'2026-04-12', team1:['sd06','sd07'], team2:['sd02','sd09'], score1:18, score2:21},
+    {id:'qm07', date:'2026-04-19', team1:['sd01','sd03'], team2:['sd02','sd05'], score1:21, score2:14},
+    {id:'qm08', date:'2026-04-19', team1:['sd04','sd06'], team2:['sd07','sd08'], score1:15, score2:21},
+    {id:'qm09', date:'2026-04-26', team1:['sd01','sd02'], team2:['sd03','sd04'], score1:21, score2:19},
+    {id:'qm10', date:'2026-04-26', team1:['sd05','sd09'], team2:['sd06','sd10'], score1:21, score2:17}
+  ],
+  jumpTests: {
+    jt01a:{id:'jt01a', playerId:'sd01', player:'sd01', date:'2026-03-20', standingReach:"7'5\"", blockJump:"9'3\"", approachJump:"9'7\""},
+    jt01b:{id:'jt01b', playerId:'sd01', player:'sd01', date:'2026-04-24', standingReach:"7'5\"", blockJump:"9'5\"", approachJump:"9'9\""},
+    jt02a:{id:'jt02a', playerId:'sd02', player:'sd02', date:'2026-03-20', standingReach:"7'4\"", blockJump:"9'2\"", approachJump:"9'6\""},
+    jt02b:{id:'jt02b', playerId:'sd02', player:'sd02', date:'2026-04-24', standingReach:"7'4\"", blockJump:"9'4\"", approachJump:"9'8\""},
+    jt03a:{id:'jt03a', playerId:'sd03', player:'sd03', date:'2026-03-20', standingReach:"7'4\"", blockJump:"9'3\"", approachJump:"9'5\""},
+    jt03b:{id:'jt03b', playerId:'sd03', player:'sd03', date:'2026-04-24', standingReach:"7'4\"", blockJump:"9'5\"", approachJump:"9'7\""},
+    jt04a:{id:'jt04a', playerId:'sd04', player:'sd04', date:'2026-03-20', standingReach:"7'3\"", blockJump:"9'0\"", approachJump:"9'4\""},
+    jt04b:{id:'jt04b', playerId:'sd04', player:'sd04', date:'2026-04-24', standingReach:"7'3\"", blockJump:"9'2\"", approachJump:"9'6\""},
+    jt05a:{id:'jt05a', playerId:'sd05', player:'sd05', date:'2026-03-20', standingReach:"7'3\"", blockJump:"9'0\"", approachJump:"9'3\""},
+    jt05b:{id:'jt05b', playerId:'sd05', player:'sd05', date:'2026-04-24', standingReach:"7'3\"", blockJump:"9'1\"", approachJump:"9'5\""},
+    jt06a:{id:'jt06a', playerId:'sd06', player:'sd06', date:'2026-03-20', standingReach:"7'2\"", blockJump:"8'11\"", approachJump:"9'2\""},
+    jt06b:{id:'jt06b', playerId:'sd06', player:'sd06', date:'2026-04-24', standingReach:"7'2\"", blockJump:"9'0\"", approachJump:"9'4\""},
+    jt07a:{id:'jt07a', playerId:'sd07', player:'sd07', date:'2026-03-20', standingReach:"7'2\"", blockJump:"8'10\"", approachJump:"9'1\""},
+    jt07b:{id:'jt07b', playerId:'sd07', player:'sd07', date:'2026-04-24', standingReach:"7'2\"", blockJump:"8'11\"", approachJump:"9'2\""},
+    jt08a:{id:'jt08a', playerId:'sd08', player:'sd08', date:'2026-03-20', standingReach:"7'2\"", blockJump:"8'10\"", approachJump:"9'0\""},
+    jt08b:{id:'jt08b', playerId:'sd08', player:'sd08', date:'2026-04-24', standingReach:"7'2\"", blockJump:"9'0\"", approachJump:"9'2\""},
+    jt09a:{id:'jt09a', playerId:'sd09', player:'sd09', date:'2026-03-20', standingReach:"7'1\"", blockJump:"8'8\"", approachJump:"8'11\""},
+    jt09b:{id:'jt09b', playerId:'sd09', player:'sd09', date:'2026-04-24', standingReach:"7'1\"", blockJump:"8'10\"", approachJump:"9'1\""},
+    jt10a:{id:'jt10a', playerId:'sd10', player:'sd10', date:'2026-03-20', standingReach:"7'1\"", blockJump:"8'8\"", approachJump:"8'10\""},
+    jt10b:{id:'jt10b', playerId:'sd10', player:'sd10', date:'2026-04-24', standingReach:"7'1\"", blockJump:"8'9\"", approachJump:"9'0\""},
+    jt11a:{id:'jt11a', playerId:'sd11', player:'sd11', date:'2026-03-20', standingReach:"7'1\"", blockJump:"8'7\"", approachJump:"8'10\""},
+    jt11b:{id:'jt11b', playerId:'sd11', player:'sd11', date:'2026-04-24', standingReach:"7'1\"", blockJump:"8'9\"", approachJump:"9'0\""},
+    jt12a:{id:'jt12a', playerId:'sd12', player:'sd12', date:'2026-03-20', standingReach:"7'0\"", blockJump:"8'7\"", approachJump:"8'9\""},
+    jt12b:{id:'jt12b', playerId:'sd12', player:'sd12', date:'2026-04-24', standingReach:"7'0\"", blockJump:"8'8\"", approachJump:"8'11\""},
+    jt13a:{id:'jt13a', playerId:'sd13', player:'sd13', date:'2026-03-20', standingReach:"7'0\"", blockJump:"8'6\"", approachJump:"8'9\""},
+    jt13b:{id:'jt13b', playerId:'sd13', player:'sd13', date:'2026-04-24', standingReach:"7'0\"", blockJump:"8'8\"", approachJump:"8'11\""},
+    jt14a:{id:'jt14a', playerId:'sd14', player:'sd14', date:'2026-03-20', standingReach:"6'11\"", blockJump:"8'6\"", approachJump:"8'8\""},
+    jt14b:{id:'jt14b', playerId:'sd14', player:'sd14', date:'2026-04-24', standingReach:"6'11\"", blockJump:"8'7\"", approachJump:"8'10\""},
+    jt15a:{id:'jt15a', playerId:'sd15', player:'sd15', date:'2026-03-20', standingReach:"7'0\"", blockJump:"8'6\"", approachJump:"8'8\""},
+    jt15b:{id:'jt15b', playerId:'sd15', player:'sd15', date:'2026-04-24', standingReach:"7'0\"", blockJump:"8'7\"", approachJump:"8'10\""},
+    jt16a:{id:'jt16a', playerId:'sd16', player:'sd16', date:'2026-03-20', standingReach:"6'11\"", blockJump:"8'5\"", approachJump:"8'7\""},
+    jt16b:{id:'jt16b', playerId:'sd16', player:'sd16', date:'2026-04-24', standingReach:"6'11\"", blockJump:"8'7\"", approachJump:"8'9\""}
+  },
+  starDrills: {
+    dr01a:{id:'dr01a', playerId:'sd01', player:'sd01', date:'2026-03-20', time:13.8},
+    dr01b:{id:'dr01b', playerId:'sd01', player:'sd01', date:'2026-04-24', time:12.9},
+    dr02a:{id:'dr02a', playerId:'sd02', player:'sd02', date:'2026-03-20', time:13.5},
+    dr02b:{id:'dr02b', playerId:'sd02', player:'sd02', date:'2026-04-24', time:12.6},
+    dr03a:{id:'dr03a', playerId:'sd03', player:'sd03', date:'2026-03-20', time:14.5},
+    dr03b:{id:'dr03b', playerId:'sd03', player:'sd03', date:'2026-04-24', time:13.8},
+    dr04a:{id:'dr04a', playerId:'sd04', player:'sd04', date:'2026-03-20', time:14.2},
+    dr04b:{id:'dr04b', playerId:'sd04', player:'sd04', date:'2026-04-24', time:13.5},
+    dr05a:{id:'dr05a', playerId:'sd05', player:'sd05', date:'2026-03-20', time:14.8},
+    dr05b:{id:'dr05b', playerId:'sd05', player:'sd05', date:'2026-04-24', time:14.1},
+    dr06a:{id:'dr06a', playerId:'sd06', player:'sd06', date:'2026-03-20', time:15.0},
+    dr06b:{id:'dr06b', playerId:'sd06', player:'sd06', date:'2026-04-24', time:14.3},
+    dr07a:{id:'dr07a', playerId:'sd07', player:'sd07', date:'2026-03-20', time:16.2},
+    dr07b:{id:'dr07b', playerId:'sd07', player:'sd07', date:'2026-04-24', time:15.4},
+    dr08a:{id:'dr08a', playerId:'sd08', player:'sd08', date:'2026-03-20', time:15.8},
+    dr08b:{id:'dr08b', playerId:'sd08', player:'sd08', date:'2026-04-24', time:15.0},
+    dr09a:{id:'dr09a', playerId:'sd09', player:'sd09', date:'2026-03-20', time:16.8},
+    dr09b:{id:'dr09b', playerId:'sd09', player:'sd09', date:'2026-04-24', time:16.0},
+    dr10a:{id:'dr10a', playerId:'sd10', player:'sd10', date:'2026-03-20', time:17.0},
+    dr10b:{id:'dr10b', playerId:'sd10', player:'sd10', date:'2026-04-24', time:16.2},
+    dr11a:{id:'dr11a', playerId:'sd11', player:'sd11', date:'2026-03-20', time:17.5},
+    dr11b:{id:'dr11b', playerId:'sd11', player:'sd11', date:'2026-04-24', time:16.8},
+    dr12a:{id:'dr12a', playerId:'sd12', player:'sd12', date:'2026-03-20', time:18.2},
+    dr12b:{id:'dr12b', playerId:'sd12', player:'sd12', date:'2026-04-24', time:17.4},
+    dr13a:{id:'dr13a', playerId:'sd13', player:'sd13', date:'2026-03-20', time:18.0},
+    dr13b:{id:'dr13b', playerId:'sd13', player:'sd13', date:'2026-04-24', time:17.2},
+    dr14a:{id:'dr14a', playerId:'sd14', player:'sd14', date:'2026-03-20', time:18.8},
+    dr14b:{id:'dr14b', playerId:'sd14', player:'sd14', date:'2026-04-24', time:18.0},
+    dr15a:{id:'dr15a', playerId:'sd15', player:'sd15', date:'2026-03-20', time:18.5},
+    dr15b:{id:'dr15b', playerId:'sd15', player:'sd15', date:'2026-04-24', time:17.7},
+    dr16a:{id:'dr16a', playerId:'sd16', player:'sd16', date:'2026-03-20', time:19.4},
+    dr16b:{id:'dr16b', playerId:'sd16', player:'sd16', date:'2026-04-24', time:18.6}
   }
 };
 
@@ -687,11 +1021,11 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
 <!-- ====== PLAYERS ====== -->
   <div class="tab-content" id="tab-players">
     <div class="filter-row" id="type-filter-players">
-      <button class="filter-btn active" data-ptype="all">All</button>
-      <button class="filter-btn" data-ptype="queens">Queens</button>
-      <button class="filter-btn blue" data-ptype="gameday">Dual</button>
-      <button class="filter-btn purple" data-ptype="scrimmage">Scrimmage</button>
+      <button class="filter-btn" data-ptype="all">All</button>
+      <button class="filter-btn blue active" data-ptype="gameday">Dual</button>
       <button class="filter-btn" data-ptype="exhibition" style="background:var(--white);color:#0e7a4d;border-color:#0e7a4d;">Exhibition</button>
+      <button class="filter-btn purple" data-ptype="scrimmage">Scrimmage</button>
+      <button class="filter-btn" data-ptype="queens">Queens</button>
     </div>
     
     <div class="card" style="padding:8px 12px;"><div class="table-wrap">
@@ -1752,6 +2086,23 @@ function initFB(){
     D.standings   = JSON.parse(JSON.stringify(_DEMO.standings));
     D.assignments = JSON.parse(JSON.stringify(_DEMO.assignments));
     D.opponents   = JSON.parse(JSON.stringify(_DEMO.opponents));
+    D.gamedays    = JSON.parse(JSON.stringify(_DEMO.gamedays));
+    D.scrimmages  = JSON.parse(JSON.stringify(_DEMO.scrimmages));
+    D.matches     = JSON.parse(JSON.stringify(_DEMO.matches));
+    D.goals       = JSON.parse(JSON.stringify(_DEMO.goals));
+    D.liveScoring = JSON.parse(JSON.stringify(_DEMO.liveScoring));
+    profilesData  = {
+      skills:     JSON.parse(JSON.stringify(_DEMO.skills)),
+      jumpTests:  JSON.parse(JSON.stringify(_DEMO.jumpTests)),
+      starDrills: JSON.parse(JSON.stringify(_DEMO.starDrills))
+    };
+    // Demo-only: shift the first assignment and the live-scoring entry to today's
+    // date (td(), the same YYYY-MM-DD the renderFans "today" gate compares against)
+    // so the date-gated live banner surfaces. Mutates the hydrated copies only;
+    // the _DEMO source literals stay static.
+    var _t = td();
+    if(D.assignments && D.assignments.asg01) D.assignments.asg01.date = _t;
+    if(D.liveScoring && D.liveScoring['0']) D.liveScoring['0'].date = _t;
     setSS(true);
     refreshCurrent();
     if(!_autoLoginDone){_autoLoginDone=true;autoLogin();}
@@ -2235,7 +2586,7 @@ function updateStanding(){
 // ============================================================
 // PLAYERS TAB
 // ============================================================
-let pSort={key:'diff',dir:'desc'},pCourt='all',pType='all';
+let pSort={key:'court',dir:'asc'},pCourt='all',pType='gameday';
 function renderPlayers(){
   // Build header based on type
   const thead=document.getElementById('players-thead');
@@ -2252,7 +2603,7 @@ function renderPlayers(){
     if(pSort.key===th.dataset.psort)pSort.dir=pSort.dir==='asc'?'desc':'asc';
     else{pSort.key=th.dataset.psort;pSort.dir='desc';}renderPlayers();});});
 
-  const list=pType==='gameday'?D.gamedays:pType==='scrimmage'?D.scrimmages:pType==='exhibition'?(D.gamedays||[]).filter(m=>(m.court||0)>5):null;
+  const list=pType==='gameday'?(D.gamedays||[]).filter(m=>(m.court||0)<=5):pType==='scrimmage'?D.scrimmages:pType==='exhibition'?(D.gamedays||[]).filter(m=>(m.court||0)>5):null;
   let rows=D.players.map(p=>{
     if(pType==='queens'){
       const s=queensStats(p.id,D.matches);
@@ -2697,7 +3048,7 @@ document.querySelectorAll('.tab').forEach(t=>{t.addEventListener('click',()=>{
 // Players tab filters
 document.querySelectorAll('#type-filter-players [data-ptype]').forEach(b=>{b.addEventListener('click',()=>{
   document.querySelectorAll('#type-filter-players [data-ptype]').forEach(x=>x.classList.remove('active'));b.classList.add('active');
-  pType=b.dataset.ptype;pSort={key:'diff',dir:'desc'};renderPlayers();});});
+  pType=b.dataset.ptype;pSort={key:'court',dir:'asc'};renderPlayers();});});
 document.querySelectorAll('#court-filter-players [data-court]').forEach(b=>{b.addEventListener('click',()=>{
   document.querySelectorAll('#court-filter-players [data-court]').forEach(x=>x.classList.remove('active'));b.classList.add('active');pCourt=b.dataset.court;renderPlayers();});});
 
@@ -3406,6 +3757,15 @@ function getPlayerDataSummary(pid){
 async function generateAIPlan(pid,gid){
   const goal=D.goals?.[pid]?.[gid];if(!goal)return;
   const p=gP(pid);if(!p)return;
+  if(SC.demoMode){
+    // Demo: no live worker call and no Firebase write. Drop a canned draft plan
+    // straight into the in-memory goal and re-render, mirroring the success path.
+    const plan=`${p.firstName}, you have put in honest work toward this goal and it shows in your recent numbers. Your court awareness and competitiveness are real strengths to build on.\n\nThe next step is turning that foundation into more consistent finishing. Pick two specific habits, a tighter serve target and a faster transition off the net, and rep them every practice.\n\nAdd ten focused minutes to each session on those two habits and track your clean reps against your errors so the progress is visible. Check in every two weeks and we will adjust as your numbers move.\n\nStay patient and keep competing. Coach Mark.`;
+    if(D.goals[pid]&&D.goals[pid][gid]) D.goals[pid][gid].aiFeedback={text:plan,generatedAt:td(),status:'draft',editedBy:null,approvedAt:null};
+    renderCoachGoals();
+    toast('AI plan generated — review and approve');
+    return;
+  }
   const dataSummary=getPlayerDataSummary(pid);
   const loadingId='ai-loading-'+gid;
   document.getElementById(loadingId).innerHTML='<div class="ai-loading"><div class="spinner"></div><div style="margin-top:8px;">AI is analyzing performance data...</div></div>';
@@ -4074,6 +4434,27 @@ async function generateAIPairings(){
   const teamData=buildTeamDataForPairings();
 
   try{
+    let text;
+    if(SC.demoMode){
+      // Demo: build a canned result in the exact text format the parser expects,
+      // then fall through to the same render/editAIPairings path. No worker call.
+      if(isQueens){
+        const mkRound=(r)=>`${numRounds>1?'ROUND '+r+':\n':''}COURT 1: Suzie Spiker & Penny Passer VS Debby Digger & Sandy Server | Balanced power and defense
+COURT 2: Bonnie Blocker & Riley Receiver VS Sammy Setter & Olivia Option | Block paired with young legs
+COURT 3: Sarah Sandbagger & Wendy Wave VS Holly Hitter & Dana Dune | Even developing matchup
+COURT 4: Tara Tide & Marina Mist VS Cora Coral & Shelly Shoal | Exhibition group reps`;
+        text=Array.from({length:numRounds},(_,i)=>mkRound(i+1)).join('\n')+'\nANALYSIS: All sixteen players go every round, strong and developing players split evenly for competitive games.';
+      }else{
+        text=['COURT 1: Suzie Spiker + Debby Digger | Top pair, balanced hitter and defender',
+          'COURT 2: Bonnie Blocker + Sammy Setter | Big block with a steady setter',
+          'COURT 3: Penny Passer + Sandy Server | Consistent serve and serve receive',
+          'COURT 4: Sarah Sandbagger + Holly Hitter | Developing pair with strong effort',
+          'COURT 5: Riley Receiver + Olivia Option | Young pair earning reps',
+          'COURT 6: Wendy Wave + Dana Dune | Exhibition court, building chemistry',
+          'COURT 7: Tara Tide + Cora Coral | Exhibition reps for development',
+          'COURT 8: Marina Mist + Shelly Shoal | Exhibition court, learning the system'].slice(0,numCourts).join('\n')+'\nANALYSIS: Strongest pairs up top, development players get exhibition reps on courts six through eight.';
+      }
+    } else {
     const response=await fetch('https://beach-volleyball-ai.markmcnees-479.workers.dev',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
@@ -4111,12 +4492,14 @@ ${numCourts>=4?'COURT 4: [Player1 Full Name] + [Player2 Full Name] | [Brief reas
 ${numCourts>=5?'COURT 5: [Player1 Full Name] + [Player2 Full Name] | [Brief reason - 10 words max]':''}
 ${numCourts>=6?'COURT 6: [Player1 Full Name] + [Player2 Full Name] | [Brief reason - 10 words max]':''}
 ${numCourts>=7?'COURT 7: [Player1 Full Name] + [Player2 Full Name] | [Brief reason - 10 words max]':''}
+${numCourts>=8?'COURT 8: [Player1 Full Name] + [Player2 Full Name] | [Brief reason - 10 words max]':''}
 SUBS: [Remaining players not assigned]
 ANALYSIS: [2-3 sentences explaining overall strategy]`}`}]
       })
     });
     const data=await response.json();
-    const text=data.content?.map(c=>c.text||'').join('')||'Unable to generate pairings.';
+    text=data.content?.map(c=>c.text||'').join('')||'Unable to generate pairings.';
+    }
 
     // Parse and display nicely
     let h='';
