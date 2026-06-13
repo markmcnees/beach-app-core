@@ -2241,19 +2241,23 @@ function queensStats(pid,matches){
 
 // External match stats (game day or scrimmage — both partners share score)
 function extStats(pid,matchList){
-  let setsW=0,setsL=0,pf=0,pa=0,k=0,b=0,a=0,se=0,re=0,he=0,de=0,totalSets=0,matchesPlayed=0;
+  let setsW=0,setsL=0,pf=0,pa=0,k=0,b=0,a=0,se=0,re=0,he=0,de=0,totalSets=0,matchesPlayed=0,matchesWon=0,matchesLost=0;
   matchList.forEach(m=>{
     if(!(m.pair||[]).includes(pid))return;
     matchesPlayed++;
+    let localW=0,localL=0;
     (m.sets||[]).forEach(s=>{
       const su=s.scoreUs||0,st=s.scoreThem||0;
       pf+=su;pa+=st;totalSets++;
       su>st?setsW++:setsL++;
+      su>st?localW++:localL++;
       const ps=s.stats?.[pid]||{};
       k+=ps.k||0;b+=ps.b||0;a+=ps.a||0;se+=ps.se||0;re+=ps.re||0;he+=ps.he||0;de+=ps.de||0;
     });
+    // Best 2 of 3: a played match (at least one set) is a win if the pair won more sets than it lost.
+    if(localW+localL>0) (localW>localL?matchesWon++:matchesLost++);
   });
-  return{setsWon:setsW,setsLost:setsL,diff:pf-pa,pf,pa,sets:totalSets,matches:matchesPlayed,k,b,a,se,re,he,de};
+  return{setsWon:setsW,setsLost:setsL,diff:pf-pa,pf,pa,sets:totalSets,matches:matchesPlayed,matchesWon,matchesLost,k,b,a,se,re,he,de};
 }
 
 // Combined stats for Players tab "All" view
@@ -3325,8 +3329,8 @@ function renderPlayerPortal(){
   const ss=extStats(pid,D.scrimmages);
   document.getElementById('pp-summary').innerHTML=`
     <div style="grid-column:1/-1;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:4px;">
+      <div class="stat-box"><div class="stat-number green">${gs.matchesWon}-${gs.matchesLost}</div><div class="stat-label">Match W-L</div></div>
       <div class="stat-box"><div class="stat-number green">${gs.setsWon}-${gs.setsLost}</div><div class="stat-label">Set W-L</div></div>
-      <div class="stat-box"><div class="stat-number green">${gs.matches}</div><div class="stat-label">Matches</div></div>
       <div class="stat-box"><div class="stat-number ${pmClass(gs.diff)}">${gs.sets>0?pmStr(gs.diff):'—'}</div><div class="stat-label">Pts +/-</div></div>
     </div>
     <div style="grid-column:1/-1;display:grid;grid-template-columns:repeat(7,1fr);gap:6px;">
