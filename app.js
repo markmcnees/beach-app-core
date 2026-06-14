@@ -2204,7 +2204,7 @@ function listenData(){if(!db)return;
     });
   });
 }
-function seedDB(){if(!db)return;
+function seedDB(){if(!db || !SC.allowAutoSeed)return;
   const u={};
   DEF_P.forEach(p=>{u[DB_ROOT+'/players/'+p.id]=JSON.parse(JSON.stringify(p));u[SC.dbRoots.profiles+'/players/'+p.id]=JSON.parse(JSON.stringify(p));});
   DEF_M.forEach(m=>{u[DB_ROOT+'/matches/'+m.id]=JSON.parse(JSON.stringify(m));});
