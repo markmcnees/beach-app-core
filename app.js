@@ -1,4 +1,6 @@
 const SC=window.SCHOOL_CONFIG;
+// User-facing label for the privileged role. Config-driven via SC.coachLabel, defaulting to Coach so every existing school is unchanged. Display only; the internal role string stays 'coach'.
+const COACH_LABEL = (SC && SC.coachLabel) ? SC.coachLabel : 'Coach';
 
 // ============================================================
 // DEMO FIXTURE — only consumed when SC.demoMode === true
@@ -901,13 +903,13 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
   <div class="login-box">
     <div class="login-logo" style="flex-direction:column;align-items:center;gap:6px;"><img src="${SC.logo}" style="height:64px;width:auto;" alt="${SC.logoAlt}" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<span style=&quot;font-size:64px;line-height:1.2;&quot;>${SC.teamEmoji}</span>')"><span>${SC.displayName}</span></div>
     <div class="login-sub">2026 Beach Volleyball Season</div>
-    ${SC.demoMode ? '<div class="demo-creds-inline">Coach PIN: <strong>'+SC.coachPin+'</strong><span class="sep">·</span>Player password: <strong>'+SC.defaultPw+'</strong></div>' : ''}
+    ${SC.demoMode ? '<div class="demo-creds-inline">'+COACH_LABEL+' PIN: <strong>'+SC.coachPin+'</strong><span class="sep">·</span>Player password: <strong>'+SC.defaultPw+'</strong></div>' : ''}
     <div class="login-toggle">
-      <button class="login-toggle-btn active" onclick="switchLogin('coach')">Coach</button>
+      <button class="login-toggle-btn active" onclick="switchLogin('coach')">${COACH_LABEL.toUpperCase()}</button>
       <button class="login-toggle-btn" onclick="switchLogin('player')">Player</button>
     </div>
     <div class="login-section active" id="login-coach">
-      <div style="font-family:'Bebas Neue';font-size:14px;letter-spacing:1.5px;color:var(--charcoal);margin-bottom:8px;">Enter Coach PIN</div>
+      <div style="font-family:'Bebas Neue';font-size:14px;letter-spacing:1.5px;color:var(--charcoal);margin-bottom:8px;">Enter ${COACH_LABEL} PIN</div>
       <div class="login-pin-dots" id="pin-dots">
         <div class="login-pin-dot"></div><div class="login-pin-dot"></div>
         <div class="login-pin-dot"></div><div class="login-pin-dot"></div>
