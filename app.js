@@ -5,22 +5,22 @@ const SC=window.SCHOOL_CONFIG;
 // ============================================================
 const _DEMO = {
   players: [
-    {id:'sd01', firstName:'Suzie',  lastName:'Spiker',     classYear:'SR', court:1, jersey:1,  active:true},
-    {id:'sd02', firstName:'Debby',  lastName:'Digger',     classYear:'SR', court:1, jersey:7,  active:true},
-    {id:'sd03', firstName:'Bonnie', lastName:'Blocker',    classYear:'JR', court:2, jersey:12, active:true},
-    {id:'sd04', firstName:'Sammy',  lastName:'Setter',     classYear:'JR', court:2, jersey:3,  active:true},
-    {id:'sd05', firstName:'Penny',  lastName:'Passer',     classYear:'JR', court:3, jersey:24, active:true},
-    {id:'sd06', firstName:'Sandy',  lastName:'Server',     classYear:'SO', court:3, jersey:9,  active:true},
-    {id:'sd07', firstName:'Sarah',  lastName:'Sandbagger', classYear:'SO', court:4, jersey:5,  active:true},
-    {id:'sd08', firstName:'Holly',  lastName:'Hitter',     classYear:'SO', court:4, jersey:15, active:true},
-    {id:'sd09', firstName:'Riley',  lastName:'Receiver',   classYear:'FR', court:5, jersey:21, active:true},
-    {id:'sd10', firstName:'Olivia', lastName:'Option',     classYear:'FR', court:5, jersey:8,  active:true},
-    {id:'sd11', firstName:'Wendy',  lastName:'Wave',       classYear:'SO', court:6, jersey:33, active:true},
-    {id:'sd12', firstName:'Dana',   lastName:'Dune',       classYear:'FR', court:6, jersey:18, active:true},
-    {id:'sd13', firstName:'Tara',   lastName:'Tide',       classYear:'SO', court:7, jersey:2,  active:true},
-    {id:'sd14', firstName:'Cora',   lastName:'Coral',      classYear:'FR', court:7, jersey:44, active:true},
-    {id:'sd15', firstName:'Marina', lastName:'Mist',       classYear:'FR', court:8, jersey:11, active:true},
-    {id:'sd16', firstName:'Shelly', lastName:'Shoal',      classYear:'SO', court:8, jersey:6,  active:true}
+    {id:'sd01', firstName:'Suzie',  lastName:'Spiker',     classYear:'SR', court:1, jersey:1,  active:true, tier:'gold'},
+    {id:'sd02', firstName:'Debby',  lastName:'Digger',     classYear:'SR', court:1, jersey:7,  active:true, tier:'gold'},
+    {id:'sd03', firstName:'Bonnie', lastName:'Blocker',    classYear:'JR', court:2, jersey:12, active:true, tier:'gold'},
+    {id:'sd04', firstName:'Sammy',  lastName:'Setter',     classYear:'JR', court:2, jersey:3,  active:true, tier:'gold'},
+    {id:'sd05', firstName:'Penny',  lastName:'Passer',     classYear:'JR', court:3, jersey:24, active:true, tier:'gold'},
+    {id:'sd06', firstName:'Sandy',  lastName:'Server',     classYear:'SO', court:3, jersey:9,  active:true, tier:'gold'},
+    {id:'sd07', firstName:'Sarah',  lastName:'Sandbagger', classYear:'SO', court:4, jersey:5,  active:true, tier:'gold'},
+    {id:'sd08', firstName:'Holly',  lastName:'Hitter',     classYear:'SO', court:4, jersey:15, active:true, tier:'gold'},
+    {id:'sd09', firstName:'Riley',  lastName:'Receiver',   classYear:'FR', court:5, jersey:21, active:true, tier:'garnet'},
+    {id:'sd10', firstName:'Olivia', lastName:'Option',     classYear:'FR', court:5, jersey:8,  active:true, tier:'garnet'},
+    {id:'sd11', firstName:'Wendy',  lastName:'Wave',       classYear:'SO', court:6, jersey:33, active:true, tier:'garnet'},
+    {id:'sd12', firstName:'Dana',   lastName:'Dune',       classYear:'FR', court:6, jersey:18, active:true, tier:'garnet'},
+    {id:'sd13', firstName:'Tara',   lastName:'Tide',       classYear:'SO', court:7, jersey:2,  active:true, tier:'garnet'},
+    {id:'sd14', firstName:'Cora',   lastName:'Coral',      classYear:'FR', court:7, jersey:44, active:true, tier:'garnet'},
+    {id:'sd15', firstName:'Marina', lastName:'Mist',       classYear:'FR', court:8, jersey:11, active:true, tier:'garnet'},
+    {id:'sd16', firstName:'Shelly', lastName:'Shoal',      classYear:'SO', court:8, jersey:6,  active:true, tier:'garnet'}
   ],
   schedule: [
     {id:'sch01', date:'2026-04-08', opponent:'Coastal Prep',     location:'home', time:'4:00 PM', scoreUs:3, scoreThem:2},
@@ -471,6 +471,8 @@ const _DEMO = {
 // ============================================================
 (function injectApp(){
   var c=SC.colors;
+  // Gold accent: config-driven via SC.colors.accent, falling back to the platform default so any school without an accent renders exactly as before.
+  var accent=(c && c.accent) ? c.accent : '#d4a843';
 
   // Helper: hex color to r,g,b string for rgba()
   function hexRgb(hex){
@@ -480,7 +482,7 @@ const _DEMO = {
   }
 
   // ── Inject CSS ──────────────────────────────────────────────
-  var rootLine=':root{--red:'+c.primary+';--red-dark:'+c.primaryDark+';--red-deeper:'+c.primaryDeeper+';--red-light:'+c.primaryLight+';--red-bg:'+c.primaryBg+';--black:#1a1a1a;--charcoal:#2d2d2d;--white:#ffffff;--off-white:#fafafa;--cream:#f7f4f0;--gold:#d4a843;--gold-light:#f0d98a;--gray:#6b7280;--gray-light:#d1d5db;--gray-lighter:#e8eaed;--green:#16a34a;--green-bg:#dcfce7;--loss-red:#991b1b;--blue:#4338ca;--blue-bg:#e0e7ff;--purple:#7c3aed;--purple-bg:#f3e8ff;--radius:10px;--shadow:0 2px 10px rgba(0,0,0,0.06);--shadow-lg:0 8px 30px rgba(0,0,0,0.12);}';
+  var rootLine=':root{--red:'+c.primary+';--red-dark:'+c.primaryDark+';--red-deeper:'+c.primaryDeeper+';--red-light:'+c.primaryLight+';--red-bg:'+c.primaryBg+';--black:#1a1a1a;--charcoal:#2d2d2d;--white:#ffffff;--off-white:#fafafa;--cream:#f7f4f0;--gold:'+accent+';--gold-light:#f0d98a;--gray:#6b7280;--gray-light:#d1d5db;--gray-lighter:#e8eaed;--green:#16a34a;--green-bg:#dcfce7;--loss-red:#991b1b;--blue:#4338ca;--blue-bg:#e0e7ff;--purple:#7c3aed;--purple-bg:#f3e8ff;--radius:10px;--shadow:0 2px 10px rgba(0,0,0,0.06);--shadow-lg:0 8px 30px rgba(0,0,0,0.12);}';
   var headerLine='.header{background:linear-gradient(135deg,var(--red-deeper) 0%,var(--red) 50%,var(--red-dark) 100%);padding:14px 20px 10px;position:relative;z-index:100;box-shadow:0 4px 24px rgba('+hexRgb(c.primary)+',0.3);}';
   var staticCSS=`
 
@@ -615,6 +617,9 @@ body{font-family:'Barlow',sans-serif;background:var(--cream);color:var(--black);
 .notif-banner-detail{font-size:13px;font-weight:700;}
 .class-badge{display:inline-block;font-size:10px;font-weight:800;padding:1px 6px;border-radius:3px;text-transform:uppercase;letter-spacing:0.5px;}
 .class-SR{background:var(--black);color:var(--white);}.class-JR{background:var(--red);color:var(--white);}.class-SO{background:var(--gold);color:var(--black);}.class-FR{background:var(--gray-light);color:var(--charcoal);}
+.tier-badge{display:inline-block;font-family:'Bebas Neue',sans-serif;font-size:11px;padding:2px 8px;border-radius:4px;letter-spacing:1px;}
+.tier-garnet{background:#782F40;color:#ffffff;}.tier-gold{background:#CEB888;color:#2d2d2d;}.tier-unassigned{background:var(--gray-light);color:var(--charcoal);}
+.tier-select{font-family:'Barlow',sans-serif;font-size:12px;padding:2px 6px;border:1px solid var(--gray-light);border-radius:5px;color:var(--charcoal);margin-left:4px;}
 .player-table{width:100%;border-collapse:separate;border-spacing:0;font-size:13px;}
 .player-table thead th{font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:1px;color:var(--gray);padding:8px 6px;text-align:left;border-bottom:2px solid var(--gray-lighter);cursor:pointer;white-space:nowrap;user-select:none;}
 .player-table thead th:hover{color:var(--red);}.player-table thead th.sort-active{color:var(--red-dark);}
@@ -1313,6 +1318,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
   <div class="card">
     <div class="pp-name" id="pp-name"></div>
     <div class="pp-meta" id="pp-meta"></div>
+    <div id="pp-tier-request"></div>
   </div>
 
   <!-- Notification banner -->
@@ -2069,7 +2075,7 @@ const DEF_M=[
   {id:'m09',date:'2026-02-06',court:2,team1:['p15','p04'],team2:['p05','p06'],score1:21,score2:15}
 ];
 
-let D={players:[],matches:[],planned:[],gamedays:[],scrimmages:[],schedule:[],standings:{},goals:{},assignments:{},duals:[],opponents:{},liveScoring:{},quizScores:{}};
+let D={players:[],matches:[],planned:[],gamedays:[],scrimmages:[],schedule:[],standings:{},goals:{},assignments:{},duals:[],opponents:{},liveScoring:{},quizScores:{},tierRequests:{}};
 let profilesData={}; // from leon_queens node for AI context
 let pgdNotes={}; // player self-notes per date: pgdNotes[pid][date]
 let _autoLoginDone=false;
@@ -2089,6 +2095,7 @@ function initFB(){
     D.gamedays    = JSON.parse(JSON.stringify(_DEMO.gamedays));
     D.scrimmages  = JSON.parse(JSON.stringify(_DEMO.scrimmages));
     D.matches     = JSON.parse(JSON.stringify(_DEMO.matches));
+    D.tierRequests= {};
     D.goals       = JSON.parse(JSON.stringify(_DEMO.goals));
     D.liveScoring = JSON.parse(JSON.stringify(_DEMO.liveScoring));
     profilesData  = {
@@ -2131,6 +2138,7 @@ function listenData(){if(!db)return;
       D.assignments=val.assignments||{};
       D.duals=val.duals?Object.values(val.duals):[];
       D.opponents=val.opponents||{};
+      D.tierRequests=val.tier_requests||{};
     }else{
       D.players=JSON.parse(JSON.stringify(DEF_P));
       D.matches=JSON.parse(JSON.stringify(DEF_M));
@@ -2205,6 +2213,7 @@ function listenData(){if(!db)return;
   });
 }
 function seedDB(){if(!db || !SC.allowAutoSeed)return;
+  if(DB_ROOT !== 'leon_queens_matches') return; // DEF_P is the Leon roster; never seed it into any other school node
   const u={};
   DEF_P.forEach(p=>{u[DB_ROOT+'/players/'+p.id]=JSON.parse(JSON.stringify(p));u[SC.dbRoots.profiles+'/players/'+p.id]=JSON.parse(JSON.stringify(p));});
   DEF_M.forEach(m=>{u[DB_ROOT+'/matches/'+m.id]=JSON.parse(JSON.stringify(m));});
@@ -2959,6 +2968,21 @@ function savePlayerName(pid){
   fbSet('players/'+pid,{...p,firstName:fn,lastName:ln});
   toast('Name updated: '+fn+' '+ln);
 }
+// Exec tier setter (Grass Club only). Mirrors savePlayerName's whole-object spread write so no other field is disturbed.
+// Also mutates the in-memory player so the change reflects immediately in demo mode, where fbSet is a no-op.
+function coachSetTier(pid,newTier){
+  const p=gP(pid);if(!p)return;
+  p.tier=newTier;
+  fbSet('players/'+pid,{...p,tier:newTier});
+  // Clear any pending tier request now that the coach has acted, closing the loop. Removes from the separate node only.
+  fbRemove('tier_requests/'+pid);
+  if(D.tierRequests)delete D.tierRequests[pid];
+  const rq=document.getElementById('cpm-tier-req');if(rq)rq.remove();
+  const TIER_LABELS={unassigned:'Unassigned',gold:'Gold',garnet:'Garnet'};
+  const b=document.getElementById('cpm-tier-badge');
+  if(b){b.className='tier-badge tier-'+newTier;b.textContent=TIER_LABELS[newTier];}
+  toast('Tier set: '+TIER_LABELS[newTier]);
+}
 function cancelEditName(pid,fn,ln){
   const nameEl=document.getElementById('rname-'+pid);
   if(nameEl)nameEl.innerHTML=fn+' '+ln;
@@ -3313,6 +3337,18 @@ function ppSetStatView(view,btn){
   if(btn)btn.classList.add('active');
   renderPlayerPortal();
 }
+// Player-side tier request (Grass Club only). Writes to the SEPARATE tier_requests node; never touches players/{id}.tier.
+// Mutates the in-memory copy so it reflects immediately in demo mode, where fbSet is a no-op.
+function playerRequestTier(choice){
+  if(!currentPlayerId)return;
+  const rec={tier:choice,ts:Date.now()};
+  fbSet('tier_requests/'+currentPlayerId,rec);
+  if(!D.tierRequests)D.tierRequests={};
+  D.tierRequests[currentPlayerId]=rec;
+  const TIER_LABELS={gold:'Gold',garnet:'Garnet'};
+  toast('Requested '+(TIER_LABELS[choice]||choice)+'. Your coach will review it.');
+  renderPlayerPortal();
+}
 function renderPlayerPortal(){
   if(!currentPlayerId)return;
   const p=gP(currentPlayerId);
@@ -3321,6 +3357,29 @@ function renderPlayerPortal(){
 
   document.getElementById('pp-name').textContent=p.firstName+' '+p.lastName;
   document.getElementById('pp-meta').innerHTML=`${p.jersey!=null?'<span style="font-family:\'Bebas Neue\',sans-serif;font-size:16px;color:var(--red);margin-right:6px;">#'+p.jersey+'</span>':''}<span class="class-badge class-${p.classYear}">${p.classYear}</span>`;
+
+  // Player tier request (Grass Club only, gated on SC.tiersEnabled). Tier placement is set by the coach;
+  // the player may ask to be considered for one. Writes to the SEPARATE tier_requests node, never to the player record.
+  const tierReqEl=document.getElementById('pp-tier-request');
+  if(tierReqEl){
+    if(SC.tiersEnabled){
+      const TIER_LABELS={gold:'Gold',garnet:'Garnet'};
+      const req=(D.tierRequests||{})[pid];
+      let rh=`<div class="card" style="padding:12px 14px;margin-top:10px;">
+        <div style="font-family:'Bebas Neue';font-size:13px;letter-spacing:1px;color:var(--charcoal);margin-bottom:4px;">Tier Placement</div>
+        <div style="font-size:12px;color:var(--gray);margin-bottom:10px;line-height:1.5;">Your coach sets your tier. You can ask to be considered for one below. This is a request, not a final placement.</div>`;
+      if(req&&req.tier){
+        rh+=`<div style="font-size:13px;margin-bottom:10px;">You requested: <span class="tier-badge tier-${req.tier}">${TIER_LABELS[req.tier]||req.tier}</span> <span style="color:var(--gray);font-size:12px;">Your coach will review it.</span></div>`;
+      }
+      rh+=`<div style="display:flex;gap:8px;">
+        <button class="btn btn-small" style="flex:1;background:#CEB888;color:#2d2d2d;border:none;" onclick="playerRequestTier('gold')">Request Gold</button>
+        <button class="btn btn-small" style="flex:1;background:#782F40;color:#ffffff;border:none;" onclick="playerRequestTier('garnet')">Request Garnet</button>
+      </div></div>`;
+      tierReqEl.innerHTML=rh;
+    } else {
+      tierReqEl.innerHTML='';
+    }
+  }
 
   // Summary stats — filtered by ppStatView
   const qs=queensStats(pid,D.matches);
@@ -3934,6 +3993,24 @@ function coachOpenPlayer(pid){
   // Header
   document.getElementById('cpm-name').textContent=p.firstName+' '+p.lastName;
   document.getElementById('cpm-meta').innerHTML=`<span class="class-badge class-${p.classYear}">${p.classYear}</span> <span class="court-badge court-${p.court}">PG ${p.court} — ${CL_LABELS[p.court]||''}</span>`;
+  // Tier control (Grass Club only, gated on SC.tiersEnabled so Leon, South Walton, and the demo never see it).
+  // Badge shows the current tier; the coach role additionally gets a setter that writes onto the player record.
+  if(SC.tiersEnabled){
+    const TIER_LABELS={unassigned:'Unassigned',gold:'Gold',garnet:'Garnet'};
+    const curTier=p.tier||'unassigned';
+    let tierHtml=` <span class="tier-badge tier-${curTier}" id="cpm-tier-badge">${TIER_LABELS[curTier]}</span>`;
+    if(currentRole==='coach'){
+      tierHtml+=`<select class="tier-select" onchange="coachSetTier('${pid}',this.value)">`+
+        ['unassigned','gold','garnet'].map(t=>`<option value="${t}" ${t===curTier?'selected':''}>${TIER_LABELS[t]}</option>`).join('')+
+        `</select>`;
+    }
+    // Player request flag: if this player has a pending tier request, surface it so the coach can act via the select above.
+    const tierReq=(D.tierRequests||{})[pid];
+    if(tierReq&&tierReq.tier){
+      tierHtml+=` <span class="tier-badge tier-${tierReq.tier}" id="cpm-tier-req" title="Player requested this tier">Requested: ${TIER_LABELS[tierReq.tier]||tierReq.tier}</span>`;
+    }
+    document.getElementById('cpm-meta').innerHTML+=tierHtml;
+  }
   // Skills sliders
   const SKILL_KEYS=['serving','passing','setting','hitting','blocking','defense','courtSense','communication'];
   const SKILL_LABELS={serving:'Serving',passing:'Passing',setting:'Setting',hitting:'Hitting',blocking:'Blocking',defense:'Defense',courtSense:'Court Sense',communication:'Communication'};
