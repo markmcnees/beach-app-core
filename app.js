@@ -1,6 +1,8 @@
 const SC=window.SCHOOL_CONFIG;
 // User-facing label for the privileged role. Config-driven via SC.coachLabel, defaulting to Coach so every existing school is unchanged. Display only; the internal role string stays 'coach'.
 const COACH_LABEL = (SC && SC.coachLabel) ? SC.coachLabel : 'Coach';
+// Login logo image height in px. Config-driven via SC.logoHeight, defaulting to 64 so every existing school renders exactly as today.
+const LOGO_H = (SC && SC.logoHeight) ? SC.logoHeight : 64;
 
 // ============================================================
 // DEMO FIXTURE — only consumed when SC.demoMode === true
@@ -901,7 +903,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
 <!-- LOGIN SCREEN -->
 <div class="login-overlay" id="login-overlay">
   <div class="login-box">
-    <div class="login-logo" style="flex-direction:column;align-items:center;gap:6px;"><img src="${SC.logo}" style="height:64px;width:auto;" alt="${SC.logoAlt}" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<span style=&quot;font-size:64px;line-height:1.2;&quot;>${SC.teamEmoji}</span>')"><span>${SC.displayName}</span></div>
+    <div class="login-logo" style="flex-direction:column;align-items:center;gap:6px;"><img src="${SC.logo}" style="height:${LOGO_H}px;width:auto;" alt="${SC.logoAlt}" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<span style=&quot;font-size:64px;line-height:1.2;&quot;>${SC.teamEmoji}</span>')"><span>${SC.displayName}</span></div>
     <div class="login-sub">2026 Beach Volleyball Season</div>
     ${SC.demoMode ? '<div class="demo-creds-inline">'+COACH_LABEL+' PIN: <strong>'+SC.coachPin+'</strong><span class="sep">·</span>Player password: <strong>'+SC.defaultPw+'</strong></div>' : ''}
     <div class="login-toggle">
