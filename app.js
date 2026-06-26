@@ -9,8 +9,8 @@ const LOGO_H = (SC && SC.logoHeight) ? SC.logoHeight : 64;
 // ============================================================
 const _DEMO = {
   players: [
-    {id:'sd01', firstName:'Suzie',  lastName:'Spiker',     classYear:'SR', court:1, jersey:1,  active:true, tier:'gold'},
-    {id:'sd02', firstName:'Debby',  lastName:'Digger',     classYear:'SR', court:1, jersey:7,  active:true, tier:'gold'},
+    {id:'sd01', firstName:'Suzie',  lastName:'Spiker',     classYear:'SR', court:1, jersey:1,  active:true, tier:'gold', leadership:'exec'},
+    {id:'sd02', firstName:'Debby',  lastName:'Digger',     classYear:'SR', court:1, jersey:7,  active:true, tier:'gold', leadership:'faculty'},
     {id:'sd03', firstName:'Bonnie', lastName:'Blocker',    classYear:'JR', court:2, jersey:12, active:true, tier:'gold'},
     {id:'sd04', firstName:'Sammy',  lastName:'Setter',     classYear:'JR', court:2, jersey:3,  active:true, tier:'gold'},
     {id:'sd05', firstName:'Penny',  lastName:'Passer',     classYear:'JR', court:3, jersey:24, active:true, tier:'gold'},
@@ -2989,6 +2989,20 @@ function coachSetTier(pid,newTier){
   // Refresh the roster behind the modal so a filtered view stays in sync (a player whose new tier no longer matches the active filter drops out immediately). Grass Club only.
   if(SC.tiersEnabled && typeof renderRoster==='function') renderRoster();
 }
+// Exec leadership setter (Grass Club only). Mirrors coachSetTier's whole-object spread write so no other field is disturbed.
+// leadership is 'exec' or 'faculty' or none. An empty selection clears it to null so absent means none. The chat layers read p.leadership later.
+function coachSetLeadership(pid,newVal){
+  const p=gP(pid);if(!p)return;
+  const val=newVal||null;
+  p.leadership=val;
+  fbSet('players/'+pid,{...p,leadership:val});
+  const LEADER_LABELS={'':'None',exec:'Exec',faculty:'Faculty Advisor'};
+  const b=document.getElementById('cpm-leader-badge');
+  if(b)b.textContent=LEADER_LABELS[val||''];
+  toast('Leadership set: '+LEADER_LABELS[val||'']);
+  // Keep the roster in sync, same as coachSetTier. Grass Club only.
+  if(SC.tiersEnabled && typeof renderRoster==='function') renderRoster();
+}
 function cancelEditName(pid,fn,ln){
   const nameEl=document.getElementById('rname-'+pid);
   if(nameEl)nameEl.innerHTML=fn+' '+ln;
@@ -4036,6 +4050,16 @@ function coachOpenPlayer(pid){
       tierHtml+=` <span class="tier-badge tier-${tierReq.tier}" id="cpm-tier-req" title="Player requested this tier">Requested: ${TIER_LABELS[tierReq.tier]||tierReq.tier}</span>`;
     }
     document.getElementById('cpm-meta').innerHTML+=tierHtml;
+    // Leadership marker control (Grass Club only, coach role only). Sets p.leadership = exec | faculty | none. The chat layers read this later.
+    if(currentRole==='coach'){
+      const LEADER_LABELS={'':'None',exec:'Exec',faculty:'Faculty Advisor'};
+      const curLead=p.leadership||'';
+      let leaderHtml=` <span id="cpm-leader-badge" style="font-size:11px;font-weight:700;color:var(--gray);margin-left:4px;">${LEADER_LABELS[curLead]}</span>`;
+      leaderHtml+=`<select class="tier-select" onchange="coachSetLeadership('${pid}',this.value)">`+
+        ['','exec','faculty'].map(v=>`<option value="${v}" ${v===curLead?'selected':''}>${LEADER_LABELS[v]}</option>`).join('')+
+        `</select>`;
+      document.getElementById('cpm-meta').innerHTML+=leaderHtml;
+    }
   }
   // Skills sliders
   const SKILL_KEYS=['serving','passing','setting','hitting','blocking','defense','courtSense','communication'];
