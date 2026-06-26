@@ -2103,7 +2103,12 @@ function initFB(){
     D.scrimmages  = JSON.parse(JSON.stringify(_DEMO.scrimmages));
     D.matches     = JSON.parse(JSON.stringify(_DEMO.matches));
     D.tierRequests= {};
-    D.chat        = {};
+    // Layer 5a demo seed: a couple of starter messages across channels so switching shows content. Authored by existing demo player ids.
+    D.chat        = {
+      allclub:{ seed_ac1:{authorId:'sd01',text:'Welcome to the All Club channel. Updates for everyone land here.',createdAt:Date.now()-7200000} },
+      gold:{ seed_g1:{authorId:'sd05',text:'Gold squad, great work at practice today.',createdAt:Date.now()-3600000} },
+      garnet:{}
+    };
     D.goals       = JSON.parse(JSON.stringify(_DEMO.goals));
     D.liveScoring = JSON.parse(JSON.stringify(_DEMO.liveScoring));
     profilesData  = {
@@ -7099,12 +7104,16 @@ function switchPPTab(tab,btn){
 }
 
 // ── CLUB CHAT (Grass Club, player portal) ───────────────────────────────────
-// One flat channel at DB_ROOT/chat/general, loaded into D.chat.general by the main
+// Three channels under DB_ROOT/chat/{channel}, loaded into D.chat[channel] by the main
 // listener and mirrored in memory on post so the demo (db null, fbSet no-op) still
 // shows messages. Author is the logged-in player (currentPlayerId); name and badge
 // derive from gP(authorId) at render time, so nothing is denormalized onto the message.
 // Layer 4: which post currently has its inline comment composer open (null = none). One at a time; preserved across re-renders.
 let openCommentPostId=null;
+// Layer 5a: three channels keyed under D.chat[channel]. allclub first = default landing channel. No visibility or posting rules yet; all three are visible and postable to everyone.
+const CHAT_CHANNELS=[['allclub','All Club'],['gold','Gold'],['garnet','Garnet']];
+let activeChatChannel='allclub';
+function setChatChannel(ch){ activeChatChannel=ch; openCommentPostId=null; renderClubChat(); }
 function toggleCommentComposer(postId){
   openCommentPostId = (openCommentPostId===postId) ? null : postId;
   renderClubChat();
@@ -7113,7 +7122,7 @@ function renderClubChat(){
   const panel=document.getElementById('pp-panel-chat');
   if(!panel)return;
   const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const msgs=(D.chat&&D.chat.general)||{};
+  const msgs=(D.chat&&D.chat[activeChatChannel])||{};
   const rows=Object.keys(msgs)
     .map(id=>({id,m:msgs[id]}))
     .filter(x=>x.m&&typeof x.m==='object')
@@ -7166,14 +7175,19 @@ function renderClubChat(){
       </div>`;
     }).join('');
   }
+  // Channel switcher (Layer 5a). Mirrors the roster tier-filter filter-btn pattern; active button tracks activeChatChannel.
+  const channelToggle=`<div style="display:flex;gap:8px;margin-bottom:10px;" id="cc-channel-toggle">`+
+    CHAT_CHANNELS.map(([ch,lbl])=>`<button class="filter-btn${activeChatChannel===ch?' active':''}" onclick="setChatChannel('${ch}')" style="flex:1;text-align:center;">${lbl}</button>`).join('')+
+    `</div>`;
   panel.innerHTML=`<div class="card"><div class="card-title"><span class="bar"></span> 💬 Club Chat</div>
+    ${channelToggle}
     <div id="cc-list">${list}</div>
     <textarea id="cc-text" maxlength="2000" placeholder="Message the club" style="width:100%;border:1px solid var(--gray-lighter);border-radius:8px;padding:10px 12px;font-family:inherit;font-size:14px;resize:vertical;min-height:64px;box-sizing:border-box;margin-top:10px;"></textarea>
     <button class="btn btn-primary btn-small" style="margin-top:8px;" onclick="postClubChat()">Post</button>
   </div>`;
 }
-// Post a club-chat message as the logged-in player. Writes under DB_ROOT/chat/general and
-// mirrors into memory so the demo reflects it immediately. No eligibility checks this layer.
+// Post a club-chat message as the logged-in player into the active channel. Writes under
+// DB_ROOT/chat/{channel} and mirrors into memory so the demo reflects it immediately. No eligibility checks this sub-step.
 function postClubChat(){
   if(!currentPlayerId)return;
   const ta=document.getElementById('cc-text');
@@ -7182,47 +7196,47 @@ function postClubChat(){
   if(!text)return;
   const id=gi('msg');
   const msg={authorId:currentPlayerId,text:text,createdAt:Date.now()};
-  fbSet('chat/general/'+id,msg);
+  fbSet('chat/'+activeChatChannel+'/'+id,msg);
   if(!D.chat)D.chat={};
-  if(!D.chat.general)D.chat.general={};
-  D.chat.general[id]=msg;
+  if(!D.chat[activeChatChannel])D.chat[activeChatChannel]={};
+  D.chat[activeChatChannel][id]=msg;
   ta.value='';
   renderClubChat();
 }
 // Delete a club-chat message. Author can delete their own only this layer; broader moderation comes with the rules layer.
 function delClubChat(id){
-  const m=(D.chat&&D.chat.general)?D.chat.general[id]:null;
+  const m=(D.chat&&D.chat[activeChatChannel])?D.chat[activeChatChannel][id]:null;
   if(!m)return;
   if(m.authorId!==currentPlayerId){toast('You can only delete your own messages.');return;}
   if(!confirm('Delete this message?'))return;
-  fbRemove('chat/general/'+id);
-  if(D.chat&&D.chat.general)delete D.chat.general[id];
+  fbRemove('chat/'+activeChatChannel+'/'+id);
+  if(D.chat&&D.chat[activeChatChannel])delete D.chat[activeChatChannel][id];
   renderClubChat();
 }
 // Post a comment under a club-chat post. Writes to the nested comments child and mirrors in memory for the demo.
 // Keeps the composer open on that post after posting (openCommentPostId unchanged).
 function postClubComment(postId){
   if(!currentPlayerId)return;
-  if(!(D.chat&&D.chat.general&&D.chat.general[postId]))return;
+  if(!(D.chat&&D.chat[activeChatChannel]&&D.chat[activeChatChannel][postId]))return;
   const ta=document.getElementById('cc-comment-text-'+postId);
   if(!ta)return;
   const text=(ta.value||'').trim();
   if(!text)return;
   const cid=gi('cmt');
   const c={authorId:currentPlayerId,text:text,createdAt:Date.now()};
-  fbSet('chat/general/'+postId+'/comments/'+cid,c);
-  if(!D.chat.general[postId].comments)D.chat.general[postId].comments={};
-  D.chat.general[postId].comments[cid]=c;
+  fbSet('chat/'+activeChatChannel+'/'+postId+'/comments/'+cid,c);
+  if(!D.chat[activeChatChannel][postId].comments)D.chat[activeChatChannel][postId].comments={};
+  D.chat[activeChatChannel][postId].comments[cid]=c;
   renderClubChat();
 }
 // Delete a comment. Author can delete their own only this layer; broader moderation comes with the rules layer.
 function delClubComment(postId,commentId){
-  const post=(D.chat&&D.chat.general)?D.chat.general[postId]:null;
+  const post=(D.chat&&D.chat[activeChatChannel])?D.chat[activeChatChannel][postId]:null;
   const c=(post&&post.comments)?post.comments[commentId]:null;
   if(!c)return;
   if(c.authorId!==currentPlayerId){toast('You can only delete your own comments.');return;}
   if(!confirm('Delete this comment?'))return;
-  fbRemove('chat/general/'+postId+'/comments/'+commentId);
+  fbRemove('chat/'+activeChatChannel+'/'+postId+'/comments/'+commentId);
   if(post&&post.comments)delete post.comments[commentId];
   renderClubChat();
 }
