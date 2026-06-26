@@ -7103,6 +7103,12 @@ function switchPPTab(tab,btn){
 // listener and mirrored in memory on post so the demo (db null, fbSet no-op) still
 // shows messages. Author is the logged-in player (currentPlayerId); name and badge
 // derive from gP(authorId) at render time, so nothing is denormalized onto the message.
+// Layer 4: which post currently has its inline comment composer open (null = none). One at a time; preserved across re-renders.
+let openCommentPostId=null;
+function toggleCommentComposer(postId){
+  openCommentPostId = (openCommentPostId===postId) ? null : postId;
+  renderClubChat();
+}
 function renderClubChat(){
   const panel=document.getElementById('pp-panel-chat');
   if(!panel)return;
@@ -7122,6 +7128,31 @@ function renderClubChat(){
       const badge=playerBadge(author);
       const when=m.createdAt?new Date(m.createdAt).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
       const del=m.authorId===currentPlayerId?`<button class="btn btn-danger btn-small" style="margin-top:6px;padding:3px 8px;font-size:10px;" onclick="delClubChat('${id}')">Delete</button>`:'';
+      // Comments (Layer 4): flat list nested under the post, oldest first, read from the post node's comments child.
+      const cmts=m.comments||{};
+      const crows=Object.keys(cmts)
+        .map(cid=>({cid,c:cmts[cid]}))
+        .filter(x=>x.c&&typeof x.c==='object')
+        .sort((a,b)=>(a.c.createdAt||0)-(b.c.createdAt||0));
+      const commentsHtml=crows.map(({cid,c})=>{
+        const ca=gP(c.authorId);
+        const cname=ca?ca.firstName+' '+ca.lastName:'Player';
+        const cbadge=playerBadge(ca);
+        const cwhen=c.createdAt?new Date(c.createdAt).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+        const cdel=c.authorId===currentPlayerId?`<button class="btn btn-danger btn-small" style="margin-top:4px;padding:2px 7px;font-size:10px;" onclick="delClubComment('${id}','${cid}')">Delete</button>`:'';
+        return `<div style="padding:6px 0 6px 14px;border-left:2px solid var(--gray-lighter);margin-top:6px;">
+          <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;">
+            <span style="font-weight:700;color:var(--charcoal);font-size:13px;">${esc(cname)} ${cbadge}</span>
+            <span style="font-size:10px;color:var(--gray);white-space:nowrap;">${cwhen}</span>
+          </div>
+          <div style="font-size:13px;color:var(--black);white-space:pre-wrap;word-break:break-word;margin-top:2px;">${esc(c.text)}</div>
+          ${cdel}
+        </div>`;
+      }).join('');
+      const composerHtml=openCommentPostId===id?`<div style="margin-top:8px;padding-left:14px;">
+        <textarea id="cc-comment-text-${id}" maxlength="2000" placeholder="Add a comment" style="width:100%;border:1px solid var(--gray-lighter);border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13px;resize:vertical;min-height:48px;box-sizing:border-box;"></textarea>
+        <button class="btn btn-primary btn-small" style="margin-top:6px;padding:3px 10px;font-size:10px;" onclick="postClubComment('${id}')">Post Comment</button>
+      </div>`:'';
       return `<div style="padding:8px 0;border-bottom:1px solid var(--gray-lighter);">
         <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;">
           <span style="font-weight:700;color:var(--charcoal);font-size:14px;">${esc(name)} ${badge}</span>
@@ -7129,6 +7160,9 @@ function renderClubChat(){
         </div>
         <div style="font-size:14px;color:var(--black);white-space:pre-wrap;word-break:break-word;margin-top:2px;">${esc(m.text)}</div>
         ${del}
+        ${commentsHtml}
+        <div style="margin-top:6px;"><button class="btn btn-secondary btn-small" style="padding:3px 8px;font-size:10px;" onclick="toggleCommentComposer('${id}')">${openCommentPostId===id?'Close':'Comment'}</button></div>
+        ${composerHtml}
       </div>`;
     }).join('');
   }
@@ -7163,6 +7197,33 @@ function delClubChat(id){
   if(!confirm('Delete this message?'))return;
   fbRemove('chat/general/'+id);
   if(D.chat&&D.chat.general)delete D.chat.general[id];
+  renderClubChat();
+}
+// Post a comment under a club-chat post. Writes to the nested comments child and mirrors in memory for the demo.
+// Keeps the composer open on that post after posting (openCommentPostId unchanged).
+function postClubComment(postId){
+  if(!currentPlayerId)return;
+  if(!(D.chat&&D.chat.general&&D.chat.general[postId]))return;
+  const ta=document.getElementById('cc-comment-text-'+postId);
+  if(!ta)return;
+  const text=(ta.value||'').trim();
+  if(!text)return;
+  const cid=gi('cmt');
+  const c={authorId:currentPlayerId,text:text,createdAt:Date.now()};
+  fbSet('chat/general/'+postId+'/comments/'+cid,c);
+  if(!D.chat.general[postId].comments)D.chat.general[postId].comments={};
+  D.chat.general[postId].comments[cid]=c;
+  renderClubChat();
+}
+// Delete a comment. Author can delete their own only this layer; broader moderation comes with the rules layer.
+function delClubComment(postId,commentId){
+  const post=(D.chat&&D.chat.general)?D.chat.general[postId]:null;
+  const c=(post&&post.comments)?post.comments[commentId]:null;
+  if(!c)return;
+  if(c.authorId!==currentPlayerId){toast('You can only delete your own comments.');return;}
+  if(!confirm('Delete this comment?'))return;
+  fbRemove('chat/general/'+postId+'/comments/'+commentId);
+  if(post&&post.comments)delete post.comments[commentId];
   renderClubChat();
 }
 
