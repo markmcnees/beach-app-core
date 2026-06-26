@@ -7139,6 +7139,8 @@ function canPostInChannel(ch){
   if(ch==='garnet')  return lead || me.tier==='garnet';
   return false;
 }
+// Layer 5d: is the current player leadership (exec or faculty)? Drives the as-Exec toggle and exec-voice delete rights.
+function isCurrentLeader(){ const me=gP(currentPlayerId); return !!(me && (me.leadership==='exec' || me.leadership==='faculty')); }
 function toggleCommentComposer(postId){
   openCommentPostId = (openCommentPostId===postId) ? null : postId;
   renderClubChat();
@@ -7148,6 +7150,10 @@ function renderClubChat(){
   if(!panel)return;
   ensureVisibleChannel();
   const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  // Layer 5d author rendering: an exec-voice item (authorRole 'exec', no authorId) shows as Exec with the Exec badge; otherwise resolve the person via gP. Applies to posts and comments.
+  const EXEC_BADGE='<span class="tier-badge badge-exec">Exec</span>';
+  const authorName=o=>{ if(o&&o.authorRole==='exec')return 'Exec'; const a=gP(o&&o.authorId); return a?a.firstName+' '+a.lastName:'Player'; };
+  const authorBadge=o=>{ if(o&&o.authorRole==='exec')return EXEC_BADGE; return playerBadge(gP(o&&o.authorId)); };
   const msgs=(D.chat&&D.chat[activeChatChannel])||{};
   const rows=Object.keys(msgs)
     .map(id=>({id,m:msgs[id]}))
@@ -7158,11 +7164,11 @@ function renderClubChat(){
     list='<p style="color:var(--gray);font-size:13px;padding:8px 0;">No messages yet. Start the conversation.</p>';
   }else{
     list=rows.map(({id,m})=>{
-      const author=gP(m.authorId);
-      const name=author?author.firstName+' '+author.lastName:'Player';
-      const badge=playerBadge(author);
+      const name=authorName(m);
+      const badge=authorBadge(m);
       const when=m.createdAt?new Date(m.createdAt).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
-      const del=m.authorId===currentPlayerId?`<button class="btn btn-danger btn-small" style="margin-top:6px;padding:3px 8px;font-size:10px;" onclick="delClubChat('${id}')">Delete</button>`:'';
+      const canDelPost=m.authorId===currentPlayerId || (m.authorRole==='exec' && isCurrentLeader());
+      const del=canDelPost?`<button class="btn btn-danger btn-small" style="margin-top:6px;padding:3px 8px;font-size:10px;" onclick="delClubChat('${id}')">Delete</button>`:'';
       // Comments (Layer 4): flat list nested under the post, oldest first, read from the post node's comments child.
       const cmts=m.comments||{};
       const crows=Object.keys(cmts)
@@ -7170,9 +7176,8 @@ function renderClubChat(){
         .filter(x=>x.c&&typeof x.c==='object')
         .sort((a,b)=>(a.c.createdAt||0)-(b.c.createdAt||0));
       const commentsHtml=crows.map(({cid,c})=>{
-        const ca=gP(c.authorId);
-        const cname=ca?ca.firstName+' '+ca.lastName:'Player';
-        const cbadge=playerBadge(ca);
+        const cname=authorName(c);
+        const cbadge=authorBadge(c);
         const cwhen=c.createdAt?new Date(c.createdAt).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
         const cdel=c.authorId===currentPlayerId?`<button class="btn btn-danger btn-small" style="margin-top:4px;padding:2px 7px;font-size:10px;" onclick="delClubComment('${id}','${cid}')">Delete</button>`:'';
         return `<div style="padding:6px 0 6px 14px;border-left:2px solid var(--gray-lighter);margin-top:6px;">
@@ -7207,8 +7212,11 @@ function renderClubChat(){
     CHAT_CHANNELS.filter(([ch])=>vis.indexOf(ch)>=0).map(([ch,lbl])=>`<button class="filter-btn${activeChatChannel===ch?' active':''}" onclick="setChatChannel('${ch}')" style="flex:1;text-align:center;">${lbl}</button>`).join('')+
     `</div>`;
   // Posting gate (Layer 5c): show the composer only when the current player may post in the active channel; otherwise a muted note. Commenting stays open to viewers.
+  // Layer 5d: leadership players get a toggle to post under the generic Exec club voice instead of their own name. Default unchecked; non-leaders never see it.
+  const asExecToggle=isCurrentLeader()?`<label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;color:var(--gray);"><input type="checkbox" id="cc-as-exec"> Post as Exec (club voice)</label>`:'';
   const composer=canPostInChannel(activeChatChannel)
     ? `<textarea id="cc-text" maxlength="2000" placeholder="Message the club" style="width:100%;border:1px solid var(--gray-lighter);border-radius:8px;padding:10px 12px;font-family:inherit;font-size:14px;resize:vertical;min-height:64px;box-sizing:border-box;margin-top:10px;"></textarea>
+      ${asExecToggle}
       <button class="btn btn-primary btn-small" style="margin-top:8px;" onclick="postClubChat()">Post</button>`
     : `<p style="color:var(--gray);font-size:13px;padding:8px 0;margin-top:10px;">Only club leadership can post here. You can still comment on posts below.</p>`;
   panel.innerHTML=`<div class="card"><div class="card-title"><span class="bar"></span> 💬 Club Chat</div>
@@ -7226,8 +7234,11 @@ function postClubChat(){
   if(!ta)return;
   const text=(ta.value||'').trim();
   if(!text)return;
+  const asExecEl=document.getElementById('cc-as-exec');
+  const asExec=!!(asExecEl && asExecEl.checked && isCurrentLeader());
   const id=gi('msg');
-  const msg={authorId:currentPlayerId,text:text,createdAt:Date.now()};
+  // Exec-voice post: generic club voice, authorRole 'exec' with no personal authorId. Otherwise normal personal authorship.
+  const msg=asExec?{authorRole:'exec',text:text,createdAt:Date.now()}:{authorId:currentPlayerId,text:text,createdAt:Date.now()};
   fbSet('chat/'+activeChatChannel+'/'+id,msg);
   if(!D.chat)D.chat={};
   if(!D.chat[activeChatChannel])D.chat[activeChatChannel]={};
@@ -7239,7 +7250,8 @@ function postClubChat(){
 function delClubChat(id){
   const m=(D.chat&&D.chat[activeChatChannel])?D.chat[activeChatChannel][id]:null;
   if(!m)return;
-  if(m.authorId!==currentPlayerId){toast('You can only delete your own messages.');return;}
+  const canDel=m.authorId===currentPlayerId || (m.authorRole==='exec' && isCurrentLeader());
+  if(!canDel){toast('You can only delete your own messages.');return;}
   if(!confirm('Delete this message?'))return;
   fbRemove('chat/'+activeChatChannel+'/'+id);
   if(D.chat&&D.chat[activeChatChannel])delete D.chat[activeChatChannel][id];
