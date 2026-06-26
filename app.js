@@ -1336,6 +1336,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
     <button class="pp-tab-btn" onclick="switchPPTab('scouts',this)">🕵️ Scouts</button>
     <button class="pp-tab-btn" onclick="switchPPTab('matches',this)">📋 My Matches</button>
     <button class="pp-tab-btn" onclick="switchPPTab('learn',this)">🎓 Learn</button>
+    ${SC.chatEnabled?'<button class="pp-tab-btn" onclick="switchPPTab(\'chat\',this)">💬 Club Chat</button>':''}
   </div>
 
   <!-- ══ MY STATS PANEL ══ -->
@@ -1521,6 +1522,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       </div>
     </div>
   </div>
+  ${SC.chatEnabled?'<div class="pp-panel" id="pp-panel-chat"></div>':''}
 
 </div><!-- end player-portal -->
 
@@ -2101,6 +2103,7 @@ function initFB(){
     D.scrimmages  = JSON.parse(JSON.stringify(_DEMO.scrimmages));
     D.matches     = JSON.parse(JSON.stringify(_DEMO.matches));
     D.tierRequests= {};
+    D.chat        = {};
     D.goals       = JSON.parse(JSON.stringify(_DEMO.goals));
     D.liveScoring = JSON.parse(JSON.stringify(_DEMO.liveScoring));
     profilesData  = {
@@ -2144,10 +2147,11 @@ function listenData(){if(!db)return;
       D.duals=val.duals?Object.values(val.duals):[];
       D.opponents=val.opponents||{};
       D.tierRequests=val.tier_requests||{};
+      D.chat=val.chat||{};
     }else{
       D.players=JSON.parse(JSON.stringify(DEF_P));
       D.matches=JSON.parse(JSON.stringify(DEF_M));
-      D.planned=[];D.gamedays=[];D.scrimmages=[];D.duals=[];
+      D.planned=[];D.gamedays=[];D.scrimmages=[];D.duals=[];D.chat={};
       seedDB();
     }
     refreshCurrent();
@@ -7087,10 +7091,79 @@ function switchPPTab(tab,btn){
   document.querySelectorAll('.pp-panel').forEach(p=>p.classList.remove('active'));
   if(tab==='scouts'){if(btn)btn.classList.add('active');document.getElementById('pp-panel-scouts').classList.add('active');renderPlayerScouts();return;}
   if(tab==='learn'){if(btn)btn.classList.add('active');document.getElementById('pp-panel-learn').classList.add('active');renderPPQuizHistory();return;}
+  if(tab==='chat'){if(btn)btn.classList.add('active');document.getElementById('pp-panel-chat').classList.add('active');renderClubChat();return;}
   if(btn)btn.classList.add('active');
   document.getElementById('pp-panel-'+tab).classList.add('active');
   if(tab==='live')renderPlayerLiveScoring();
   if(tab==='matches')renderPlayerMatches();
+}
+
+// ── CLUB CHAT (Grass Club, player portal) ───────────────────────────────────
+// One flat channel at DB_ROOT/chat/general, loaded into D.chat.general by the main
+// listener and mirrored in memory on post so the demo (db null, fbSet no-op) still
+// shows messages. Author is the logged-in player (currentPlayerId); name and badge
+// derive from gP(authorId) at render time, so nothing is denormalized onto the message.
+function renderClubChat(){
+  const panel=document.getElementById('pp-panel-chat');
+  if(!panel)return;
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const msgs=(D.chat&&D.chat.general)||{};
+  const rows=Object.keys(msgs)
+    .map(id=>({id,m:msgs[id]}))
+    .filter(x=>x.m&&typeof x.m==='object')
+    .sort((a,b)=>(a.m.createdAt||0)-(b.m.createdAt||0));
+  let list;
+  if(!rows.length){
+    list='<p style="color:var(--gray);font-size:13px;padding:8px 0;">No messages yet. Start the conversation.</p>';
+  }else{
+    list=rows.map(({id,m})=>{
+      const author=gP(m.authorId);
+      const name=author?author.firstName+' '+author.lastName:'Player';
+      const badge=playerBadge(author);
+      const when=m.createdAt?new Date(m.createdAt).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+      const del=m.authorId===currentPlayerId?`<button class="btn btn-danger btn-small" style="margin-top:6px;padding:3px 8px;font-size:10px;" onclick="delClubChat('${id}')">Delete</button>`:'';
+      return `<div style="padding:8px 0;border-bottom:1px solid var(--gray-lighter);">
+        <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;">
+          <span style="font-weight:700;color:var(--charcoal);font-size:14px;">${esc(name)} ${badge}</span>
+          <span style="font-size:11px;color:var(--gray);white-space:nowrap;">${when}</span>
+        </div>
+        <div style="font-size:14px;color:var(--black);white-space:pre-wrap;word-break:break-word;margin-top:2px;">${esc(m.text)}</div>
+        ${del}
+      </div>`;
+    }).join('');
+  }
+  panel.innerHTML=`<div class="card"><div class="card-title"><span class="bar"></span> 💬 Club Chat</div>
+    <div id="cc-list">${list}</div>
+    <textarea id="cc-text" maxlength="2000" placeholder="Message the club" style="width:100%;border:1px solid var(--gray-lighter);border-radius:8px;padding:10px 12px;font-family:inherit;font-size:14px;resize:vertical;min-height:64px;box-sizing:border-box;margin-top:10px;"></textarea>
+    <button class="btn btn-primary btn-small" style="margin-top:8px;" onclick="postClubChat()">Post</button>
+  </div>`;
+}
+// Post a club-chat message as the logged-in player. Writes under DB_ROOT/chat/general and
+// mirrors into memory so the demo reflects it immediately. No eligibility checks this layer.
+function postClubChat(){
+  if(!currentPlayerId)return;
+  const ta=document.getElementById('cc-text');
+  if(!ta)return;
+  const text=(ta.value||'').trim();
+  if(!text)return;
+  const id=gi('msg');
+  const msg={authorId:currentPlayerId,text:text,createdAt:Date.now()};
+  fbSet('chat/general/'+id,msg);
+  if(!D.chat)D.chat={};
+  if(!D.chat.general)D.chat.general={};
+  D.chat.general[id]=msg;
+  ta.value='';
+  renderClubChat();
+}
+// Delete a club-chat message. Author can delete their own only this layer; broader moderation comes with the rules layer.
+function delClubChat(id){
+  const m=(D.chat&&D.chat.general)?D.chat.general[id]:null;
+  if(!m)return;
+  if(m.authorId!==currentPlayerId){toast('You can only delete your own messages.');return;}
+  if(!confirm('Delete this message?'))return;
+  fbRemove('chat/general/'+id);
+  if(D.chat&&D.chat.general)delete D.chat.general[id];
+  renderClubChat();
 }
 
 // ============================================================
