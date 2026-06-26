@@ -328,14 +328,14 @@ const _DEMO = {
     sd06:{serving:6,passing:5,setting:5,hitting:6,blocking:5,defense:5,courtSense:6,communication:5},
     sd07:{serving:4,passing:5,setting:3,hitting:4,blocking:3,defense:5,courtSense:4,communication:5},
     sd08:{serving:4,passing:4,setting:3,hitting:5,blocking:4,defense:4,courtSense:3,communication:4},
-    sd09:{serving:3,passing:4,setting:0,hitting:3,blocking:2,defense:4,courtSense:3,communication:0},
-    sd10:{serving:3,passing:3,setting:0,hitting:3,blocking:0,defense:4,courtSense:0,communication:3},
-    sd11:{serving:2,passing:3,setting:0,hitting:2,blocking:0,defense:3,courtSense:0,communication:2},
-    sd12:{serving:2,passing:2,setting:0,hitting:2,blocking:2,defense:2,courtSense:0,communication:0},
-    sd13:{serving:3,passing:2,setting:0,hitting:2,blocking:0,defense:2,courtSense:0,communication:2},
-    sd14:{serving:2,passing:3,setting:0,hitting:1,blocking:0,defense:3,courtSense:0,communication:0},
-    sd15:{serving:2,passing:2,setting:0,hitting:2,blocking:1,defense:2,courtSense:0,communication:2},
-    sd16:{serving:0,passing:2,setting:0,hitting:2,blocking:0,defense:2,courtSense:0,communication:0}
+    sd09:{serving:3,passing:4,setting:2,hitting:3,blocking:2,defense:4,courtSense:3,communication:3},
+    sd10:{serving:3,passing:3,setting:2,hitting:3,blocking:3,defense:4,courtSense:4,communication:3},
+    sd11:{serving:2,passing:3,setting:3,hitting:2,blocking:3,defense:3,courtSense:3,communication:2},
+    sd12:{serving:2,passing:2,setting:2,hitting:2,blocking:2,defense:2,courtSense:5,communication:3},
+    sd13:{serving:3,passing:2,setting:2,hitting:2,blocking:3,defense:2,courtSense:3,communication:2},
+    sd14:{serving:2,passing:3,setting:2,hitting:1,blocking:2,defense:3,courtSense:4,communication:3},
+    sd15:{serving:2,passing:2,setting:3,hitting:2,blocking:1,defense:2,courtSense:3,communication:2},
+    sd16:{serving:2,passing:2,setting:2,hitting:2,blocking:2,defense:2,courtSense:5,communication:3}
   },
   goals: {
     sd01:{
@@ -2113,7 +2113,7 @@ function initFB(){
     D.chat        = {
       allclub:{ seed_ac1:{authorId:'sd01',text:'Welcome to the All Club channel. Updates for everyone land here.',createdAt:Date.now()-7200000} },
       gold:{ seed_g1:{authorId:'sd05',text:'Gold squad, great work at practice today.',createdAt:Date.now()-3600000} },
-      garnet:{}
+      garnet:{ seed_gar1:{authorId:'sd09',text:'Garnet squad, proud of how we battled today. Keep showing up and we keep climbing.',createdAt:Date.now()-1800000} }
     };
     D.goals       = JSON.parse(JSON.stringify(_DEMO.goals));
     D.liveScoring = JSON.parse(JSON.stringify(_DEMO.liveScoring));
