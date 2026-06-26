@@ -3885,13 +3885,32 @@ async function generateAIPlan(pid,gid){
   if(SC.demoMode){
     // Demo: no live worker call and no Firebase write. Drop a canned draft plan
     // straight into the in-memory goal and re-render, mirroring the success path.
-    const plan=`${p.firstName}, you have put in honest work toward this goal and it shows in your recent numbers. Your court awareness and competitiveness are real strengths to build on.\n\nThe next step is turning that foundation into more consistent finishing. Pick two specific habits, a tighter serve target and a faster transition off the net, and rep them every practice.\n\nAdd ten focused minutes to each session on those two habits and track your clean reps against your errors so the progress is visible. Check in every two weeks and we will adjust as your numbers move.\n\nStay patient and keep competing. Coach Mark.`;
+    // When tiers are enabled, vary the canned text by tier so the framing is
+    // visible in the Grass Club demo: Garnet aims up to Gold, Gold holds the top.
+    let plan;
+    if(SC.tiersEnabled && p.tier==='garnet'){
+      plan=`${p.firstName}, you have put in honest work toward this goal and it shows in your recent numbers. Your court awareness and competitiveness are exactly the traits that earn a move up to the Gold team.\n\nThe path up is built on consistency. Pick two specific habits, a tighter serve target and a faster transition off the net, and rep them every practice until they hold up under pressure the way the Gold players do.\n\nAdd ten focused minutes to each session on those two habits and track your clean reps against your errors so your progress toward that next level is visible. Check in every two weeks and we will adjust as your numbers climb.\n\nKeep competing for that spot. Coach Mark.`;
+    }else if(SC.tiersEnabled && p.tier==='gold'){
+      plan=`${p.firstName}, you have earned your place on the Gold team and your recent numbers back it up. Your court awareness and competitiveness are real strengths, and now the work is holding that level and excelling.\n\nStaying at the top means sharpening what already works and closing the last small gaps. Pick two specific habits, a tighter serve target and a faster transition off the net, and rep them every practice so your strengths stay strengths against the best competition.\n\nAdd ten focused minutes to each session on those two habits and track your clean reps against your errors so you keep refining at the margins. Check in every two weeks and we will adjust as your numbers move.\n\nKeep setting the standard. Coach Mark.`;
+    }else{
+      plan=`${p.firstName}, you have put in honest work toward this goal and it shows in your recent numbers. Your court awareness and competitiveness are real strengths to build on.\n\nThe next step is turning that foundation into more consistent finishing. Pick two specific habits, a tighter serve target and a faster transition off the net, and rep them every practice.\n\nAdd ten focused minutes to each session on those two habits and track your clean reps against your errors so the progress is visible. Check in every two weeks and we will adjust as your numbers move.\n\nStay patient and keep competing. Coach Mark.`;
+    }
     if(D.goals[pid]&&D.goals[pid][gid]) D.goals[pid][gid].aiFeedback={text:plan,generatedAt:td(),status:'draft',editedBy:null,approvedAt:null};
     renderCoachGoals();
     toast('AI plan generated — review and approve');
     return;
   }
   const dataSummary=getPlayerDataSummary(pid);
+  // Tier framing: only when tiers are enabled and the player is on a named team.
+  // Garnet aims to earn a move up to Gold; Gold aims to hold the top and excel.
+  let tierFraming='';
+  if(SC.tiersEnabled && (p.tier==='gold'||p.tier==='garnet')){
+    if(p.tier==='garnet'){
+      tierFraming=`\n\nTEAM CONTEXT: This player is on the Garnet (development) team. Frame the plan around the specific skills and habits that would help them earn a move up to the Gold team, treating reaching that next level as the target.`;
+    }else{
+      tierFraming=`\n\nTEAM CONTEXT: This player is on the Gold (top) team. Frame the plan around holding that level and excelling, refining their strengths and closing remaining gaps so they stay competitive at the top.`;
+    }
+  }
   const loadingId='ai-loading-'+gid;
   document.getElementById(loadingId).innerHTML='<div class="ai-loading"><div class="spinner"></div><div style="margin-top:8px;">AI is analyzing performance data...</div></div>';
 
@@ -3909,7 +3928,7 @@ Formatting rules you must follow without exception: no markdown of any kind, no 
 PLAYER DATA:
 ${dataSummary}
 
-GOAL: ${goal.label}
+GOAL: ${goal.label}${tierFraming}
 
 Write a personalized development plan in 4 to 6 paragraphs. Include:
 1. An honest assessment of where the player currently stands relative to this goal, referencing their actual stats and ratings.
