@@ -2986,6 +2986,8 @@ function coachSetTier(pid,newTier){
   const b=document.getElementById('cpm-tier-badge');
   if(b){b.className='tier-badge tier-'+newTier;b.textContent=TIER_LABELS[newTier];}
   toast('Tier set: '+TIER_LABELS[newTier]);
+  // Refresh the roster behind the modal so a filtered view stays in sync (a player whose new tier no longer matches the active filter drops out immediately). Grass Club only.
+  if(SC.tiersEnabled && typeof renderRoster==='function') renderRoster();
 }
 function cancelEditName(pid,fn,ln){
   const nameEl=document.getElementById('rname-'+pid);
@@ -2993,12 +2995,24 @@ function cancelEditName(pid,fn,ln){
 }
 
 function renderRoster(){
-  const sorted=[...D.players].sort((a,b)=>a.court-b.court||CO[a.classYear]-CO[b.classYear]||a.lastName.localeCompare(b.lastName));
+  const TIER_LABELS={unassigned:'Unassigned',gold:'Gold',garnet:'Garnet'};
+  let sorted=[...D.players].sort((a,b)=>a.court-b.court||CO[a.classYear]-CO[b.classYear]||a.lastName.localeCompare(b.lastName));
+  // Tier filter (Grass Club only). Applied before court grouping; default 'all' shows everyone.
+  if(SC.tiersEnabled && rosterTierFilter!=='all'){
+    sorted=sorted.filter(p=>(p.tier||'unassigned')===rosterTierFilter);
+  }
   let html='',last=null;
+  // Tier filter toggle (Grass Club only). Mirrors the ppStatView filter-btn pattern.
+  if(SC.tiersEnabled){
+    html+=`<div style="display:flex;gap:8px;margin-bottom:10px;" id="roster-tier-toggle">`+
+      [['all','All'],['gold','Gold'],['garnet','Garnet'],['unassigned','Unassigned']].map(([v,lbl])=>
+        `<button class="filter-btn${rosterTierFilter===v?' active':''}" onclick="setRosterTierFilter('${v}',this)" style="flex:1;text-align:center;">${lbl}</button>`).join('')+
+      `</div>`;
+  }
   sorted.forEach(p=>{if(p.court!==last){
     html+=`<div style="font-family:'Bebas Neue';font-size:12px;letter-spacing:1.5px;color:var(--red);margin:12px 0 6px;padding-top:8px;${last!==null?'border-top:2px solid var(--gray-lighter);':''}">
       <span class="court-badge court-${p.court}">PG ${p.court}</span></div>`;last=p.court;}
-    html+=`<div class="roster-item" id="ritem-${p.id}"><span class="class-badge class-${p.classYear}">${p.classYear}</span>
+    html+=`<div class="roster-item" id="ritem-${p.id}"><span class="class-badge class-${p.classYear}">${p.classYear}</span>${SC.tiersEnabled?` <span class="tier-badge tier-${p.tier||'unassigned'}">${TIER_LABELS[p.tier||'unassigned']}</span>`:''}
       <span class="roster-name" id="rname-${p.id}">${p.firstName} ${p.lastName}</span>
       <input type="number" min="0" max="99" placeholder="#" title="Jersey #" value="${p.jersey||''}" style="width:52px;padding:4px 6px;border:1px solid var(--gray-lighter);border-radius:6px;font-family:'Bebas Neue',sans-serif;font-size:15px;text-align:center;color:var(--charcoal);" onchange="updJersey('${p.id}',this.value)">
       <select class="court-select" onchange="updCt('${p.id}',this.value)">${COURTS.map(c=>`<option value="${c}" ${p.court===c?'selected':''}>PG ${c}</option>`).join('')}</select>
@@ -3340,6 +3354,14 @@ function ppSetStatView(view,btn){
   document.querySelectorAll('#pp-stat-toggle .filter-btn').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
   renderPlayerPortal();
+}
+// Roster tier filter state (Grass Club only). Mirrors ppStatView: module-level selection, toggle .active, re-render.
+let rosterTierFilter='all';
+function setRosterTierFilter(v,btn){
+  rosterTierFilter=v;
+  document.querySelectorAll('#roster-tier-toggle .filter-btn').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  renderRoster();
 }
 // Player-side tier request (Grass Club only). Writes to the SEPARATE tier_requests node; never touches players/{id}.tier.
 // Mutates the in-memory copy so it reflects immediately in demo mode, where fbSet is a no-op.
