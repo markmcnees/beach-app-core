@@ -7129,6 +7129,16 @@ function visibleChatChannels(){
 }
 // Keep the active channel valid for the current player; if it is not visible, fall back to allclub (always visible).
 function ensureVisibleChannel(){ if(visibleChatChannels().indexOf(activeChatChannel)<0) activeChatChannel='allclub'; }
+// Layer 5c posting rule: who may CREATE A POST in a channel. gold needs tier gold or leadership; garnet needs tier garnet or leadership; allclub is leadership only. Commenting is not gated by this.
+function canPostInChannel(ch){
+  const me=gP(currentPlayerId);
+  if(!me) return false;
+  const lead = me.leadership==='exec' || me.leadership==='faculty';
+  if(ch==='allclub') return lead;
+  if(ch==='gold')    return lead || me.tier==='gold';
+  if(ch==='garnet')  return lead || me.tier==='garnet';
+  return false;
+}
 function toggleCommentComposer(postId){
   openCommentPostId = (openCommentPostId===postId) ? null : postId;
   renderClubChat();
@@ -7196,17 +7206,22 @@ function renderClubChat(){
   const channelToggle=`<div style="display:flex;gap:8px;margin-bottom:10px;" id="cc-channel-toggle">`+
     CHAT_CHANNELS.filter(([ch])=>vis.indexOf(ch)>=0).map(([ch,lbl])=>`<button class="filter-btn${activeChatChannel===ch?' active':''}" onclick="setChatChannel('${ch}')" style="flex:1;text-align:center;">${lbl}</button>`).join('')+
     `</div>`;
+  // Posting gate (Layer 5c): show the composer only when the current player may post in the active channel; otherwise a muted note. Commenting stays open to viewers.
+  const composer=canPostInChannel(activeChatChannel)
+    ? `<textarea id="cc-text" maxlength="2000" placeholder="Message the club" style="width:100%;border:1px solid var(--gray-lighter);border-radius:8px;padding:10px 12px;font-family:inherit;font-size:14px;resize:vertical;min-height:64px;box-sizing:border-box;margin-top:10px;"></textarea>
+      <button class="btn btn-primary btn-small" style="margin-top:8px;" onclick="postClubChat()">Post</button>`
+    : `<p style="color:var(--gray);font-size:13px;padding:8px 0;margin-top:10px;">Only club leadership can post here. You can still comment on posts below.</p>`;
   panel.innerHTML=`<div class="card"><div class="card-title"><span class="bar"></span> 💬 Club Chat</div>
     ${channelToggle}
     <div id="cc-list">${list}</div>
-    <textarea id="cc-text" maxlength="2000" placeholder="Message the club" style="width:100%;border:1px solid var(--gray-lighter);border-radius:8px;padding:10px 12px;font-family:inherit;font-size:14px;resize:vertical;min-height:64px;box-sizing:border-box;margin-top:10px;"></textarea>
-    <button class="btn btn-primary btn-small" style="margin-top:8px;" onclick="postClubChat()">Post</button>
+    ${composer}
   </div>`;
 }
 // Post a club-chat message as the logged-in player into the active channel. Writes under
 // DB_ROOT/chat/{channel} and mirrors into memory so the demo reflects it immediately. No eligibility checks this sub-step.
 function postClubChat(){
   if(!currentPlayerId)return;
+  if(!canPostInChannel(activeChatChannel))return;
   const ta=document.getElementById('cc-text');
   if(!ta)return;
   const text=(ta.value||'').trim();
