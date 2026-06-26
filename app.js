@@ -976,6 +976,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       <button class="tab" data-tab="scouts">Scouts</button>
       <button class="tab" data-tab="settings">Roster</button>
       ${SC.chatEnabled?'<button class="tab" data-tab="broadcast">Broadcast</button>':''}
+      ${SC.tiersEnabled?'<button class="tab" data-tab="teamanalysis">Team Analysis</button>':''}
     </div>
   </div>
 </div>
@@ -1317,6 +1318,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       <button class="btn btn-secondary" id="add-player">Add Player</button></div>
   </div>
   ${SC.chatEnabled?'<div class="tab-content" id="tab-broadcast"></div>':''}
+  ${SC.tiersEnabled?'<div class="tab-content" id="tab-teamanalysis"></div>':''}
 
 </div>
 <!-- PLAYER PORTAL (shown when logged in as player) -->
@@ -3083,6 +3085,7 @@ function refreshTab(id){
     case'scouts':renderScouts();break;
     case'settings':renderRoster();break;
     case'broadcast':renderExecBroadcast();break;
+    case'teamanalysis':renderTeamAnalysis();break;
   }
 }
 
@@ -7356,6 +7359,133 @@ function postExecBroadcast(){
   ta.value='';
   toast('Broadcast posted to '+broadcastChannel);
   renderExecBroadcast();
+}
+
+// ============================================================
+// TEAM ANALYSIS (Exec-side, Grass Club only, gated on SC.tiersEnabled)
+// Aggregate a tier's 8-skill assessments to find collective weak spots,
+// then generate a practice session plan targeting them. Ephemeral: the
+// generated plan is held in memory and displayed, never written to Firebase.
+// ============================================================
+let analysisTier='gold';
+let analysisPlanText='';
+function setAnalysisTier(t){ analysisTier=t; analysisPlanText=''; renderTeamAnalysis(); }
+
+// Average ONLY assessed (>0) scores per skill. A 0 means unassessed and is
+// never counted. A skill with zero assessed players gets avg null and is
+// excluded from weak-spot ranking.
+function analyzeTierSkills(tier){
+  const SKILL_KEYS=['serving','passing','setting','hitting','blocking','defense','courtSense','communication'];
+  const SKILL_LABELS={serving:'Serving',passing:'Passing',setting:'Setting',hitting:'Hitting',blocking:'Blocking',defense:'Defense',courtSense:'Court Sense',communication:'Communication'};
+  const players=D.players.filter(p=>(p.tier||'unassigned')===tier);
+  const perSkill=SKILL_KEYS.map(k=>{
+    let sum=0,n=0;
+    players.forEach(p=>{
+      const sk=profilesData?.skills?.[p.id]||profilesData?.players?.[p.id]?.skills||{};
+      const v=sk[k]||0;
+      if(v>0){ sum+=v; n++; }
+    });
+    return { key:k, label:SKILL_LABELS[k], avg: n>0 ? sum/n : null, assessedCount:n };
+  });
+  const playerCount=players.length;
+  const assessedSkills=perSkill.filter(s=>s.avg!==null);
+  return { tier, playerCount, perSkill, assessedSkills };
+}
+
+// Enough data to analyze: at least 1 player in the tier and at least 3 skills
+// with at least one assessed score.
+function tierDataSufficient(a){ return a.playerCount>=1 && a.assessedSkills.length>=3; }
+
+function renderTeamAnalysis(){
+  const pane=document.getElementById('tab-teamanalysis');
+  if(!pane)return;
+  const tierLabel=t=>t==='gold'?'Gold':'Garnet';
+  const picker=`<div style="display:flex;gap:8px;margin-bottom:12px;" id="ta-tier-toggle">`+
+    [['gold','Gold'],['garnet','Garnet']].map(([v,lbl])=>
+      `<button class="filter-btn${analysisTier===v?' active':''}" onclick="setAnalysisTier('${v}')" style="flex:1;text-align:center;">${lbl}</button>`).join('')+
+    `</div>`;
+  const a=analyzeTierSkills(analysisTier);
+  let body;
+  if(!tierDataSufficient(a)){
+    body=`<p style="color:var(--gray);font-size:13px;padding:10px 0;line-height:1.5;">Not enough assessment data yet to analyze this team. Complete more skill assessments first.</p>`;
+  }else{
+    // Weakest assessed first. The lowest few are flagged as the collective weak spots.
+    const ranked=[...a.assessedSkills].sort((x,y)=>x.avg-y.avg);
+    const weakCount=Math.min(3,ranked.length);
+    const weakKeys=new Set(ranked.slice(0,weakCount).map(s=>s.key));
+    const rows=ranked.map(s=>{
+      const weak=weakKeys.has(s.key);
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--gray-lighter);font-size:13px;${weak?'font-weight:700;color:var(--loss-red);':'color:var(--charcoal);'}">
+        <span>${s.label}${weak?' (weak spot)':''}</span>
+        <span>${s.avg.toFixed(1)} <span style="color:var(--gray);font-weight:400;">(${s.assessedCount} assessed)</span></span>
+      </div>`;
+    }).join('');
+    body=`<div style="font-size:12px;color:var(--gray);margin-bottom:8px;">${tierLabel(analysisTier)} team: ${a.playerCount} player${a.playerCount===1?'':'s'}, skill averages weakest first (assessed scores only).</div>
+      <div style="margin-bottom:12px;">${rows}</div>
+      <button class="btn btn-primary btn-small" onclick="generatePracticePlan()">Generate Practice Plan</button>
+      <div id="ta-plan-output" style="margin-top:14px;">${analysisPlanText}</div>`;
+  }
+  pane.innerHTML=`<div class="card"><div class="card-title"><span class="bar"></span> 📋 Team Analysis</div>
+    <p style="font-size:12px;color:var(--gray);margin-bottom:12px;line-height:1.5;">Pick a team to see its collective skill averages, then generate a practice session aimed at the weakest spots. Assessment scores of zero mean unassessed and are left out of the averages.</p>
+    ${picker}
+    ${body}
+  </div>`;
+}
+
+// Demo + live, mirroring generateAIPlan. Ephemeral: result is held in
+// analysisPlanText and rendered into #ta-plan-output, never written to Firebase.
+async function generatePracticePlan(){
+  const a=analyzeTierSkills(analysisTier);
+  if(!tierDataSufficient(a))return;
+  const tierLabel=analysisTier==='gold'?'Gold':'Garnet';
+  const ranked=[...a.assessedSkills].sort((x,y)=>x.avg-y.avg);
+  const weak=ranked.slice(0,Math.min(3,ranked.length));
+  const weakLabels=weak.map(s=>s.label);
+  if(SC.demoMode){
+    // Demo: no network, no Firebase. Build a canned but realistic session plan
+    // that names the actual computed weak skills for the selected team.
+    const w1=weakLabels[0]||'serving';
+    const w2=weakLabels[1]||weakLabels[0]||'passing';
+    const w3=weakLabels[2]||weakLabels[1]||weakLabels[0]||'defense';
+    const plan=`Practice session for the ${tierLabel} team. The numbers point to ${weakLabels.join(', ')} as the spots holding this group back right now, so the whole session is built around them.\n\nWarmup. Fifteen minutes of dynamic movement and partner pepper, with a deliberate focus on clean ${w1} touches from the very first ball so the standard is set before competition starts.\n\nFocused block one. Spend twenty minutes on ${w1}. Run repeating reps with a clear target and a clean rep versus error count out loud, so players feel the standard climb instead of just going through the motions.\n\nFocused block two. Spend twenty minutes on ${w2} and ${w3} paired together in a single flowing drill, so players have to read and react the way they will in a real rally rather than treating each skill in isolation.\n\nScrimmage focus. Play short games to fifteen where points won with strong ${w1} or ${w2} count double. That rewards the exact habits this team needs and makes the weak spots the path to winning.\n\nCooldown. Five minutes of light movement and a quick circle where each player names one rep that felt better than last week, so the group leaves seeing progress on ${weakLabels.join(' and ')}.\n\nCoach Mark.`;
+    analysisPlanText=`<div style="white-space:pre-wrap;font-size:13px;line-height:1.7;color:var(--charcoal);">${plan}</div>`;
+    renderTeamAnalysis();
+    toast('Practice plan generated');
+    return;
+  }
+  const out=document.getElementById('ta-plan-output');
+  if(out)out.innerHTML='<div class="ai-loading"><div class="spinner"></div><div style="margin-top:8px;">AI is building a practice plan...</div></div>';
+  const averagesLine=ranked.map(s=>`${s.label} ${s.avg.toFixed(1)} (${s.assessedCount} assessed)`).join(', ');
+  try{
+    const response=await fetch('https://beach-volleyball-ai.markmcnees-479.workers.dev',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:1000,
+        messages:[{role:'user',content:`You are an experienced high school girls beach volleyball coach planning a single team practice session. Be encouraging but honest. Use beach volleyball terminology only, never indoor volleyball terms.
+
+Formatting rules you must follow without exception: no markdown of any kind, no hashtags, no double asterisks, no em dashes, no bullet point symbols. Use plain sentences and paragraphs only. Add a blank line between every paragraph. End every plan with the sign-off: Coach Mark.
+
+TEAM: ${tierLabel} team, ${a.playerCount} players.
+
+SKILL AVERAGES (assessed scores only, 1 to 10): ${averagesLine}
+
+IDENTIFIED WEAK SPOTS (lowest averages): ${weakLabels.join(', ')}
+
+Write a single practice session plan targeting these weak spots. Include a warmup, two or three focused drill blocks aimed at the weak skills with the real averages referenced, a scrimmage focus that rewards the weak skills, and a cooldown. Keep it to a few short paragraphs. Speak to the team as their coach.`}]
+      })
+    });
+    const data=await response.json();
+    const text=data.content?.map(c=>c.text||'').join('')||'Unable to generate plan. Please try again.';
+    analysisPlanText=`<div style="white-space:pre-wrap;font-size:13px;line-height:1.7;color:var(--charcoal);">${text}</div>`;
+    renderTeamAnalysis();
+    toast('Practice plan generated');
+  }catch(err){
+    console.error('AI error:',err);
+    const o=document.getElementById('ta-plan-output');
+    if(o)o.innerHTML='<div style="color:var(--loss-red);font-size:13px;">Error generating plan. Check connection and try again.</div>';
+  }
 }
 
 // ============================================================
