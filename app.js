@@ -621,8 +621,9 @@ body{font-family:'Barlow',sans-serif;background:var(--cream);color:var(--black);
 .notif-banner-detail{font-size:13px;font-weight:700;}
 .class-badge{display:inline-block;font-size:10px;font-weight:800;padding:1px 6px;border-radius:3px;text-transform:uppercase;letter-spacing:0.5px;}
 .class-SR{background:var(--black);color:var(--white);}.class-JR{background:var(--red);color:var(--white);}.class-SO{background:var(--gold);color:var(--black);}.class-FR{background:var(--gray-light);color:var(--charcoal);}
-.tier-badge{display:inline-block;font-family:'Bebas Neue',sans-serif;font-size:11px;padding:2px 8px;border-radius:4px;letter-spacing:1px;}
+.tier-badge,.badge-exec,.badge-faculty{display:inline-block;font-family:'Bebas Neue',sans-serif;font-size:11px;padding:2px 8px;border-radius:4px;letter-spacing:1px;}
 .tier-garnet{background:#782F40;color:#ffffff;}.tier-gold{background:#CEB888;color:#2d2d2d;}.tier-unassigned{background:var(--gray-light);color:var(--charcoal);}
+.badge-exec{background:#5e2432;color:#ffffff;}.badge-faculty{background:#13243A;color:#ffffff;}
 .tier-select{font-family:'Barlow',sans-serif;font-size:12px;padding:2px 6px;border:1px solid var(--gray-light);border-radius:5px;color:var(--charcoal);margin-left:4px;}
 .player-table{width:100%;border-collapse:separate;border-spacing:0;font-size:13px;}
 .player-table thead th{font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:1px;color:var(--gray);padding:8px 6px;text-align:left;border-bottom:2px solid var(--gray-lighter);cursor:pointer;white-space:nowrap;user-select:none;}
@@ -3008,8 +3009,17 @@ function cancelEditName(pid,fn,ln){
   if(nameEl)nameEl.innerHTML=fn+' '+ln;
 }
 
+// Badge by precedence (Grass Club). Leadership wins over team tier: exec or faculty shows the leadership badge, otherwise the tier badge (gold/garnet/unassigned). Reused by the roster now and the chat layers later.
+function playerBadge(p){
+  if(!p) return '';
+  if(p.leadership==='exec')    return '<span class="tier-badge badge-exec">Exec</span>';
+  if(p.leadership==='faculty') return '<span class="tier-badge badge-faculty">Faculty Advisor</span>';
+  const t=p.tier||'unassigned';
+  const L={unassigned:'Unassigned',gold:'Gold',garnet:'Garnet'};
+  return '<span class="tier-badge tier-'+t+'">'+L[t]+'</span>';
+}
+
 function renderRoster(){
-  const TIER_LABELS={unassigned:'Unassigned',gold:'Gold',garnet:'Garnet'};
   let sorted=[...D.players].sort((a,b)=>a.court-b.court||CO[a.classYear]-CO[b.classYear]||a.lastName.localeCompare(b.lastName));
   // Tier filter (Grass Club only). Applied before court grouping; default 'all' shows everyone.
   if(SC.tiersEnabled && rosterTierFilter!=='all'){
@@ -3026,7 +3036,7 @@ function renderRoster(){
   sorted.forEach(p=>{if(p.court!==last){
     html+=`<div style="font-family:'Bebas Neue';font-size:12px;letter-spacing:1.5px;color:var(--red);margin:12px 0 6px;padding-top:8px;${last!==null?'border-top:2px solid var(--gray-lighter);':''}">
       <span class="court-badge court-${p.court}">PG ${p.court}</span></div>`;last=p.court;}
-    html+=`<div class="roster-item" id="ritem-${p.id}"><span class="class-badge class-${p.classYear}">${p.classYear}</span>${SC.tiersEnabled?` <span class="tier-badge tier-${p.tier||'unassigned'}">${TIER_LABELS[p.tier||'unassigned']}</span>`:''}
+    html+=`<div class="roster-item" id="ritem-${p.id}"><span class="class-badge class-${p.classYear}">${p.classYear}</span>${SC.tiersEnabled?' '+playerBadge(p):''}
       <span class="roster-name" id="rname-${p.id}">${p.firstName} ${p.lastName}</span>
       <input type="number" min="0" max="99" placeholder="#" title="Jersey #" value="${p.jersey||''}" style="width:52px;padding:4px 6px;border:1px solid var(--gray-lighter);border-radius:6px;font-family:'Bebas Neue',sans-serif;font-size:15px;text-align:center;color:var(--charcoal);" onchange="updJersey('${p.id}',this.value)">
       <select class="court-select" onchange="updCt('${p.id}',this.value)">${COURTS.map(c=>`<option value="${c}" ${p.court===c?'selected':''}>PG ${c}</option>`).join('')}</select>
