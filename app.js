@@ -975,6 +975,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       <button class="tab" data-tab="goals">Goals</button>
       <button class="tab" data-tab="scouts">Scouts</button>
       <button class="tab" data-tab="settings">Roster</button>
+      ${SC.chatEnabled?'<button class="tab" data-tab="broadcast">Broadcast</button>':''}
     </div>
   </div>
 </div>
@@ -1315,6 +1316,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
         <select class="form-select" id="new-court"><option value="1">Court 1</option><option value="2">Court 2</option><option value="3">Court 3</option><option value="4">Court 4</option><option value="5">Court 5</option><option value="6">Court 6 — Exhib</option><option value="7">Court 7 — Exhib</option><option value="8">Court 8 — Exhib</option></select></div>
       <button class="btn btn-secondary" id="add-player">Add Player</button></div>
   </div>
+  ${SC.chatEnabled?'<div class="tab-content" id="tab-broadcast"></div>':''}
 
 </div>
 <!-- PLAYER PORTAL (shown when logged in as player) -->
@@ -3080,6 +3082,7 @@ function refreshTab(id){
     case'goals':renderCoachGoals();break;
     case'scouts':renderScouts();break;
     case'settings':renderRoster();break;
+    case'broadcast':renderExecBroadcast();break;
   }
 }
 
@@ -7283,6 +7286,57 @@ function delClubComment(postId,commentId){
   fbRemove('chat/'+activeChatChannel+'/'+postId+'/comments/'+commentId);
   if(post&&post.comments)delete post.comments[commentId];
   renderClubChat();
+}
+
+// ── EXEC BROADCAST (Grass Club, coach side, Layer 5e) ───────────────────────
+// The coach (PIN) login has currentPlayerId null, so a broadcast is always the generic Exec club voice: it writes the
+// SAME exec-voice shape as the player-side as-Exec toggle ({authorRole:'exec', no authorId}) under chat/{channel}, and
+// mirrors in memory for the demo. The exec may broadcast to any channel (the coach is club leadership).
+let broadcastChannel='allclub';
+function setBroadcastChannel(ch){ broadcastChannel=ch; renderExecBroadcast(); }
+function renderExecBroadcast(){
+  const pane=document.getElementById('tab-broadcast');
+  if(!pane)return;
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const toggle=`<div style="display:flex;gap:8px;margin-bottom:10px;" id="bc-channel-toggle">`+
+    CHAT_CHANNELS.map(([ch,lbl])=>`<button class="filter-btn${broadcastChannel===ch?' active':''}" onclick="setBroadcastChannel('${ch}')" style="flex:1;text-align:center;">${lbl}</button>`).join('')+
+    `</div>`;
+  // Read-only context: the most recent posts in the selected channel so the exec sees what is there before broadcasting.
+  const msgs=(D.chat&&D.chat[broadcastChannel])||{};
+  const rows=Object.keys(msgs).map(id=>({id,m:msgs[id]})).filter(x=>x.m&&typeof x.m==='object').sort((a,b)=>(a.m.createdAt||0)-(b.m.createdAt||0)).slice(-5);
+  let recent;
+  if(!rows.length){
+    recent='<p style="color:var(--gray);font-size:13px;padding:6px 0;">No posts in this channel yet.</p>';
+  }else{
+    recent=rows.map(({m})=>{
+      const a=gP(m.authorId);
+      const who=m.authorRole==='exec'?'Exec':(a?a.firstName+' '+a.lastName:'Player');
+      return `<div style="padding:6px 0;border-bottom:1px solid var(--gray-lighter);font-size:13px;"><span style="font-weight:700;color:var(--charcoal);">${esc(who)}</span> <span style="color:var(--black);white-space:pre-wrap;">${esc(m.text)}</span></div>`;
+    }).join('');
+  }
+  pane.innerHTML=`<div class="card"><div class="card-title"><span class="bar"></span> 📣 Broadcast</div>
+    <p style="font-size:12px;color:var(--gray);margin-bottom:12px;line-height:1.5;">Post to a club channel as the Exec voice. These posts show as Exec with the Exec badge, with no personal name attached.</p>
+    ${toggle}
+    <div style="margin-bottom:12px;">${recent}</div>
+    <textarea id="bc-text" maxlength="2000" placeholder="Broadcast a message to ${esc(broadcastChannel)}" style="width:100%;border:1px solid var(--gray-lighter);border-radius:8px;padding:10px 12px;font-family:inherit;font-size:14px;resize:vertical;min-height:64px;box-sizing:border-box;"></textarea>
+    <button class="btn btn-primary btn-small" style="margin-top:8px;" onclick="postExecBroadcast()">Broadcast as Exec</button>
+  </div>`;
+}
+// Post an exec-voice broadcast into the selected channel. Identical shape to the 5d as-Exec post: authorRole 'exec', no authorId.
+function postExecBroadcast(){
+  const ta=document.getElementById('bc-text');
+  if(!ta)return;
+  const text=(ta.value||'').trim();
+  if(!text)return;
+  const id=gi('msg');
+  const msg={authorRole:'exec',text:text,createdAt:Date.now()};
+  fbSet('chat/'+broadcastChannel+'/'+id,msg);
+  if(!D.chat)D.chat={};
+  if(!D.chat[broadcastChannel])D.chat[broadcastChannel]={};
+  D.chat[broadcastChannel][id]=msg;
+  ta.value='';
+  toast('Broadcast posted to '+broadcastChannel);
+  renderExecBroadcast();
 }
 
 // ============================================================
