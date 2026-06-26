@@ -1,6 +1,8 @@
 const SC=window.SCHOOL_CONFIG;
 // User-facing label for the privileged role. Config-driven via SC.coachLabel, defaulting to Coach so every existing school is unchanged. Display only; the internal role string stays 'coach'.
 const COACH_LABEL = (SC && SC.coachLabel) ? SC.coachLabel : 'Coach';
+// User-facing sign-off for AI generated plans. Config-driven via SC.coachSignoff, defaulting to Coach Mark so every existing school is unchanged.
+const COACH_SIGNOFF = (SC && SC.coachSignoff) ? SC.coachSignoff : 'Coach Mark';
 // Login logo image height in px. Config-driven via SC.logoHeight, defaulting to 64 so every existing school renders exactly as today.
 const LOGO_H = (SC && SC.logoHeight) ? SC.logoHeight : 64;
 
@@ -1186,7 +1188,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
         <button class="btn btn-danger btn-small" id="clear-matches">Clear All Matches</button>
       </div>
     </div>
-<div class="card" id="pin-change-card"><div class="card-title"><span class="bar"></span> 🔐 Change Coach PIN</div><p style="font-size:12px;color:var(--gray);margin-bottom:10px;">Update the PIN coaches use to access protected features.</p><div class="form-row" style="margin-bottom:8px;"><div class="form-group" style="margin-bottom:0;"><label class="form-label" style="font-size:11px;">Current PIN</label><input type="password" class="form-input" id="pin-current" placeholder="Current PIN" style="padding:8px;font-size:13px;"></div><div class="form-group" style="margin-bottom:0;"><label class="form-label" style="font-size:11px;">New PIN</label><input type="password" class="form-input" id="pin-new" placeholder="New PIN (4+ digits)" style="padding:8px;font-size:13px;"></div></div><button class="btn btn-primary btn-small" onclick="changeCoachPin()">Update PIN</button><div id="pin-change-status" style="font-size:12px;margin-top:8px;"></div></div>
+<div class="card" id="pin-change-card"><div class="card-title"><span class="bar"></span> 🔐 Change ${COACH_LABEL} PIN</div><p style="font-size:12px;color:var(--gray);margin-bottom:10px;">Update the PIN coaches use to access protected features.</p><div class="form-row" style="margin-bottom:8px;"><div class="form-group" style="margin-bottom:0;"><label class="form-label" style="font-size:11px;">Current PIN</label><input type="password" class="form-input" id="pin-current" placeholder="Current PIN" style="padding:8px;font-size:13px;"></div><div class="form-group" style="margin-bottom:0;"><label class="form-label" style="font-size:11px;">New PIN</label><input type="password" class="form-input" id="pin-new" placeholder="New PIN (4+ digits)" style="padding:8px;font-size:13px;"></div></div><button class="btn btn-primary btn-small" onclick="changeCoachPin()">Update PIN</button><div id="pin-change-status" style="font-size:12px;margin-top:8px;"></div></div>
     </div>
 
 <!-- ====== DUALS / LIVE SCORING ====== -->
@@ -1202,7 +1204,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
     <div id="dual-sheet-card" style="display:none;" class="card"><div class="card-title blue"><span class="bar"></span> 📋 Dual Sheet</div><div id="dual-sheet-container"></div></div>
     </div>
 <div class="card" style="border:2px solid var(--charcoal);">
-      <div class="card-title" style="color:var(--charcoal);"><span class="bar" style="background:var(--charcoal);"></span> 🔒 Coach Notes
+      <div class="card-title" style="color:var(--charcoal);"><span class="bar" style="background:var(--charcoal);"></span> 🔒 ${COACH_LABEL} Notes
         <span style="font-size:11px;font-weight:400;letter-spacing:0;font-family:'Barlow',sans-serif;color:var(--gray);margin-left:6px;">Private — coaches only</span>
       </div>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
@@ -1410,7 +1412,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
     </div>
 
     <!-- Coach Notes (moved here) -->
-    <div class="card"><div class="card-title"><span class="bar"></span> Coach Notes</div>
+    <div class="card"><div class="card-title"><span class="bar"></span> ${COACH_LABEL} Notes</div>
       <div id="pp-notes"></div>
     </div>
 
@@ -1580,7 +1582,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
         <div id="cpm-vert-history" style="margin-top:8px;"></div>
       </div>
       <div style="border-top:1px solid var(--gray-lighter);padding-top:16px;">
-        <div style="font-family:'Bebas Neue';font-size:16px;letter-spacing:1px;color:var(--gray);margin-bottom:8px;">📝 Coach Notes</div>
+        <div style="font-family:'Bebas Neue';font-size:16px;letter-spacing:1px;color:var(--gray);margin-bottom:8px;">📝 ${COACH_LABEL} Notes</div>
         <input type="date" id="cpm-note-date" class="form-input" style="width:100%;padding:8px;font-size:13px;margin-bottom:6px;">
         <textarea id="cpm-note-text" class="form-input" placeholder="Add a note..." rows="3" style="width:100%;padding:8px;font-size:13px;resize:vertical;margin-bottom:6px;"></textarea>
         <button class="btn btn-blue btn-small" style="width:100%;" onclick="coachAddNote()">Save Note</button>
@@ -1680,7 +1682,7 @@ ${SC.demoMode ? `
       <li><span class="demo-guide-num">2</span><div class="demo-guide-content"><h3>Look at a player's profile</h3><p>Tap any player name. Stats, partner history, and season trajectory.</p></div></li>
       <li><span class="demo-guide-num">3</span><div class="demo-guide-content"><h3>Check partner chemistry</h3><p>Standings → tap a player → Partners. Shows W/L by partner across the season — which pairings are working, which aren't.</p></div></li>
       <li><span class="demo-guide-num">4</span><div class="demo-guide-content"><h3>View a played dual</h3><p>Schedule tab → tap a past dual. Court-by-court set scores, who played who.</p></div></li>
-      <li><span class="demo-guide-num">5</span><div class="demo-guide-content"><h3>Open the planner</h3><p>Planner tab → enter Coach PIN 1234. Set lineups for upcoming matches. Try the auto-pair feature.</p></div></li>
+      <li><span class="demo-guide-num">5</span><div class="demo-guide-content"><h3>Open the planner</h3><p>Planner tab → enter ${COACH_LABEL} PIN 1234. Set lineups for upcoming matches. Try the auto-pair feature.</p></div></li>
       <li><span class="demo-guide-num">6</span><div class="demo-guide-content"><h3>Try the Excel export</h3><p>Planner → Export. Roster, results, schedule all in one workbook.</p></div></li>
       <li><span class="demo-guide-num">7</span><div class="demo-guide-content"><h3>Check the live scoring view</h3><p>From any dual, tap "Live Score." Mobile-friendly view for keeping score on the sand.</p></div></li>
     </ol>
@@ -3313,7 +3315,7 @@ function loginAsCoach(){
   document.getElementById('app-wrapper').style.display='block';
   document.getElementById('coach-content').style.display='block';
   document.getElementById('player-portal').style.display='none';
-  document.getElementById('header-username').textContent='Coach';
+  document.getElementById('header-username').textContent=COACH_LABEL;
   document.querySelector('.tabs').style.display='flex';
   refreshCurrent();
 }
@@ -3892,11 +3894,11 @@ async function generateAIPlan(pid,gid){
     // visible in the Grass Club demo: Garnet aims up to Gold, Gold holds the top.
     let plan;
     if(SC.tiersEnabled && p.tier==='garnet'){
-      plan=`${p.firstName}, you have put in honest work toward this goal and it shows in your recent numbers. Your court awareness and competitiveness are exactly the traits that earn a move up to the Gold team.\n\nThe path up is built on consistency. Pick two specific habits, a tighter serve target and a faster transition off the net, and rep them every practice until they hold up under pressure the way the Gold players do.\n\nAdd ten focused minutes to each session on those two habits and track your clean reps against your errors so your progress toward that next level is visible. Check in every two weeks and we will adjust as your numbers climb.\n\nKeep competing for that spot. Coach Mark.`;
+      plan=`${p.firstName}, you have put in honest work toward this goal and it shows in your recent numbers. Your court awareness and competitiveness are exactly the traits that earn a move up to the Gold team.\n\nThe path up is built on consistency. Pick two specific habits, a tighter serve target and a faster transition off the net, and rep them every practice until they hold up under pressure the way the Gold players do.\n\nAdd ten focused minutes to each session on those two habits and track your clean reps against your errors so your progress toward that next level is visible. Check in every two weeks and we will adjust as your numbers climb.\n\nKeep competing for that spot. ${COACH_SIGNOFF}.`;
     }else if(SC.tiersEnabled && p.tier==='gold'){
-      plan=`${p.firstName}, you have earned your place on the Gold team and your recent numbers back it up. Your court awareness and competitiveness are real strengths, and now the work is holding that level and excelling.\n\nStaying at the top means sharpening what already works and closing the last small gaps. Pick two specific habits, a tighter serve target and a faster transition off the net, and rep them every practice so your strengths stay strengths against the best competition.\n\nAdd ten focused minutes to each session on those two habits and track your clean reps against your errors so you keep refining at the margins. Check in every two weeks and we will adjust as your numbers move.\n\nKeep setting the standard. Coach Mark.`;
+      plan=`${p.firstName}, you have earned your place on the Gold team and your recent numbers back it up. Your court awareness and competitiveness are real strengths, and now the work is holding that level and excelling.\n\nStaying at the top means sharpening what already works and closing the last small gaps. Pick two specific habits, a tighter serve target and a faster transition off the net, and rep them every practice so your strengths stay strengths against the best competition.\n\nAdd ten focused minutes to each session on those two habits and track your clean reps against your errors so you keep refining at the margins. Check in every two weeks and we will adjust as your numbers move.\n\nKeep setting the standard. ${COACH_SIGNOFF}.`;
     }else{
-      plan=`${p.firstName}, you have put in honest work toward this goal and it shows in your recent numbers. Your court awareness and competitiveness are real strengths to build on.\n\nThe next step is turning that foundation into more consistent finishing. Pick two specific habits, a tighter serve target and a faster transition off the net, and rep them every practice.\n\nAdd ten focused minutes to each session on those two habits and track your clean reps against your errors so the progress is visible. Check in every two weeks and we will adjust as your numbers move.\n\nStay patient and keep competing. Coach Mark.`;
+      plan=`${p.firstName}, you have put in honest work toward this goal and it shows in your recent numbers. Your court awareness and competitiveness are real strengths to build on.\n\nThe next step is turning that foundation into more consistent finishing. Pick two specific habits, a tighter serve target and a faster transition off the net, and rep them every practice.\n\nAdd ten focused minutes to each session on those two habits and track your clean reps against your errors so the progress is visible. Check in every two weeks and we will adjust as your numbers move.\n\nStay patient and keep competing. ${COACH_SIGNOFF}.`;
     }
     if(D.goals[pid]&&D.goals[pid][gid]) D.goals[pid][gid].aiFeedback={text:plan,generatedAt:td(),status:'draft',editedBy:null,approvedAt:null};
     renderCoachGoals();
@@ -3926,7 +3928,7 @@ async function generateAIPlan(pid,gid){
         max_tokens:1000,
         messages:[{role:'user',content:`You are an experienced high school girls beach volleyball coach creating a personalized development plan. Be encouraging but honest. Use beach volleyball terminology only, never indoor volleyball terms.
 
-Formatting rules you must follow without exception: no markdown of any kind, no hashtags, no double asterisks, no em dashes, no bullet point symbols. Use plain sentences and paragraphs only. Add a blank line between every paragraph. End every plan with the sign-off: Coach Mark.
+Formatting rules you must follow without exception: no markdown of any kind, no hashtags, no double asterisks, no em dashes, no bullet point symbols. Use plain sentences and paragraphs only. Add a blank line between every paragraph. End every plan with the sign-off: ${COACH_SIGNOFF}.
 
 PLAYER DATA:
 ${dataSummary}
@@ -3979,7 +3981,7 @@ function approveGoal(pid,gid){
   const _ag=D.goals?.[pid]?.[gid];
   notifyPlayer(pid,'plan',
     'SC.schoolName — Your Training Plan is Ready',
-    'Hi '+(_ap?_ap.firstName:'there')+',\n\nCoach has approved your AI training plan for: '+(_ag?_ag.label||_ag.goalType:'your goal')+'.\n\nLog in to the app to view your personalized feedback and next steps.'
+    'Hi '+(_ap?_ap.firstName:'there')+',\n\n'+COACH_LABEL+' has approved your AI training plan for: '+(_ag?_ag.label||_ag.goalType:'your goal')+'.\n\nLog in to the app to view your personalized feedback and next steps.'
   );
 }
 
@@ -4336,8 +4338,8 @@ function renderPlayerGoals(){
       <div class="goal-header">
         <span class="goal-label">${g.label||g.goalType}</span>
         ${approved?'<span class="goal-status approved">\u2713 Plan Ready</span>':
-          hasDraft?'<span class="goal-status ai-ready">Pending Coach Review</span>':
-          '<span class="goal-status pending">Awaiting Coach\'s Plan</span>'}
+          hasDraft?'<span class="goal-status ai-ready">Pending '+COACH_LABEL+' Review</span>':
+          '<span class="goal-status pending">Awaiting '+COACH_LABEL+'\'s Plan</span>'}
       </div>
       <div style="font-size:11px;color:var(--gray);">Set on ${fD(g.selectedAt)}</div>`;
     if(approved&&fb){
@@ -6225,7 +6227,7 @@ function renderPlayerAssignment(pid){
     // Show notes if they mention player's name
     const notesLower=nextAssign.notes.toLowerCase();
     if(notesLower.includes(firstName)||notesLower.includes(lastName)){
-      h+=`<div style="font-size:12px;color:var(--gray);margin-top:8px;font-style:italic;padding:8px;background:var(--off-white);border-radius:6px;">📝 Coach notes: ${nextAssign.notes}</div>`;
+      h+=`<div style="font-size:12px;color:var(--gray);margin-top:8px;font-style:italic;padding:8px;background:var(--off-white);border-radius:6px;">📝 ${COACH_LABEL} notes: ${nextAssign.notes}</div>`;
     }
   }
   h+='</div>';
@@ -7447,7 +7449,7 @@ async function generatePracticePlan(){
     const w1=weakLabels[0]||'serving';
     const w2=weakLabels[1]||weakLabels[0]||'passing';
     const w3=weakLabels[2]||weakLabels[1]||weakLabels[0]||'defense';
-    const plan=`Practice session for the ${tierLabel} team. The numbers point to ${weakLabels.join(', ')} as the spots holding this group back right now, so the whole session is built around them.\n\nWarmup. Fifteen minutes of dynamic movement and partner pepper, with a deliberate focus on clean ${w1} touches from the very first ball so the standard is set before competition starts.\n\nFocused block one. Spend twenty minutes on ${w1}. Run repeating reps with a clear target and a clean rep versus error count out loud, so players feel the standard climb instead of just going through the motions.\n\nFocused block two. Spend twenty minutes on ${w2} and ${w3} paired together in a single flowing drill, so players have to read and react the way they will in a real rally rather than treating each skill in isolation.\n\nScrimmage focus. Play short games to fifteen where points won with strong ${w1} or ${w2} count double. That rewards the exact habits this team needs and makes the weak spots the path to winning.\n\nCooldown. Five minutes of light movement and a quick circle where each player names one rep that felt better than last week, so the group leaves seeing progress on ${weakLabels.join(' and ')}.\n\nCoach Mark.`;
+    const plan=`Practice session for the ${tierLabel} team. The numbers point to ${weakLabels.join(', ')} as the spots holding this group back right now, so the whole session is built around them.\n\nWarmup. Fifteen minutes of dynamic movement and partner pepper, with a deliberate focus on clean ${w1} touches from the very first ball so the standard is set before competition starts.\n\nFocused block one. Spend twenty minutes on ${w1}. Run repeating reps with a clear target and a clean rep versus error count out loud, so players feel the standard climb instead of just going through the motions.\n\nFocused block two. Spend twenty minutes on ${w2} and ${w3} paired together in a single flowing drill, so players have to read and react the way they will in a real rally rather than treating each skill in isolation.\n\nScrimmage focus. Play short games to fifteen where points won with strong ${w1} or ${w2} count double. That rewards the exact habits this team needs and makes the weak spots the path to winning.\n\nCooldown. Five minutes of light movement and a quick circle where each player names one rep that felt better than last week, so the group leaves seeing progress on ${weakLabels.join(' and ')}.\n\n${COACH_SIGNOFF}.`;
     analysisPlanText=`<div style="white-space:pre-wrap;font-size:13px;line-height:1.7;color:var(--charcoal);">${plan}</div>`;
     renderTeamAnalysis();
     toast('Practice plan generated');
@@ -7465,7 +7467,7 @@ async function generatePracticePlan(){
         max_tokens:1000,
         messages:[{role:'user',content:`You are an experienced high school girls beach volleyball coach planning a single team practice session. Be encouraging but honest. Use beach volleyball terminology only, never indoor volleyball terms.
 
-Formatting rules you must follow without exception: no markdown of any kind, no hashtags, no double asterisks, no em dashes, no bullet point symbols. Use plain sentences and paragraphs only. Add a blank line between every paragraph. End every plan with the sign-off: Coach Mark.
+Formatting rules you must follow without exception: no markdown of any kind, no hashtags, no double asterisks, no em dashes, no bullet point symbols. Use plain sentences and paragraphs only. Add a blank line between every paragraph. End every plan with the sign-off: ${COACH_SIGNOFF}.
 
 TEAM: ${tierLabel} team, ${a.playerCount} players.
 
@@ -8213,7 +8215,7 @@ function deleteDual(id){
   else{_delDualArmed[id]=setTimeout(()=>{delete _delDualArmed[id];},3000);toast('Tap again to confirm delete');}
 }
 function reopenDual(id){
-  const pin=prompt('Enter Coach PIN to reopen this dual:');
+  const pin=prompt('Enter '+COACH_LABEL+' PIN to reopen this dual:');
   if(!pin)return;
   if(pin!==(window._coachPin||COACH_PIN)){toast('Incorrect PIN');return;}
   fbRemove('duals/'+id);
