@@ -7113,7 +7113,22 @@ let openCommentPostId=null;
 // Layer 5a: three channels keyed under D.chat[channel]. allclub first = default landing channel. No visibility or posting rules yet; all three are visible and postable to everyone.
 const CHAT_CHANNELS=[['allclub','All Club'],['gold','Gold'],['garnet','Garnet']];
 let activeChatChannel='allclub';
-function setChatChannel(ch){ activeChatChannel=ch; openCommentPostId=null; renderClubChat(); }
+function setChatChannel(ch){ if(visibleChatChannels().indexOf(ch)<0)return; activeChatChannel=ch; openCommentPostId=null; renderClubChat(); }
+// Layer 5b visibility: which channels the current player can SEE, in CHAT_CHANNELS display order.
+// Everyone sees allclub; leadership (exec or faculty) sees all three; a gold or garnet player additionally
+// sees their own team channel; an unassigned-tier non-leadership player sees allclub only (read-only spectator).
+function visibleChatChannels(){
+  const me=gP(currentPlayerId);
+  const lead = me && (me.leadership==='exec' || me.leadership==='faculty');
+  const tier = me ? (me.tier||'unassigned') : 'unassigned';
+  const out=['allclub'];
+  if(lead){ out.push('gold','garnet'); }
+  else if(tier==='gold'){ out.push('gold'); }
+  else if(tier==='garnet'){ out.push('garnet'); }
+  return out;
+}
+// Keep the active channel valid for the current player; if it is not visible, fall back to allclub (always visible).
+function ensureVisibleChannel(){ if(visibleChatChannels().indexOf(activeChatChannel)<0) activeChatChannel='allclub'; }
 function toggleCommentComposer(postId){
   openCommentPostId = (openCommentPostId===postId) ? null : postId;
   renderClubChat();
@@ -7121,6 +7136,7 @@ function toggleCommentComposer(postId){
 function renderClubChat(){
   const panel=document.getElementById('pp-panel-chat');
   if(!panel)return;
+  ensureVisibleChannel();
   const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const msgs=(D.chat&&D.chat[activeChatChannel])||{};
   const rows=Object.keys(msgs)
@@ -7175,9 +7191,10 @@ function renderClubChat(){
       </div>`;
     }).join('');
   }
-  // Channel switcher (Layer 5a). Mirrors the roster tier-filter filter-btn pattern; active button tracks activeChatChannel.
+  // Channel switcher (Layer 5a markup, Layer 5b filtered to visible channels). Mirrors the roster tier-filter filter-btn pattern; active button tracks activeChatChannel.
+  const vis=visibleChatChannels();
   const channelToggle=`<div style="display:flex;gap:8px;margin-bottom:10px;" id="cc-channel-toggle">`+
-    CHAT_CHANNELS.map(([ch,lbl])=>`<button class="filter-btn${activeChatChannel===ch?' active':''}" onclick="setChatChannel('${ch}')" style="flex:1;text-align:center;">${lbl}</button>`).join('')+
+    CHAT_CHANNELS.filter(([ch])=>vis.indexOf(ch)>=0).map(([ch,lbl])=>`<button class="filter-btn${activeChatChannel===ch?' active':''}" onclick="setChatChannel('${ch}')" style="flex:1;text-align:center;">${lbl}</button>`).join('')+
     `</div>`;
   panel.innerHTML=`<div class="card"><div class="card-title"><span class="bar"></span> 💬 Club Chat</div>
     ${channelToggle}
