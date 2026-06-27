@@ -7536,10 +7536,11 @@ function tierDataSufficient(a){ return a.playerCount>=1 && a.assessedSkills.leng
 // are written via the coachSetTier whole-object + in-memory pattern (fbSet is a
 // no-op in demo mode, so we also mutate in memory so the re-render reflects it).
 // ============================================================
-let pgGoldCourts=2, pgGarnetCourts=2;
+let pgGoldCourts=2, pgGarnetCourts=2, pgMinGroupSize=2, pgActiveMode=null;
 const PG_SKILL_KEYS=['serving','passing','setting','hitting','blocking','defense','courtSense','communication'];
 function setPgGoldCourts(v){ pgGoldCourts=Math.max(1,parseInt(v,10)||1); renderPracticeGroups(); }
 function setPgGarnetCourts(v){ pgGarnetCourts=Math.max(1,parseInt(v,10)||1); renderPracticeGroups(); }
+function setPgMinGroupSize(v){ pgMinGroupSize=Math.max(1,parseInt(v,10)||1); renderPracticeGroups(); }
 // Per-player overall skill: average of assessed (>0) skills, zeros ignored. Same rule as Team Analysis.
 function pgPlayerSkillAvg(pid){
   const sk=profilesData?.skills?.[pid]||profilesData?.players?.[pid]?.skills||{};
@@ -7549,22 +7550,34 @@ function pgPlayerSkillAvg(pid){
 }
 // Generate groups for one tier and write each player's pg (1-based within tier).
 function pgGenerateTier(tier,mode,courts){
-  const n=Math.max(1,courts);
   const ranked=D.players
     .filter(p=>(p.tier||'unassigned')===tier)
     .map(p=>({p,avg:pgPlayerSkillAvg(p.id)}))
     .sort((a,b)=>b.avg-a.avg); // strongest first
+  const count=ranked.length;
+  const minSize=Math.max(1,pgMinGroupSize);
+  // Reduce the requested group count so no group falls below the minimum given this tier's player count.
+  // With count players and a floor of minSize each, the most groups we can run is floor(count/minSize).
+  const requested=Math.max(1,courts);
+  const effN=count>0?Math.max(1,Math.min(requested,Math.floor(count/minSize))):requested;
   const groupOf={};
   if(mode==='together'){
-    // Cluster the strongest together: chunk the sorted list into n contiguous groups.
-    const size=Math.max(1,Math.ceil(ranked.length/n));
-    ranked.forEach((x,i)=>{ groupOf[x.p.id]=Math.min(n,Math.floor(i/size)+1); });
+    // Strongest-first, top-down: PG1 takes the strongest players, PG2 the next, and so on.
+    // Sizes are base, with the first (count % effN) groups taking one extra, so leftover players
+    // fill back into existing groups rather than forming a runt group. PG1 ends up the strongest group.
+    const base=Math.floor(count/effN), rem=count%effN;
+    let idx=0;
+    for(let g=1;g<=effN;g++){
+      const size=base+(g<=rem?1:0);
+      for(let k=0;k<size&&idx<count;k++){ groupOf[ranked[idx].p.id]=g; idx++; }
+    }
   }else{
-    // Balanced: serpentine (snake) draft across the n groups so each group has a similar mix.
+    // Balanced: serpentine (snake) draft across effN groups. Sizes differ by at most one, and effN
+    // respects the minimum, so no group falls below it.
     ranked.forEach((x,i)=>{
-      const cycle=2*n;
+      const cycle=2*effN;
       const pos=i%cycle;
-      const g=pos<n?pos:(cycle-1-pos);
+      const g=pos<effN?pos:(cycle-1-pos);
       groupOf[x.p.id]=g+1;
     });
   }
@@ -7577,6 +7590,7 @@ function pgGenerateTier(tier,mode,courts){
 }
 // Generate both tiers in the chosen mode, then repaint. Local computation, no AI worker.
 function generatePracticeGroups(mode){
+  pgActiveMode=mode; // remember which mode is showing so its button stays lit
   pgGenerateTier('gold',mode,pgGoldCourts);
   pgGenerateTier('garnet',mode,pgGarnetCourts);
   toast(mode==='together'?'Groups generated (Best Together)':'Groups generated (Balanced)');
@@ -7587,7 +7601,7 @@ function renderPracticeGroups(){
   if(!pane)return;
   const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   // Build one tier column: groups 1..courts, plus any leftover (no pg yet, or pg above the current count) under Unassigned.
-  const col=(tier,courts)=>{
+  const col=(tier)=>{
     const label=tier==='gold'?'Gold':'Garnet';
     const headBg=tier==='gold'?'#CEB888':'#782F40';
     const headFg=tier==='gold'?'#2d2d2d':'#ffffff';
@@ -7598,8 +7612,11 @@ function renderPracticeGroups(){
         <span style="color:var(--charcoal);">${esc(x.p.firstName+' '+x.p.lastName)}</span>
         <span style="color:var(--gray);font-size:12px;">${x.avg>0?x.avg.toFixed(1):'-'}</span>
       </div>`;
+    // Show only the groups that actually got players from the last generate, so a reduced effective
+    // group count (from the minimum) never leaves an empty trailing group on screen.
+    const maxPg=players.reduce((m,x)=>Math.max(m,x.p.pg||0),0);
     let groupsHtml='';
-    for(let g=1;g<=courts;g++){
+    for(let g=1;g<=maxPg;g++){
       const members=players.filter(x=>x.p.pg===g).sort((a,b)=>b.avg-a.avg);
       const rows=members.length?members.map(memberRow).join(''):`<div style="color:var(--gray);font-size:12px;padding:6px 0;">No players</div>`;
       groupsHtml+=`<div style="margin-bottom:10px;border:1px solid var(--gray-lighter);border-radius:8px;overflow:hidden;">
@@ -7607,7 +7624,8 @@ function renderPracticeGroups(){
         <div style="padding:4px 10px 6px;">${rows}</div>
       </div>`;
     }
-    const leftover=players.filter(x=>!x.p.pg||x.p.pg>courts).sort((a,b)=>b.avg-a.avg);
+    // Players with no group yet (before the first generate) sit under Unassigned within their tier.
+    const leftover=players.filter(x=>!x.p.pg).sort((a,b)=>b.avg-a.avg);
     if(leftover.length){
       groupsHtml+=`<div style="margin-bottom:10px;border:1px dashed var(--gray-light);border-radius:8px;overflow:hidden;">
         <div style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1px;color:var(--gray);background:var(--off-white);padding:6px 10px;">Unassigned</div>
@@ -7626,14 +7644,16 @@ function renderPracticeGroups(){
         <input type="number" min="1" max="8" value="${pgGoldCourts}" onchange="setPgGoldCourts(this.value)" style="width:56px;padding:4px 6px;border:1px solid var(--gray-lighter);border-radius:6px;font-family:'Bebas Neue',sans-serif;font-size:15px;text-align:center;color:var(--charcoal);"></label>
       <label style="font-size:13px;color:var(--charcoal);display:flex;align-items:center;gap:6px;">Garnet groups
         <input type="number" min="1" max="8" value="${pgGarnetCourts}" onchange="setPgGarnetCourts(this.value)" style="width:56px;padding:4px 6px;border:1px solid var(--gray-lighter);border-radius:6px;font-family:'Bebas Neue',sans-serif;font-size:15px;text-align:center;color:var(--charcoal);"></label>
+      <label style="font-size:13px;color:var(--charcoal);display:flex;align-items:center;gap:6px;">Min per group
+        <input type="number" min="1" max="8" value="${pgMinGroupSize}" onchange="setPgMinGroupSize(this.value)" style="width:56px;padding:4px 6px;border:1px solid var(--gray-lighter);border-radius:6px;font-family:'Bebas Neue',sans-serif;font-size:15px;text-align:center;color:var(--charcoal);"></label>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
-      <button class="btn btn-primary btn-small" style="flex:1;min-width:150px;" onclick="generatePracticeGroups('together')">Best Together</button>
-      <button class="btn btn-secondary btn-small" style="flex:1;min-width:150px;" onclick="generatePracticeGroups('balanced')">Balanced</button>
+      <button class="filter-btn${pgActiveMode==='together'?' active':''}" style="flex:1;min-width:150px;text-align:center;" onclick="generatePracticeGroups('together')">Best Together</button>
+      <button class="filter-btn${pgActiveMode==='balanced'?' active':''}" style="flex:1;min-width:150px;text-align:center;" onclick="generatePracticeGroups('balanced')">Balanced</button>
     </div>
     <div style="display:flex;gap:16px;flex-wrap:wrap;">
-      ${col('gold',pgGoldCourts)}
-      ${col('garnet',pgGarnetCourts)}
+      ${col('gold')}
+      ${col('garnet')}
     </div>
   </div>`;
 }
