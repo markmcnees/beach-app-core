@@ -7431,17 +7431,21 @@ const BUILDER_DRILLS=[
   ['Setting',['Setter Footwork Ladder','Hand-Setting Accuracy','Jump Set Reps']],
   ['Hitting',['Approach Timing','Line vs Angle Shots','Roll Shot Control']],
   ['Blocking',['Block Footwork','Read & Press','Peel & Transition']],
-  ['Defense',['Pursuit Digs','Coach-on-Box Down Balls','Emergency Pancake Reps']]
+  ['Defense',['Pursuit Digs','Coach-on-Box Down Balls','Emergency Pancake Reps']],
+  ['Court Sense',['Read and React','Transition Footwork','Shot Selection Reps']],
+  ['Communication',['Call It Loud','Switch and Cover','Seam Coverage Drill']]
 ];
 let builderOpen=false;       // is the drill picker open
 let builderExpanded={};      // skill index -> bool (which categories are expanded)
 let builderSession=[];       // [{rid, name, minutes}]
 let builderSeq=0;            // stable row id source for remove
+let builderHeatBand='normal';         // FHSAA Policy 41 heat band driving auto fluid breaks
+let builderSuppressedBreaks=new Set();// rids of drills after which the exec deleted an auto break
 function toggleBuilder(){ builderOpen=!builderOpen; renderBuilder(); }
 function toggleBuilderSkill(si){ builderExpanded[si]=!builderExpanded[si]; renderBuilder(); }
 function addBuilderDrill(si,di){
   const name=(BUILDER_DRILLS[si]&&BUILDER_DRILLS[si][1][di])||'Drill';
-  builderSession.push({rid:++builderSeq,name:name,minutes:10});
+  builderSession.push({rid:++builderSeq,name:name,minutes:20});
   renderBuilder();
 }
 function removeBuilderDrill(rid){ builderSession=builderSession.filter(d=>d.rid!==rid); renderBuilder(); }
@@ -7449,9 +7453,38 @@ function setBuilderDrillMinutes(rid,val){
   const d=builderSession.find(x=>x.rid===rid); if(!d)return;
   const m=parseInt(val,10);
   d.minutes=isNaN(m)?0:Math.max(0,m);
-  // Update only the total in place so the edited input keeps focus.
+  // Update only the total in place so the edited input keeps focus. The total includes auto fluid breaks,
+  // so it stays correct as minutes change; the break row positions settle on the next full render.
   const t=document.getElementById('ta-builder-total');
-  if(t)t.textContent=builderSession.reduce((s,x)=>s+(x.minutes||0),0);
+  if(t)t.textContent=pbComputeRows().total;
+}
+function setBuilderHeatBand(v){ builderHeatBand=v; renderBuilder(); }
+// Delete an auto-inserted fluid break: remember the drill it followed so it stays removed on recompute.
+function removeBuilderBreak(afterRid){ builderSuppressedBreaks.add(afterRid); renderBuilder(); }
+// Derive the display rows (drills interleaved with auto fluid breaks) and the true total minutes.
+// Breaks are computed, not stored, so changing drills, minutes, or the heat band always recomputes cleanly.
+// FHSAA Policy 41 bands: normal a break after about 20 min of drilling, high about 15, extreme about 12. Each break is 10 min.
+// The cadence counter resets at every break point even if that break was deleted, so deleting one break does
+// not cascade-shift the rest. A break that would fall after the final drill is skipped.
+function pbComputeRows(){
+  const TH={normal:20,high:15,extreme:12};
+  const threshold=TH[builderHeatBand]||20;
+  const BREAK_MIN=10;
+  const rows=[]; let cum=0,total=0;
+  builderSession.forEach((d,i)=>{
+    rows.push({type:'drill',d:d});
+    const mins=d.minutes||0;
+    total+=mins; cum+=mins;
+    if(cum>=threshold){
+      cum=0; // reset cadence at the logical break point regardless of suppression
+      const isLast=i===builderSession.length-1;
+      if(!isLast && !builderSuppressedBreaks.has(d.rid)){
+        rows.push({type:'break',afterRid:d.rid,minutes:BREAK_MIN});
+        total+=BREAK_MIN;
+      }
+    }
+  });
+  return {rows,total};
 }
 function renderBuilder(){
   const el=document.getElementById('ta-builder');
@@ -7468,23 +7501,42 @@ function renderBuilder(){
       ${drillBtns}
     </div>`;
   }).join('');
-  // RIGHT: the session being built, with editable minutes and a live total.
+  // Heat condition selector. Drives the auto fluid breaks below. Honest about being forecast based, not live WBGT.
+  const HEAT_OPTS=[['normal','Normal'],['high','High heat'],['extreme','Extreme heat']];
+  const heatSel=`<div style="margin-bottom:12px;">
+    <label style="font-size:13px;color:var(--charcoal);display:flex;align-items:center;gap:6px;flex-wrap:wrap;">Heat condition
+      <select class="tier-select" onchange="setBuilderHeatBand(this.value)">${HEAT_OPTS.map(([v,lbl])=>`<option value="${v}" ${builderHeatBand===v?'selected':''}>${lbl}</option>`).join('')}</select>
+    </label>
+    <div style="font-size:11px;color:var(--gray);margin-top:6px;line-height:1.5;">Fluid breaks follow Florida heat-safety guidance (FHSAA Policy 41). This is forecast and condition based, not live WBGT monitoring. Confirm conditions on site.</div>
+  </div>`;
+  // RIGHT: the session being built, with auto fluid breaks interleaved, editable minutes, and a live total.
+  const computed=pbComputeRows();
   let right;
   if(!builderSession.length){
     right=`<p style="color:var(--gray);font-size:12px;padding:8px 0;line-height:1.5;">Tap a skill on the left, then tap a drill to add it here.</p>`;
   }else{
-    right=builderSession.map(d=>
-      `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--gray-lighter);">
+    right=computed.rows.map(r=>{
+      if(r.type==='break'){
+        return `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;margin:3px 0;border-radius:6px;background:#e8f0fe;border:1px dashed #1d4ed8;">
+          <span style="flex:1;font-size:12px;color:#1d4ed8;font-weight:700;">💧 Fluid Break (shade)</span>
+          <span style="font-size:12px;color:#1d4ed8;">${r.minutes} min</span>
+          <button class="btn btn-danger btn-small" style="padding:2px 8px;font-size:11px;" title="Remove break" onclick="removeBuilderBreak(${r.afterRid})">✕</button>
+        </div>`;
+      }
+      const d=r.d;
+      return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--gray-lighter);">
         <span style="flex:1;font-size:13px;color:var(--charcoal);">${esc(d.name)}</span>
         <input type="number" min="0" max="180" value="${d.minutes}" oninput="setBuilderDrillMinutes(${d.rid},this.value)" style="width:56px;padding:4px 6px;border:1px solid var(--gray-lighter);border-radius:6px;font-family:'Bebas Neue',sans-serif;font-size:14px;text-align:center;color:var(--charcoal);">
         <span style="font-size:11px;color:var(--gray);">min</span>
         <button class="btn btn-danger btn-small" style="padding:2px 8px;font-size:11px;" onclick="removeBuilderDrill(${d.rid})">✕</button>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   }
-  const total=builderSession.reduce((s,x)=>s+(x.minutes||0),0);
+  const total=computed.total;
   el.innerHTML=`<div class="card" style="border-top:3px solid var(--gold);">
     <div class="card-title" style="color:var(--gold);"><span class="bar" style="background:var(--gold);"></span> 🛠️ Build Practice Plan</div>
     <p style="font-size:12px;color:var(--gray);margin-bottom:12px;line-height:1.5;">Tap a skill to see its drills, tap a drill to add it to today's session, then dial in the minutes. This is a quick planning sketch and is not saved.</p>
+    ${heatSel}
     <div style="display:flex;gap:14px;flex-wrap:wrap;">
       <div style="flex:1;min-width:200px;">
         <div style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1px;color:var(--charcoal);margin-bottom:8px;">DRILLS</div>
