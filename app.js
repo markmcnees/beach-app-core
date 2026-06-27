@@ -975,6 +975,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       ${SC.tiersEnabled?`
       ${SC.chatEnabled?'<button class="tab" data-tab="broadcast">Broadcast</button>':''}
       <button class="tab" data-tab="settings">Roster</button>
+      <button class="tab" data-tab="practicegroups">Practice Groups</button>
       <button class="tab" data-tab="players">Kings/Queens</button>
       <button class="tab" data-tab="goals">Goals</button>
       <button class="tab" data-tab="teamanalysis">Practice Builder</button>
@@ -1331,6 +1332,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
   </div>
   ${SC.chatEnabled?'<div class="tab-content" id="tab-broadcast"></div>':''}
   ${SC.tiersEnabled?'<div class="tab-content" id="tab-teamanalysis"></div>':''}
+  ${SC.tiersEnabled?'<div class="tab-content" id="tab-practicegroups"></div>':''}
 
 </div>
 <!-- PLAYER PORTAL (shown when logged in as player) -->
@@ -3129,6 +3131,7 @@ function refreshTab(id){
     case'settings':renderRoster();break;
     case'broadcast':renderExecBroadcast();break;
     case'teamanalysis':renderTeamAnalysis();break;
+    case'practicegroups':renderPracticeGroups();break;
   }
 }
 
@@ -7523,6 +7526,117 @@ function analyzeTierSkills(tier){
 // Enough data to analyze: at least 1 player in the tier and at least 3 skills
 // with at least one assessed score.
 function tierDataSufficient(a){ return a.playerCount>=1 && a.assessedSkills.length>=3; }
+
+// ============================================================
+// PRACTICE GROUPS engine (Grass Club only, gated on SC.tiersEnabled).
+// Splits each tier into N practice groups numbered from 1 within that tier.
+// Uses a NEW separate field p.pg. Never reads or writes the load-bearing court field.
+// Deterministic local math only: no AI worker, no fetch, no network.
+// Court counts are session state in pass one (not persisted). Group assignments
+// are written via the coachSetTier whole-object + in-memory pattern (fbSet is a
+// no-op in demo mode, so we also mutate in memory so the re-render reflects it).
+// ============================================================
+let pgGoldCourts=2, pgGarnetCourts=2;
+const PG_SKILL_KEYS=['serving','passing','setting','hitting','blocking','defense','courtSense','communication'];
+function setPgGoldCourts(v){ pgGoldCourts=Math.max(1,parseInt(v,10)||1); renderPracticeGroups(); }
+function setPgGarnetCourts(v){ pgGarnetCourts=Math.max(1,parseInt(v,10)||1); renderPracticeGroups(); }
+// Per-player overall skill: average of assessed (>0) skills, zeros ignored. Same rule as Team Analysis.
+function pgPlayerSkillAvg(pid){
+  const sk=profilesData?.skills?.[pid]||profilesData?.players?.[pid]?.skills||{};
+  let sum=0,n=0;
+  PG_SKILL_KEYS.forEach(k=>{const v=sk[k]||0;if(v>0){sum+=v;n++;}});
+  return n>0?sum/n:0;
+}
+// Generate groups for one tier and write each player's pg (1-based within tier).
+function pgGenerateTier(tier,mode,courts){
+  const n=Math.max(1,courts);
+  const ranked=D.players
+    .filter(p=>(p.tier||'unassigned')===tier)
+    .map(p=>({p,avg:pgPlayerSkillAvg(p.id)}))
+    .sort((a,b)=>b.avg-a.avg); // strongest first
+  const groupOf={};
+  if(mode==='together'){
+    // Cluster the strongest together: chunk the sorted list into n contiguous groups.
+    const size=Math.max(1,Math.ceil(ranked.length/n));
+    ranked.forEach((x,i)=>{ groupOf[x.p.id]=Math.min(n,Math.floor(i/size)+1); });
+  }else{
+    // Balanced: serpentine (snake) draft across the n groups so each group has a similar mix.
+    ranked.forEach((x,i)=>{
+      const cycle=2*n;
+      const pos=i%cycle;
+      const g=pos<n?pos:(cycle-1-pos);
+      groupOf[x.p.id]=g+1;
+    });
+  }
+  // Write pg with the whole-object spread pattern (in memory + fbSet, no-op in demo). Never touches court.
+  ranked.forEach(x=>{
+    const pl=gP(x.p.id); if(!pl)return;
+    pl.pg=groupOf[x.p.id];
+    fbSet('players/'+pl.id,{...pl,pg:groupOf[x.p.id]});
+  });
+}
+// Generate both tiers in the chosen mode, then repaint. Local computation, no AI worker.
+function generatePracticeGroups(mode){
+  pgGenerateTier('gold',mode,pgGoldCourts);
+  pgGenerateTier('garnet',mode,pgGarnetCourts);
+  toast(mode==='together'?'Groups generated (Best Together)':'Groups generated (Balanced)');
+  renderPracticeGroups();
+}
+function renderPracticeGroups(){
+  const pane=document.getElementById('tab-practicegroups');
+  if(!pane)return;
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  // Build one tier column: groups 1..courts, plus any leftover (no pg yet, or pg above the current count) under Unassigned.
+  const col=(tier,courts)=>{
+    const label=tier==='gold'?'Gold':'Garnet';
+    const headBg=tier==='gold'?'#CEB888':'#782F40';
+    const headFg=tier==='gold'?'#2d2d2d':'#ffffff';
+    const players=D.players
+      .filter(p=>(p.tier||'unassigned')===tier)
+      .map(p=>({p,avg:pgPlayerSkillAvg(p.id)}));
+    const memberRow=x=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--gray-lighter);font-size:13px;">
+        <span style="color:var(--charcoal);">${esc(x.p.firstName+' '+x.p.lastName)}</span>
+        <span style="color:var(--gray);font-size:12px;">${x.avg>0?x.avg.toFixed(1):'-'}</span>
+      </div>`;
+    let groupsHtml='';
+    for(let g=1;g<=courts;g++){
+      const members=players.filter(x=>x.p.pg===g).sort((a,b)=>b.avg-a.avg);
+      const rows=members.length?members.map(memberRow).join(''):`<div style="color:var(--gray);font-size:12px;padding:6px 0;">No players</div>`;
+      groupsHtml+=`<div style="margin-bottom:10px;border:1px solid var(--gray-lighter);border-radius:8px;overflow:hidden;">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:1px;color:${headFg};background:${headBg};padding:6px 10px;">${label} PG${g}</div>
+        <div style="padding:4px 10px 6px;">${rows}</div>
+      </div>`;
+    }
+    const leftover=players.filter(x=>!x.p.pg||x.p.pg>courts).sort((a,b)=>b.avg-a.avg);
+    if(leftover.length){
+      groupsHtml+=`<div style="margin-bottom:10px;border:1px dashed var(--gray-light);border-radius:8px;overflow:hidden;">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1px;color:var(--gray);background:var(--off-white);padding:6px 10px;">Unassigned</div>
+        <div style="padding:4px 10px 6px;">${leftover.map(memberRow).join('')}</div>
+      </div>`;
+    }
+    return `<div style="flex:1;min-width:240px;">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:1px;color:${tier==='gold'?'#9a7d2e':'#782F40'};margin-bottom:8px;">${label}</div>
+      ${groupsHtml}
+    </div>`;
+  };
+  pane.innerHTML=`<div class="card"><div class="card-title"><span class="bar"></span> 🏐 Practice Groups</div>
+    <p style="font-size:12px;color:var(--gray);margin-bottom:12px;line-height:1.5;">Set how many practice groups each team runs, then generate. Best Together clusters the strongest players, Balanced spreads skill evenly. Groups are numbered from 1 within each team. This is a planning view and does not change court or pair seeding.</p>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px;">
+      <label style="font-size:13px;color:var(--charcoal);display:flex;align-items:center;gap:6px;">Gold groups
+        <input type="number" min="1" max="8" value="${pgGoldCourts}" onchange="setPgGoldCourts(this.value)" style="width:56px;padding:4px 6px;border:1px solid var(--gray-lighter);border-radius:6px;font-family:'Bebas Neue',sans-serif;font-size:15px;text-align:center;color:var(--charcoal);"></label>
+      <label style="font-size:13px;color:var(--charcoal);display:flex;align-items:center;gap:6px;">Garnet groups
+        <input type="number" min="1" max="8" value="${pgGarnetCourts}" onchange="setPgGarnetCourts(this.value)" style="width:56px;padding:4px 6px;border:1px solid var(--gray-lighter);border-radius:6px;font-family:'Bebas Neue',sans-serif;font-size:15px;text-align:center;color:var(--charcoal);"></label>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+      <button class="btn btn-primary btn-small" style="flex:1;min-width:150px;" onclick="generatePracticeGroups('together')">Best Together</button>
+      <button class="btn btn-secondary btn-small" style="flex:1;min-width:150px;" onclick="generatePracticeGroups('balanced')">Balanced</button>
+    </div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;">
+      ${col('gold',pgGoldCourts)}
+      ${col('garnet',pgGarnetCourts)}
+    </div>
+  </div>`;
+}
 
 function renderTeamAnalysis(){
   const pane=document.getElementById('tab-teamanalysis');
