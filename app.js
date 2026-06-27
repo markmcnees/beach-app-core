@@ -972,9 +972,15 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       `}
     </div>
     <div class="sub-tabs" id="sub-tabs-gameday"${SC.tiersEnabled?' style="display:none;"':''}>
-      <button class="tab${SC.tiersEnabled?'':' active'}" data-tab="duals">Live Scoring</button>
+      ${SC.tiersEnabled?`
+      <button class="tab active" data-tab="recruiting">Recruiting</button>
+      <button class="tab" data-tab="accounting">Accounting</button>
+      <button class="tab" data-tab="travel">Travel</button>
+      `:`
+      <button class="tab active" data-tab="duals">Live Scoring</button>
       <button class="tab" data-tab="gameday">Planner</button>
       <button class="tab" data-tab="dualhistory">Dual History</button>
+      `}
     </div>
     <div class="sub-tabs" id="sub-tabs-manage"${SC.tiersEnabled?'':' style="display:none;"'}>
       ${SC.tiersEnabled?`
@@ -1338,6 +1344,9 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
   ${SC.chatEnabled?'<div class="tab-content" id="tab-broadcast"></div>':''}
   ${SC.tiersEnabled?'<div class="tab-content" id="tab-teamanalysis"></div>':''}
   ${SC.tiersEnabled?'<div class="tab-content" id="tab-practicegroups"></div>':''}
+  ${SC.tiersEnabled?'<div class="tab-content" id="tab-recruiting"></div>':''}
+  ${SC.tiersEnabled?'<div class="tab-content" id="tab-accounting"></div>':''}
+  ${SC.tiersEnabled?'<div class="tab-content" id="tab-travel"></div>':''}
 
 </div>
 <!-- PLAYER PORTAL (shown when logged in as player) -->
@@ -3137,6 +3146,9 @@ function refreshTab(id){
     case'broadcast':renderExecBroadcast();break;
     case'teamanalysis':renderTeamAnalysis();break;
     case'practicegroups':renderPracticeGroups();break;
+    case'recruiting':renderRecruiting();break;
+    case'accounting':renderAccounting();break;
+    case'travel':renderTravel();break;
   }
 }
 
@@ -7793,6 +7805,130 @@ function renderPracticeGroups(){
       ${col('gold')}
       ${col('garnet')}
     </div>
+  </div>`;
+}
+
+// ============================================================
+// LOGISTICS mockups (Grass Club only, gated on SC.tiersEnabled).
+// Pure in-memory demo previews: no Firebase, no fbSet, no network. State resets on refresh.
+// ============================================================
+// Recruiting: sample tryout sessions plus a prospect list with a live invite toggle into Session A.
+let recruitSessions=[
+  {name:'Fall Tryout - Session A', date:'Sept 6', time:'9:00 AM', location:'Court 1', invited:['Ava Nguyen','Mia Torres']},
+  {name:'Fall Tryout - Session B', date:'Sept 7', time:'10:00 AM', location:'Court 2', invited:['Harper Lee']}
+];
+let recruitProspects=['Ava Nguyen','Mia Torres','Harper Lee','Zoe Carter','Lily Brooks','Sofia Ramos'];
+function recruitToggleInvite(pi){
+  const name=recruitProspects[pi]; const s=recruitSessions[0];
+  if(!name||!s)return;
+  const idx=s.invited.indexOf(name);
+  if(idx>=0)s.invited.splice(idx,1); else s.invited.push(name);
+  renderRecruiting();
+}
+function renderRecruiting(){
+  const pane=document.getElementById('tab-recruiting'); if(!pane)return;
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const sessionsHtml=recruitSessions.map(s=>{
+    const names=s.invited.length?s.invited.map(esc).join(', '):'No one invited yet';
+    return `<div style="border:1px solid var(--gray-lighter);border-radius:8px;padding:10px 12px;margin-bottom:8px;">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:1px;color:var(--charcoal);">${esc(s.name)}</div>
+      <div style="font-size:12px;color:var(--gray);margin:2px 0 6px;">${esc(s.date)} · ${esc(s.time)} · ${esc(s.location)}</div>
+      <div style="font-size:12px;color:var(--charcoal);"><span style="font-weight:700;">${s.invited.length} invited</span> <span style="color:var(--gray);">${names}</span></div>
+    </div>`;
+  }).join('');
+  const target=recruitSessions[0];
+  const prospectsHtml=recruitProspects.map((p,pi)=>{
+    const inv=target&&target.invited.indexOf(p)>=0;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--gray-lighter);font-size:13px;">
+      <span style="color:var(--charcoal);">${esc(p)}</span>
+      <button class="btn btn-small ${inv?'btn-danger':'btn-secondary'}" style="padding:3px 10px;font-size:11px;" onclick="recruitToggleInvite(${pi})">${inv?'Invited (remove)':'Invite to Session A'}</button>
+    </div>`;
+  }).join('');
+  pane.innerHTML=`<div class="card"><div class="card-title"><span class="bar"></span> 🎯 Recruiting</div>
+    <p style="font-size:11px;color:var(--gray);margin-bottom:12px;">Demo preview, not yet saving.</p>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1px;color:var(--charcoal);margin-bottom:8px;">TRYOUT SESSIONS</div>
+    ${sessionsHtml}
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1px;color:var(--charcoal);margin:14px 0 4px;">PROSPECTS</div>
+    ${prospectsHtml}
+  </div>`;
+}
+// Accounting: sample dues table with a per-member paid toggle and a live collected summary.
+let acctMembers=[
+  {name:'Suzie Spiker',dues:75,paid:true},
+  {name:'Debby Digger',dues:75,paid:true},
+  {name:'Bonnie Blocker',dues:75,paid:false},
+  {name:'Sammy Setter',dues:75,paid:true},
+  {name:'Penny Passer',dues:75,paid:false},
+  {name:'Sandy Server',dues:75,paid:true},
+  {name:'Riley Receiver',dues:75,paid:false},
+  {name:'Olivia Option',dues:75,paid:true}
+];
+function acctTogglePaid(i){ if(acctMembers[i]){ acctMembers[i].paid=!acctMembers[i].paid; renderAccounting(); } }
+function renderAccounting(){
+  const pane=document.getElementById('tab-accounting'); if(!pane)return;
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const total=acctMembers.length;
+  const paidCount=acctMembers.filter(m=>m.paid).length;
+  const collected=acctMembers.filter(m=>m.paid).reduce((s,m)=>s+m.dues,0);
+  const owed=acctMembers.reduce((s,m)=>s+m.dues,0);
+  const rows=acctMembers.map((m,i)=>`<tr>
+      <td style="padding:6px 4px;border-bottom:1px solid var(--gray-lighter);font-size:13px;color:var(--charcoal);">${esc(m.name)}</td>
+      <td style="padding:6px 4px;border-bottom:1px solid var(--gray-lighter);font-size:13px;color:var(--charcoal);text-align:right;">$${m.dues}</td>
+      <td style="padding:6px 4px;border-bottom:1px solid var(--gray-lighter);text-align:right;">
+        <button class="btn btn-small ${m.paid?'btn-secondary':'btn-danger'}" style="padding:3px 10px;font-size:11px;" onclick="acctTogglePaid(${i})">${m.paid?'Paid':'Not paid'}</button>
+      </td>
+    </tr>`).join('');
+  pane.innerHTML=`<div class="card"><div class="card-title"><span class="bar"></span> 💵 Accounting</div>
+    <p style="font-size:11px;color:var(--gray);margin-bottom:10px;">Demo preview, not yet saving.</p>
+    <div style="font-size:13px;color:var(--charcoal);margin-bottom:10px;"><span style="font-weight:700;">${paidCount} of ${total} paid</span>, $${collected} collected of $${owed}</div>
+    <table style="width:100%;border-collapse:collapse;">
+      <thead><tr>
+        <th style="text-align:left;font-size:11px;letter-spacing:1px;color:var(--gray);padding:4px;">MEMBER</th>
+        <th style="text-align:right;font-size:11px;letter-spacing:1px;color:var(--gray);padding:4px;">DUES</th>
+        <th style="text-align:right;font-size:11px;letter-spacing:1px;color:var(--gray);padding:4px;">STATUS</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+// Travel: sample away tournament with line items and a per-player paid-up toggle.
+let travelTrips=[
+  {event:'Gulf Shores Open', dates:'Oct 18-19', location:'Gulf Shores, AL',
+   items:[{label:'Registration',amount:40},{label:'Lodging',amount:60},{label:'Travel',amount:25}],
+   roster:[
+     {name:'Suzie Spiker',paidUp:true},
+     {name:'Debby Digger',paidUp:true},
+     {name:'Bonnie Blocker',paidUp:false},
+     {name:'Sammy Setter',paidUp:false},
+     {name:'Penny Passer',paidUp:true}
+   ]}
+];
+function travelTogglePaid(ti,ri){ const t=travelTrips[ti]; if(t&&t.roster[ri]){ t.roster[ri].paidUp=!t.roster[ri].paidUp; renderTravel(); } }
+function renderTravel(){
+  const pane=document.getElementById('tab-travel'); if(!pane)return;
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const cards=travelTrips.map((t,ti)=>{
+    const itemsTotal=t.items.reduce((s,it)=>s+it.amount,0);
+    const itemsHtml=t.items.map(it=>`<div style="display:flex;justify-content:space-between;font-size:13px;color:var(--charcoal);padding:3px 0;">
+      <span>${esc(it.label)}</span><span>$${it.amount}</span></div>`).join('');
+    const paidCount=t.roster.filter(p=>p.paidUp).length;
+    const rosterHtml=t.roster.map((p,ri)=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--gray-lighter);font-size:13px;">
+      <span style="color:var(--charcoal);">${esc(p.name)}</span>
+      <button class="btn btn-small ${p.paidUp?'btn-secondary':'btn-danger'}" style="padding:3px 10px;font-size:11px;" onclick="travelTogglePaid(${ti},${ri})">${p.paidUp?'Paid up':'Owes'}</button>
+    </div>`).join('');
+    return `<div style="border:1px solid var(--gray-lighter);border-radius:8px;padding:12px;margin-bottom:10px;">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:1px;color:var(--charcoal);">${esc(t.event)}</div>
+      <div style="font-size:12px;color:var(--gray);margin:2px 0 8px;">${esc(t.dates)} · ${esc(t.location)}</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:1px;color:var(--charcoal);margin-bottom:4px;">COST PER PLAYER</div>
+      ${itemsHtml}
+      <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:var(--charcoal);border-top:1px solid var(--gray-lighter);margin-top:4px;padding-top:6px;"><span>Total</span><span>$${itemsTotal}</span></div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:1px;color:var(--charcoal);margin:12px 0 4px;">ROSTER (${paidCount} of ${t.roster.length} paid up)</div>
+      ${rosterHtml}
+    </div>`;
+  }).join('');
+  pane.innerHTML=`<div class="card"><div class="card-title"><span class="bar"></span> 🚌 Travel</div>
+    <p style="font-size:11px;color:var(--gray);margin-bottom:12px;">Demo preview, not yet saving.</p>
+    ${cards}
   </div>`;
 }
 
