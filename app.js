@@ -11,22 +11,22 @@ const LOGO_H = (SC && SC.logoHeight) ? SC.logoHeight : 64;
 // ============================================================
 const _DEMO = {
   players: [
-    {id:'sd01', firstName:'Suzie',  lastName:'Spiker',     classYear:'SR', court:1, jersey:1,  active:true, tier:'gold', leadership:'exec'},
-    {id:'sd02', firstName:'Debby',  lastName:'Digger',     classYear:'SR', court:1, jersey:7,  active:true, tier:'gold', leadership:'faculty'},
-    {id:'sd03', firstName:'Bonnie', lastName:'Blocker',    classYear:'JR', court:2, jersey:12, active:true, tier:'gold'},
-    {id:'sd04', firstName:'Sammy',  lastName:'Setter',     classYear:'JR', court:2, jersey:3,  active:true, tier:'gold'},
-    {id:'sd05', firstName:'Penny',  lastName:'Passer',     classYear:'JR', court:3, jersey:24, active:true, tier:'gold'},
-    {id:'sd06', firstName:'Sandy',  lastName:'Server',     classYear:'SO', court:3, jersey:9,  active:true, tier:'gold'},
-    {id:'sd07', firstName:'Sarah',  lastName:'Sandbagger', classYear:'SO', court:4, jersey:5,  active:true, tier:'gold'},
-    {id:'sd08', firstName:'Holly',  lastName:'Hitter',     classYear:'SO', court:4, jersey:15, active:true, tier:'gold'},
-    {id:'sd09', firstName:'Riley',  lastName:'Receiver',   classYear:'FR', court:5, jersey:21, active:true, tier:'garnet'},
-    {id:'sd10', firstName:'Olivia', lastName:'Option',     classYear:'FR', court:5, jersey:8,  active:true, tier:'garnet'},
-    {id:'sd11', firstName:'Wendy',  lastName:'Wave',       classYear:'SO', court:6, jersey:33, active:true, tier:'garnet'},
-    {id:'sd12', firstName:'Dana',   lastName:'Dune',       classYear:'FR', court:6, jersey:18, active:true, tier:'garnet'},
-    {id:'sd13', firstName:'Tara',   lastName:'Tide',       classYear:'SO', court:7, jersey:2,  active:true, tier:'garnet'},
-    {id:'sd14', firstName:'Cora',   lastName:'Coral',      classYear:'FR', court:7, jersey:44, active:true, tier:'garnet'},
-    {id:'sd15', firstName:'Marina', lastName:'Mist',       classYear:'FR', court:8, jersey:11, active:true, tier:'garnet'},
-    {id:'sd16', firstName:'Shelly', lastName:'Shoal',      classYear:'SO', court:8, jersey:6,  active:true, tier:'garnet'}
+    {id:'sd01', firstName:'Suzie',  lastName:'Spiker',     classYear:'SR', court:1, jersey:1,  active:true, tier:'gold', leadership:'exec', gender:'F'},
+    {id:'sd02', firstName:'Debby',  lastName:'Digger',     classYear:'SR', court:1, jersey:7,  active:true, tier:'gold', leadership:'faculty', gender:'F'},
+    {id:'sd03', firstName:'Bonnie', lastName:'Blocker',    classYear:'JR', court:2, jersey:12, active:true, tier:'gold', gender:'F'},
+    {id:'sd04', firstName:'Sammy',  lastName:'Setter',     classYear:'JR', court:2, jersey:3,  active:true, tier:'gold', gender:'M'},
+    {id:'sd05', firstName:'Penny',  lastName:'Passer',     classYear:'JR', court:3, jersey:24, active:true, tier:'gold', gender:'F'},
+    {id:'sd06', firstName:'Sandy',  lastName:'Server',     classYear:'SO', court:3, jersey:9,  active:true, tier:'gold', gender:'M'},
+    {id:'sd07', firstName:'Sarah',  lastName:'Sandbagger', classYear:'SO', court:4, jersey:5,  active:true, tier:'gold', gender:'F'},
+    {id:'sd08', firstName:'Holly',  lastName:'Hitter',     classYear:'SO', court:4, jersey:15, active:true, tier:'gold', gender:'M'},
+    {id:'sd09', firstName:'Riley',  lastName:'Receiver',   classYear:'FR', court:5, jersey:21, active:true, tier:'garnet', gender:'M'},
+    {id:'sd10', firstName:'Olivia', lastName:'Option',     classYear:'FR', court:5, jersey:8,  active:true, tier:'garnet', gender:'F'},
+    {id:'sd11', firstName:'Wendy',  lastName:'Wave',       classYear:'SO', court:6, jersey:33, active:true, tier:'garnet', gender:'F'},
+    {id:'sd12', firstName:'Dana',   lastName:'Dune',       classYear:'FR', court:6, jersey:18, active:true, tier:'garnet', gender:'M'},
+    {id:'sd13', firstName:'Tara',   lastName:'Tide',       classYear:'SO', court:7, jersey:2,  active:true, tier:'garnet', gender:'F'},
+    {id:'sd14', firstName:'Cora',   lastName:'Coral',      classYear:'FR', court:7, jersey:44, active:true, tier:'garnet', gender:'M'},
+    {id:'sd15', firstName:'Marina', lastName:'Mist',       classYear:'FR', court:8, jersey:11, active:true, tier:'garnet', gender:'F'},
+    {id:'sd16', firstName:'Shelly', lastName:'Shoal',      classYear:'SO', court:8, jersey:6,  active:true, tier:'garnet', gender:'M'}
   ],
   schedule: [
     {id:'sch01', date:'2026-04-08', opponent:'Coastal Prep',     location:'home', time:'4:00 PM', scoreUs:3, scoreThem:2},
@@ -972,13 +972,22 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       <button class="tab" data-tab="dualhistory">Dual History</button>
     </div>
     <div class="sub-tabs" id="sub-tabs-manage" style="display:none;">
+      ${SC.tiersEnabled?`
+      ${SC.chatEnabled?'<button class="tab" data-tab="broadcast">Broadcast</button>':''}
+      <button class="tab" data-tab="settings">Roster</button>
+      <button class="tab" data-tab="players">Kings/Queens</button>
+      <button class="tab" data-tab="goals">Goals</button>
+      <button class="tab" data-tab="teamanalysis">Practice Builder</button>
+      <button class="tab" data-tab="dashboard" style="display:none;">Dashboard</button>
+      <button class="tab" data-tab="scouts" style="display:none;">Scouts</button>
+      `:`
       <button class="tab" data-tab="dashboard">Dashboard</button>
       <button class="tab" data-tab="players">Players</button>
       <button class="tab" data-tab="goals">Goals</button>
       <button class="tab" data-tab="scouts">Scouts</button>
       <button class="tab" data-tab="settings">Roster</button>
       ${SC.chatEnabled?'<button class="tab" data-tab="broadcast">Broadcast</button>':''}
-      ${SC.tiersEnabled?'<button class="tab" data-tab="teamanalysis">Team Analysis</button>':''}
+      `}
     </div>
   </div>
 </div>
@@ -1034,13 +1043,14 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
 
 <!-- ====== PLAYERS ====== -->
   <div class="tab-content" id="tab-players">
-    <div class="filter-row" id="type-filter-players">
+    ${SC.tiersEnabled?`<div class="filter-row" id="players-tier-toggle" style="display:flex;gap:8px;"></div>
+    <div class="filter-row" id="players-gender-toggle" style="display:none;gap:8px;margin-top:6px;"></div>`:`<div class="filter-row" id="type-filter-players">
       <button class="filter-btn" data-ptype="all">All</button>
       <button class="filter-btn blue active" data-ptype="gameday">Dual</button>
       <button class="filter-btn" data-ptype="exhibition" style="background:var(--white);color:#0e7a4d;border-color:#0e7a4d;">Exhibition</button>
       <button class="filter-btn purple" data-ptype="scrimmage">Scrimmage</button>
       <button class="filter-btn" data-ptype="queens">Queens</button>
-    </div>
+    </div>`}
     
     <div class="card" style="padding:8px 12px;"><div class="table-wrap">
       <table class="player-table" id="players-table"><thead><tr id="players-thead"></tr></thead><tbody></tbody></table>
@@ -2620,7 +2630,30 @@ function updateStanding(){
 // PLAYERS TAB
 // ============================================================
 let pSort={key:'court',dir:'asc'},pCourt='all',pType='gameday';
+// Players-view tier and gender filter state (Grass Club only). Independent of the Roster tab's rosterTierFilter so the two views do not share state.
+let playersTierFilter='all', playersGenderFilter='all';
+function setPlayersTierFilter(v,btn){ playersTierFilter=v; if(v==='all')playersGenderFilter='all'; renderPlayers(); }
+function setPlayersGenderFilter(v,btn){ playersGenderFilter=v; renderPlayers(); }
 function renderPlayers(){
+  // Club (Grass Club) shows a tier filter (and a gender sub-filter when a tier is picked) instead of the stat-view pills,
+  // and uses the combined stat view. Non-club configs are untouched and keep their stat-view pills.
+  if(SC.tiersEnabled){
+    pType='all';
+    const tierBox=document.getElementById('players-tier-toggle');
+    if(tierBox){
+      tierBox.innerHTML=[['all','All'],['gold','Gold'],['garnet','Garnet']].map(([v,lbl])=>
+        `<button class="filter-btn${playersTierFilter===v?' active':''}" onclick="setPlayersTierFilter('${v}',this)" style="flex:1;text-align:center;">${lbl}</button>`).join('');
+    }
+    const genBox=document.getElementById('players-gender-toggle');
+    if(genBox){
+      if(playersTierFilter==='all'){ genBox.style.display='none'; genBox.innerHTML=''; }
+      else{
+        genBox.style.display='flex';
+        genBox.innerHTML=[['all','Both'],['M','Male'],['F','Female']].map(([v,lbl])=>
+          `<button class="filter-btn${playersGenderFilter===v?' active':''}" onclick="setPlayersGenderFilter('${v}',this)" style="flex:1;text-align:center;">${lbl}</button>`).join('');
+      }
+    }
+  }
   // Build header based on type
   const thead=document.getElementById('players-thead');
   let cols;
@@ -2650,6 +2683,11 @@ function renderPlayers(){
     }
   });
   if(pCourt!=='all')rows=rows.filter(r=>r.p.court===parseInt(pCourt));
+  // Club tier/gender filter (Grass Club only). Gender only narrows when a specific tier is selected.
+  if(SC.tiersEnabled){
+    if(playersTierFilter!=='all')rows=rows.filter(r=>(r.p.tier||'unassigned')===playersTierFilter);
+    if(playersTierFilter!=='all'&&playersGenderFilter!=='all')rows=rows.filter(r=>r.p.gender===playersGenderFilter);
+  }
   // Sort
   rows.sort((a,b)=>{
     let va=a.sortVals[pSort.key],vb=b.sortVals[pSort.key];
@@ -3053,7 +3091,7 @@ function renderRoster(){
       <span class="court-badge court-${p.court}">PG ${p.court}</span></div>`;last=p.court;}
     html+=`<div class="roster-item" id="ritem-${p.id}"><span class="class-badge class-${p.classYear}">${p.classYear}</span>${SC.tiersEnabled?' '+playerBadge(p):''}
       <span class="roster-name" id="rname-${p.id}">${p.firstName} ${p.lastName}</span>
-      <input type="number" min="0" max="99" placeholder="#" title="Jersey #" value="${p.jersey||''}" style="width:52px;padding:4px 6px;border:1px solid var(--gray-lighter);border-radius:6px;font-family:'Bebas Neue',sans-serif;font-size:15px;text-align:center;color:var(--charcoal);" onchange="updJersey('${p.id}',this.value)">
+      ${!SC.tiersEnabled?`<input type="number" min="0" max="99" placeholder="#" title="Jersey #" value="${p.jersey||''}" style="width:52px;padding:4px 6px;border:1px solid var(--gray-lighter);border-radius:6px;font-family:'Bebas Neue',sans-serif;font-size:15px;text-align:center;color:var(--charcoal);" onchange="updJersey('${p.id}',this.value)">`:''}
       <select class="court-select" onchange="updCt('${p.id}',this.value)">${COURTS.map(c=>`<option value="${c}" ${p.court===c?'selected':''}>PG ${c}</option>`).join('')}</select>
       <button class="btn btn-small" onclick="editPlayerName('${p.id}')" style="padding:4px 8px;font-size:10px;background:var(--blue);color:var(--white);">✎</button>
       <button class="btn btn-danger btn-small" onclick="remPlayer('${p.id}')" style="padding:4px 8px;font-size:10px;">✕</button></div>`;});
@@ -3132,10 +3170,13 @@ document.querySelectorAll('.tab').forEach(t=>{t.addEventListener('click',()=>{
   if(tc)tc.classList.add('active');
   refreshTab(t.dataset.tab);});});
 
-// Players tab filters
+// Players tab filters. Club (SC.tiersEnabled) replaces the stat-view pills with a tier/gender filter, so the
+// stat-view listener is wired only for non-club configs where the pills exist.
+if(!SC.tiersEnabled){
 document.querySelectorAll('#type-filter-players [data-ptype]').forEach(b=>{b.addEventListener('click',()=>{
   document.querySelectorAll('#type-filter-players [data-ptype]').forEach(x=>x.classList.remove('active'));b.classList.add('active');
   pType=b.dataset.ptype;pSort={key:'court',dir:'asc'};renderPlayers();});});
+}
 document.querySelectorAll('#court-filter-players [data-court]').forEach(b=>{b.addEventListener('click',()=>{
   document.querySelectorAll('#court-filter-players [data-court]').forEach(x=>x.classList.remove('active'));b.classList.add('active');pCourt=b.dataset.court;renderPlayers();});});
 
