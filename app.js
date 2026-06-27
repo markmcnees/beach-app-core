@@ -7459,31 +7459,52 @@ function setBuilderDrillMinutes(rid,val){
   if(t)t.textContent=pbComputeRows().total;
 }
 function setBuilderHeatBand(v){ builderHeatBand=v; renderBuilder(); }
-// Delete an auto-inserted fluid break: remember the drill it followed so it stays removed on recompute.
-function removeBuilderBreak(afterRid){ builderSuppressedBreaks.add(afterRid); renderBuilder(); }
-// Derive the display rows (drills interleaved with auto fluid breaks) and the true total minutes.
-// Breaks are computed, not stored, so changing drills, minutes, or the heat band always recomputes cleanly.
-// FHSAA Policy 41 bands: normal a break after about 20 min of drilling, high about 15, extreme about 12. Each break is 10 min.
-// The cadence counter resets at every break point even if that break was deleted, so deleting one break does
-// not cascade-shift the rest. A break that would fall after the final drill is skipped.
+// Delete an auto-inserted fluid break: remember its stable key so it stays removed on recompute.
+function removeBuilderBreak(key){ builderSuppressedBreaks.add(key); renderBuilder(); }
+// Derive the display rows (drills, split around fluid breaks) and the true total minutes.
+// Breaks fall on an ELAPSED-TIME cadence: a break every `threshold` minutes of cumulative drilling,
+// independent of where drill boundaries are. When a break boundary lands in the middle of a drill, the
+// drill is shown as two (or more) parts around the break, while its stored data stays one entry with one
+// total minutes. Breaks are computed, not stored, so changing drills, minutes, or the heat band recomputes
+// cleanly. FHSAA Policy 41 bands: normal every ~20 min of drilling, high ~15, extreme ~12. Each break is 10 min.
+// A break that would fall exactly at the end of the whole session is skipped.
 function pbComputeRows(){
   const TH={normal:20,high:15,extreme:12};
   const threshold=TH[builderHeatBand]||20;
   const BREAK_MIN=10;
-  const rows=[]; let cum=0,total=0;
-  builderSession.forEach((d,i)=>{
-    rows.push({type:'drill',d:d});
-    const mins=d.minutes||0;
-    total+=mins; cum+=mins;
-    if(cum>=threshold){
-      cum=0; // reset cadence at the logical break point regardless of suppression
-      const isLast=i===builderSession.length-1;
-      if(!isLast && !builderSuppressedBreaks.has(d.rid)){
-        rows.push({type:'break',afterRid:d.rid,minutes:BREAK_MIN});
-        total+=BREAK_MIN;
+  const rows=[];
+  const totalDrill=builderSession.reduce((s,x)=>s+Math.max(0,x.minutes||0),0);
+  let elapsed=0,total=0;
+  builderSession.forEach(d=>{
+    let remaining=Math.max(0,d.minutes||0);
+    const dMin=d.minutes||0;
+    if(remaining===0){
+      // A zero-minute drill still gets one editable row so it can be removed or set back up.
+      rows.push({type:'drill',rid:d.rid,name:d.name,seg:0,part:0,dMin:0});
+      return;
+    }
+    let part=0,dBreak=0;
+    while(remaining>0){
+      const intoBlock=elapsed%threshold;          // minutes into the current drilling block
+      const toBoundary=threshold-intoBlock;        // drilling minutes until the next break boundary
+      const seg=Math.min(remaining,toBoundary);    // this segment runs up to the boundary or the drill end
+      rows.push({type:'drill',rid:d.rid,name:d.name,seg:seg,part:part,dMin:dMin});
+      elapsed+=seg; total+=seg; remaining-=seg; part++;
+      // A break falls here only when we landed exactly on a boundary AND there is more drilling to come.
+      if(elapsed%threshold===0 && elapsed<totalDrill){
+        dBreak++;
+        const key=d.rid+':'+dBreak; // stable: owned by this drill, ordinal disambiguates multi-break drills
+        if(!builderSuppressedBreaks.has(key)){
+          rows.push({type:'break',breakKey:key,minutes:BREAK_MIN});
+          total+=BREAK_MIN;
+        }
       }
     }
   });
+  // Tag each drill row with how many parts its drill split into, so render can label parts and pick the editable row.
+  const partCount={};
+  rows.forEach(r=>{ if(r.type==='drill') partCount[r.rid]=(partCount[r.rid]||0)+1; });
+  rows.forEach(r=>{ if(r.type==='drill') r.totalParts=partCount[r.rid]||1; });
   return {rows,total};
 }
 function renderBuilder(){
@@ -7520,15 +7541,35 @@ function renderBuilder(){
         return `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;margin:3px 0;border-radius:6px;background:#e8f0fe;border:1px dashed #1d4ed8;">
           <span style="flex:1;font-size:12px;color:#1d4ed8;font-weight:700;">💧 Fluid Break (shade)</span>
           <span style="font-size:12px;color:#1d4ed8;">${r.minutes} min</span>
-          <button class="btn btn-danger btn-small" style="padding:2px 8px;font-size:11px;" title="Remove break" onclick="removeBuilderBreak(${r.afterRid})">✕</button>
+          <button class="btn btn-danger btn-small" style="padding:2px 8px;font-size:11px;" title="Remove break" onclick="removeBuilderBreak('${r.breakKey}')">✕</button>
         </div>`;
       }
-      const d=r.d;
+      const split=r.totalParts>1;
+      const label=split?`${esc(r.name)} (part ${r.part+1})`:esc(r.name);
+      if(!split){
+        // Single, un-split drill: editable input is the whole drill total, with a remove control. As before.
+        return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--gray-lighter);">
+          <span style="flex:1;font-size:13px;color:var(--charcoal);">${label}</span>
+          <input type="number" min="0" max="180" value="${r.dMin}" oninput="setBuilderDrillMinutes(${r.rid},this.value)" style="width:56px;padding:4px 6px;border:1px solid var(--gray-lighter);border-radius:6px;font-family:'Bebas Neue',sans-serif;font-size:14px;text-align:center;color:var(--charcoal);">
+          <span style="font-size:11px;color:var(--gray);">min</span>
+          <button class="btn btn-danger btn-small" style="padding:2px 8px;font-size:11px;" onclick="removeBuilderDrill(${r.rid})">✕</button>
+        </div>`;
+      }
+      if(r.part===0){
+        // First part of a split drill: shows this segment's minutes as plain text, plus the editable WHOLE-drill
+        // total (edits recompute the split) and the remove control. The total input appears on this row only.
+        return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--gray-lighter);">
+          <span style="flex:1;font-size:13px;color:var(--charcoal);">${label}</span>
+          <span style="font-size:12px;color:var(--gray);">${r.seg} min</span>
+          <input type="number" min="0" max="180" value="${r.dMin}" oninput="setBuilderDrillMinutes(${r.rid},this.value)" title="Whole drill total minutes" style="width:56px;padding:4px 6px;border:1px solid var(--gray-lighter);border-radius:6px;font-family:'Bebas Neue',sans-serif;font-size:14px;text-align:center;color:var(--charcoal);">
+          <span style="font-size:11px;color:var(--gray);">total</span>
+          <button class="btn btn-danger btn-small" style="padding:2px 8px;font-size:11px;" onclick="removeBuilderDrill(${r.rid})">✕</button>
+        </div>`;
+      }
+      // Later part of a split drill: derived segment minutes as plain text only, no input and no remove.
       return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--gray-lighter);">
-        <span style="flex:1;font-size:13px;color:var(--charcoal);">${esc(d.name)}</span>
-        <input type="number" min="0" max="180" value="${d.minutes}" oninput="setBuilderDrillMinutes(${d.rid},this.value)" style="width:56px;padding:4px 6px;border:1px solid var(--gray-lighter);border-radius:6px;font-family:'Bebas Neue',sans-serif;font-size:14px;text-align:center;color:var(--charcoal);">
-        <span style="font-size:11px;color:var(--gray);">min</span>
-        <button class="btn btn-danger btn-small" style="padding:2px 8px;font-size:11px;" onclick="removeBuilderDrill(${d.rid})">✕</button>
+        <span style="flex:1;font-size:13px;color:var(--charcoal);">${label}</span>
+        <span style="font-size:12px;color:var(--gray);">${r.seg} min</span>
       </div>`;
     }).join('');
   }
