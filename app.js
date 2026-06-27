@@ -2662,7 +2662,10 @@ function renderPlayers(){
   }else if(pType==='gameday'||pType==='scrimmage'||pType==='exhibition'){
     cols=[{k:'name',l:'Player'},{k:'court',l:'Pair'},{k:'sets',l:'Sets'},{k:'diff',l:'+/-'},{k:'k',l:'K'},{k:'b',l:'B'},{k:'a',l:'A'},{k:'se',l:'SE'},{k:'re',l:'RE'},{k:'he',l:'HE'},{k:'de',l:'DE'}];
   }else{
-    cols=[{k:'name',l:'Player'},{k:'court',l:'Pair'},{k:'qrec',l:'Q W-L'},{k:'qdiff',l:'Q +/-'},{k:'gdsets',l:'GD Sets'},{k:'gddiff',l:'GD +/-'},{k:'diff',l:'Total +/-'}];
+    // Club (SC.tiersEnabled) drops the Pair column from the combined Kings/Queens view; high schools keep it.
+    cols=SC.tiersEnabled
+      ?[{k:'name',l:'Player'},{k:'qrec',l:'Q W-L'},{k:'qdiff',l:'Q +/-'},{k:'gdsets',l:'GD Sets'},{k:'gddiff',l:'GD +/-'},{k:'diff',l:'Total +/-'}]
+      :[{k:'name',l:'Player'},{k:'court',l:'Pair'},{k:'qrec',l:'Q W-L'},{k:'qdiff',l:'Q +/-'},{k:'gdsets',l:'GD Sets'},{k:'gddiff',l:'GD +/-'},{k:'diff',l:'Total +/-'}];
   }
   thead.innerHTML=cols.map(c=>`<th data-psort="${c.k}">${c.l} <span class="sort-arrow"></span></th>`).join('');
   thead.querySelectorAll('th[data-psort]').forEach(th=>{th.addEventListener('click',()=>{
@@ -2714,7 +2717,7 @@ function renderPlayers(){
   }else{
     tbody.innerHTML=rows.map(r=>{const p=r.p,c=r.c;
       return`<tr><td>${pNameCell(p)}</td>
-        <td><span class="court-badge court-${p.court}">${p.court}</span></td>
+        ${SC.tiersEnabled?'':`<td><span class="court-badge court-${p.court}">${p.court}</span></td>`}
         <td class="wl-record">${c.qWins}-${c.qLosses}</td>
         <td class="plus-minus ${pmClass(c.qDiff)}">${c.qGP>0?pmStr(c.qDiff):'—'}</td>
         <td>${c.gdSets||'—'}</td>
@@ -7414,6 +7417,88 @@ let analysisTier='gold';
 let analysisPlanText='';
 function setAnalysisTier(t){ analysisTier=t; analysisPlanText=''; renderTeamAnalysis(); }
 
+// ============================================================
+// PRACTICE BUILDER drill-picker mockup (Grass Club only, gated on SC.tiersEnabled).
+// Pure in-memory demo preview: nothing persists, no Firebase, no fbSet, no AI worker.
+// All state lives in plain JS vars and resets on refresh, consistent with demo mode.
+// ============================================================
+const BUILDER_DRILLS=[
+  ['Serving',['Float Serve Targets','Jump Serve Reps','Serve to Zones (1-5)']],
+  ['Passing',['Butterfly Passing','Serve Receive to Target','Shankproof (partner pepper)']],
+  ['Setting',['Setter Footwork Ladder','Hand-Setting Accuracy','Jump Set Reps']],
+  ['Hitting',['Approach Timing','Line vs Angle Shots','Roll Shot Control']],
+  ['Blocking',['Block Footwork','Read & Press','Peel & Transition']],
+  ['Defense',['Pursuit Digs','Coach-on-Box Down Balls','Emergency Pancake Reps']]
+];
+let builderOpen=false;       // is the drill picker open
+let builderExpanded={};      // skill index -> bool (which categories are expanded)
+let builderSession=[];       // [{rid, name, minutes}]
+let builderSeq=0;            // stable row id source for remove
+function toggleBuilder(){ builderOpen=!builderOpen; renderBuilder(); }
+function toggleBuilderSkill(si){ builderExpanded[si]=!builderExpanded[si]; renderBuilder(); }
+function addBuilderDrill(si,di){
+  const name=(BUILDER_DRILLS[si]&&BUILDER_DRILLS[si][1][di])||'Drill';
+  builderSession.push({rid:++builderSeq,name:name,minutes:10});
+  renderBuilder();
+}
+function removeBuilderDrill(rid){ builderSession=builderSession.filter(d=>d.rid!==rid); renderBuilder(); }
+function setBuilderDrillMinutes(rid,val){
+  const d=builderSession.find(x=>x.rid===rid); if(!d)return;
+  const m=parseInt(val,10);
+  d.minutes=isNaN(m)?0:Math.max(0,m);
+  // Update only the total in place so the edited input keeps focus.
+  const t=document.getElementById('ta-builder-total');
+  if(t)t.textContent=builderSession.reduce((s,x)=>s+(x.minutes||0),0);
+}
+function renderBuilder(){
+  const el=document.getElementById('ta-builder');
+  if(!el)return;
+  if(!builderOpen){ el.innerHTML=''; return; }
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  // LEFT: six skill categories, each expandable to reveal its drills.
+  const left=BUILDER_DRILLS.map(([skill,drills],si)=>{
+    const open=!!builderExpanded[si];
+    const drillBtns=open?drills.map((dn,di)=>
+      `<button class="btn btn-secondary btn-small" style="width:100%;text-align:left;margin:4px 0 0;font-size:12px;padding:8px 10px;" onclick="addBuilderDrill(${si},${di})">+ ${esc(dn)}</button>`).join(''):'';
+    return `<div style="margin-bottom:6px;">
+      <button class="btn btn-small" style="width:100%;text-align:left;background:var(--off-white);color:var(--charcoal);border:1px solid var(--gray-lighter);font-family:'Bebas Neue',sans-serif;letter-spacing:1px;font-size:14px;" onclick="toggleBuilderSkill(${si})">${open?'▼':'▶'} ${esc(skill)}</button>
+      ${drillBtns}
+    </div>`;
+  }).join('');
+  // RIGHT: the session being built, with editable minutes and a live total.
+  let right;
+  if(!builderSession.length){
+    right=`<p style="color:var(--gray);font-size:12px;padding:8px 0;line-height:1.5;">Tap a skill on the left, then tap a drill to add it here.</p>`;
+  }else{
+    right=builderSession.map(d=>
+      `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--gray-lighter);">
+        <span style="flex:1;font-size:13px;color:var(--charcoal);">${esc(d.name)}</span>
+        <input type="number" min="0" max="180" value="${d.minutes}" oninput="setBuilderDrillMinutes(${d.rid},this.value)" style="width:56px;padding:4px 6px;border:1px solid var(--gray-lighter);border-radius:6px;font-family:'Bebas Neue',sans-serif;font-size:14px;text-align:center;color:var(--charcoal);">
+        <span style="font-size:11px;color:var(--gray);">min</span>
+        <button class="btn btn-danger btn-small" style="padding:2px 8px;font-size:11px;" onclick="removeBuilderDrill(${d.rid})">✕</button>
+      </div>`).join('');
+  }
+  const total=builderSession.reduce((s,x)=>s+(x.minutes||0),0);
+  el.innerHTML=`<div class="card" style="border-top:3px solid var(--gold);">
+    <div class="card-title" style="color:var(--gold);"><span class="bar" style="background:var(--gold);"></span> 🛠️ Build Practice Plan</div>
+    <p style="font-size:12px;color:var(--gray);margin-bottom:12px;line-height:1.5;">Tap a skill to see its drills, tap a drill to add it to today's session, then dial in the minutes. This is a quick planning sketch and is not saved.</p>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;">
+      <div style="flex:1;min-width:200px;">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1px;color:var(--charcoal);margin-bottom:8px;">DRILLS</div>
+        ${left}
+      </div>
+      <div style="flex:1;min-width:200px;">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1px;color:var(--charcoal);margin-bottom:8px;">TODAY'S SESSION</div>
+        ${right}
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:10px;border-top:2px solid var(--gray-lighter);">
+          <span style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:1px;color:var(--charcoal);">TOTAL</span>
+          <span style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--gold);"><span id="ta-builder-total">${total}</span> min</span>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
 // Average ONLY assessed (>0) scores per skill. A 0 means unassessed and is
 // never counted. A skill with zero assessed players gets avg null and is
 // excluded from weak-spot ranking.
@@ -7465,14 +7550,20 @@ function renderTeamAnalysis(){
     }).join('');
     body=`<div style="font-size:12px;color:var(--gray);margin-bottom:8px;">${tierLabel(analysisTier)} team: ${a.playerCount} player${a.playerCount===1?'':'s'}, skill averages weakest first (assessed scores only).</div>
       <div style="margin-bottom:12px;">${rows}</div>
-      <button class="btn btn-primary btn-small" onclick="generatePracticePlan()">Generate Practice Plan</button>
-      <div id="ta-plan-output" style="margin-top:14px;">${analysisPlanText}</div>`;
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-primary btn-small" style="flex:1;min-width:160px;" onclick="generatePracticePlan()">Generate Practice Plan</button>
+        ${SC.tiersEnabled?'<button class="btn btn-secondary btn-small" style="flex:1;min-width:160px;" onclick="toggleBuilder()">Build Practice Plan</button>':''}
+      </div>
+      <div id="ta-plan-output" style="margin-top:14px;">${analysisPlanText}</div>
+      ${SC.tiersEnabled?'<div id="ta-builder" style="margin-top:14px;"></div>':''}`;
   }
   pane.innerHTML=`<div class="card"><div class="card-title"><span class="bar"></span> 📋 Team Analysis</div>
     <p style="font-size:12px;color:var(--gray);margin-bottom:12px;line-height:1.5;">Pick a team to see its collective skill averages, then generate a practice session aimed at the weakest spots. Assessment scores of zero mean unassessed and are left out of the averages.</p>
     ${picker}
     ${body}
   </div>`;
+  // Repaint the in-memory drill-picker mockup from state so it survives tier switches and plan re-renders. Grass Club only.
+  if(SC.tiersEnabled)renderBuilder();
 }
 
 // Demo + live, mirroring generateAIPlan. Ephemeral: result is held in
