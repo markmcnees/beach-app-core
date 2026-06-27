@@ -7596,6 +7596,30 @@ function generatePracticeGroups(mode){
   toast(mode==='together'?'Groups generated (Best Together)':'Groups generated (Balanced)');
   renderPracticeGroups();
 }
+// Per-player override: move a player to a different group within their current tier.
+// Reuses the established in-memory + fbSet pg write (no-op in demo). Never touches court.
+function pgMovePlayerGroup(pid,newGroup){
+  const g=parseInt(newGroup,10);
+  if(!g)return;
+  const pl=gP(pid); if(!pl)return;
+  pl.pg=g;
+  fbSet('players/'+pid,{...pl,pg:g});
+  toast('Moved to PG'+g);
+  renderPracticeGroups();
+}
+// Per-player override: bump a player to the other tier, then land them at PG1 in that tier so they
+// never dangle with a stale group number. Reuses coachSetTier for the canonical tier change. Never touches court.
+function pgMovePlayerTier(pid,newTier){
+  const pl=gP(pid); if(!pl)return;
+  if((pl.tier||'unassigned')===newTier)return; // no change, do nothing
+  coachSetTier(pid,newTier); // writes tier, clears any pending tier request, re-renders the roster
+  const after=gP(pid); if(!after)return;
+  after.pg=1;
+  fbSet('players/'+pid,{...after,pg:1});
+  const TIER_LABELS={gold:'Gold',garnet:'Garnet'};
+  toast('Moved to '+(TIER_LABELS[newTier]||newTier)+', PG1');
+  renderPracticeGroups(); // coachSetTier re-renders the roster but not this view, so repaint it here
+}
 function renderPracticeGroups(){
   const pane=document.getElementById('tab-practicegroups');
   if(!pane)return;
@@ -7608,13 +7632,29 @@ function renderPracticeGroups(){
     const players=D.players
       .filter(p=>(p.tier||'unassigned')===tier)
       .map(p=>({p,avg:pgPlayerSkillAvg(p.id)}));
-    const memberRow=x=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--gray-lighter);font-size:13px;">
-        <span style="color:var(--charcoal);">${esc(x.p.firstName+' '+x.p.lastName)}</span>
-        <span style="color:var(--gray);font-size:12px;">${x.avg>0?x.avg.toFixed(1):'-'}</span>
-      </div>`;
     // Show only the groups that actually got players from the last generate, so a reduced effective
     // group count (from the minimum) never leaves an empty trailing group on screen.
     const maxPg=players.reduce((m,x)=>Math.max(m,x.p.pg||0),0);
+    // Each row shows name + skill average, plus (coach only) two inline dropdowns: move to another group
+    // in this tier, and move to the other team. Same inline-select styling as the roster court/tier controls.
+    const memberRow=x=>{
+      const ctrls=currentRole==='coach'?`<div style="display:flex;gap:6px;align-items:center;margin-top:4px;flex-wrap:wrap;">
+        ${maxPg>=1?`<select class="tier-select" title="Move group" onchange="pgMovePlayerGroup('${x.p.id}',this.value)">`
+          +(x.p.pg?'':'<option value="" selected disabled>Group</option>')
+          +Array.from({length:maxPg},(_,i)=>i+1).map(g=>`<option value="${g}" ${x.p.pg===g?'selected':''}>PG${g}</option>`).join('')
+          +`</select>`:''}
+        <select class="tier-select" title="Move team" onchange="pgMovePlayerTier('${x.p.id}',this.value)">
+          ${[['gold','Gold'],['garnet','Garnet']].map(([v,lbl])=>`<option value="${v}" ${(x.p.tier||'')===v?'selected':''}>${lbl}</option>`).join('')}
+        </select>
+      </div>`:'';
+      return `<div style="padding:5px 0;border-bottom:1px solid var(--gray-lighter);font-size:13px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="color:var(--charcoal);">${esc(x.p.firstName+' '+x.p.lastName)}</span>
+          <span style="color:var(--gray);font-size:12px;">${x.avg>0?x.avg.toFixed(1):'-'}</span>
+        </div>
+        ${ctrls}
+      </div>`;
+    };
     let groupsHtml='';
     for(let g=1;g<=maxPg;g++){
       const members=players.filter(x=>x.p.pg===g).sort((a,b)=>b.avg-a.avg);
