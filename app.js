@@ -963,22 +963,27 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
   </div>
   <div class="tabs" id="tabs">
     <div class="mode-bar" id="mode-bar">
+      ${SC.tiersEnabled?`
+      <button class="mode-btn active" id="mode-manage" onclick="switchMode('manage')">⚙️ Manage</button>
+      <button class="mode-btn" id="mode-gameday" onclick="switchMode('gameday')">🏐 Logistics</button>
+      `:`
       <button class="mode-btn active" id="mode-gameday" onclick="switchMode('gameday')">🏐 Game Day</button>
       <button class="mode-btn" id="mode-manage" onclick="switchMode('manage')">⚙️ Manage</button>
+      `}
     </div>
-    <div class="sub-tabs" id="sub-tabs-gameday">
-      <button class="tab active" data-tab="duals">Live Scoring</button>
+    <div class="sub-tabs" id="sub-tabs-gameday"${SC.tiersEnabled?' style="display:none;"':''}>
+      <button class="tab${SC.tiersEnabled?'':' active'}" data-tab="duals">Live Scoring</button>
       <button class="tab" data-tab="gameday">Planner</button>
       <button class="tab" data-tab="dualhistory">Dual History</button>
     </div>
-    <div class="sub-tabs" id="sub-tabs-manage" style="display:none;">
+    <div class="sub-tabs" id="sub-tabs-manage"${SC.tiersEnabled?'':' style="display:none;"'}>
       ${SC.tiersEnabled?`
-      ${SC.chatEnabled?'<button class="tab" data-tab="broadcast">Broadcast</button>':''}
-      <button class="tab" data-tab="settings">Roster</button>
-      <button class="tab" data-tab="practicegroups">Practice Groups</button>
+      ${SC.chatEnabled?'<button class="tab active" data-tab="broadcast">Broadcast</button>':''}
+      <button class="tab${SC.chatEnabled?'':' active'}" data-tab="settings">Roster</button>
+      <button class="tab" data-tab="teamanalysis">Practice Builder</button>
       <button class="tab" data-tab="players">Kings/Queens</button>
       <button class="tab" data-tab="goals">Goals</button>
-      <button class="tab" data-tab="teamanalysis">Practice Builder</button>
+      <button class="tab" data-tab="practicegroups" style="display:none;">Practice Groups</button>
       <button class="tab" data-tab="dashboard" style="display:none;">Dashboard</button>
       <button class="tab" data-tab="scouts" style="display:none;">Scouts</button>
       `:`
