@@ -11,22 +11,22 @@ const LOGO_H = (SC && SC.logoHeight) ? SC.logoHeight : 64;
 // ============================================================
 const _DEMO = {
   players: [
-    {id:'sd01', firstName:'Suzie',  lastName:'Spiker',     classYear:'SR', court:1, jersey:1,  active:true, tier:'gold', leadership:'exec', gender:'F'},
-    {id:'sd02', firstName:'Debby',  lastName:'Digger',     classYear:'SR', court:1, jersey:7,  active:true, tier:'gold', leadership:'faculty', gender:'F'},
-    {id:'sd03', firstName:'Bonnie', lastName:'Blocker',    classYear:'JR', court:2, jersey:12, active:true, tier:'gold', gender:'F'},
-    {id:'sd04', firstName:'Sammy',  lastName:'Setter',     classYear:'JR', court:2, jersey:3,  active:true, tier:'gold', gender:'M'},
-    {id:'sd05', firstName:'Penny',  lastName:'Passer',     classYear:'JR', court:3, jersey:24, active:true, tier:'gold', gender:'F'},
-    {id:'sd06', firstName:'Sandy',  lastName:'Server',     classYear:'SO', court:3, jersey:9,  active:true, tier:'gold', gender:'M'},
-    {id:'sd07', firstName:'Sarah',  lastName:'Sandbagger', classYear:'SO', court:4, jersey:5,  active:true, tier:'gold', gender:'F'},
-    {id:'sd08', firstName:'Holly',  lastName:'Hitter',     classYear:'SO', court:4, jersey:15, active:true, tier:'gold', gender:'M'},
-    {id:'sd09', firstName:'Riley',  lastName:'Receiver',   classYear:'FR', court:5, jersey:21, active:true, tier:'garnet', gender:'M'},
-    {id:'sd10', firstName:'Olivia', lastName:'Option',     classYear:'FR', court:5, jersey:8,  active:true, tier:'garnet', gender:'F'},
-    {id:'sd11', firstName:'Wendy',  lastName:'Wave',       classYear:'SO', court:6, jersey:33, active:true, tier:'garnet', gender:'F'},
-    {id:'sd12', firstName:'Dana',   lastName:'Dune',       classYear:'FR', court:6, jersey:18, active:true, tier:'garnet', gender:'M'},
-    {id:'sd13', firstName:'Tara',   lastName:'Tide',       classYear:'SO', court:7, jersey:2,  active:true, tier:'garnet', gender:'F'},
-    {id:'sd14', firstName:'Cora',   lastName:'Coral',      classYear:'FR', court:7, jersey:44, active:true, tier:'garnet', gender:'M'},
-    {id:'sd15', firstName:'Marina', lastName:'Mist',       classYear:'FR', court:8, jersey:11, active:true, tier:'garnet', gender:'F'},
-    {id:'sd16', firstName:'Shelly', lastName:'Shoal',      classYear:'SO', court:8, jersey:6,  active:true, tier:'garnet', gender:'M'}
+    {id:'sd01', firstName:'Suzie',  lastName:'Spiker',     classYear:'SR', court:1, jersey:1,  active:true, tier:'gold', leadership:'exec', gender:'F', csRank:1480},
+    {id:'sd02', firstName:'Debby',  lastName:'Digger',     classYear:'SR', court:1, jersey:7,  active:true, tier:'gold', leadership:'faculty', gender:'F', csRank:1465},
+    {id:'sd03', firstName:'Bonnie', lastName:'Blocker',    classYear:'JR', court:2, jersey:12, active:true, tier:'gold', gender:'F', csRank:1440},
+    {id:'sd04', firstName:'Sammy',  lastName:'Setter',     classYear:'JR', court:2, jersey:3,  active:true, tier:'gold', gender:'M', csRank:1455},
+    {id:'sd05', firstName:'Penny',  lastName:'Passer',     classYear:'JR', court:3, jersey:24, active:true, tier:'gold', gender:'F', csRank:1420},
+    {id:'sd06', firstName:'Sandy',  lastName:'Server',     classYear:'SO', court:3, jersey:9,  active:true, tier:'gold', gender:'M', csRank:1410},
+    {id:'sd07', firstName:'Sarah',  lastName:'Sandbagger', classYear:'SO', court:4, jersey:5,  active:true, tier:'gold', gender:'F', csRank:1390},
+    {id:'sd08', firstName:'Holly',  lastName:'Hitter',     classYear:'SO', court:4, jersey:15, active:true, tier:'gold', gender:'M', csRank:1375},
+    {id:'sd09', firstName:'Riley',  lastName:'Receiver',   classYear:'FR', court:5, jersey:21, active:true, tier:'garnet', gender:'M', csRank:1510},
+    {id:'sd10', firstName:'Olivia', lastName:'Option',     classYear:'FR', court:5, jersey:8,  active:true, tier:'garnet', gender:'F', csRank:1525},
+    {id:'sd11', firstName:'Wendy',  lastName:'Wave',       classYear:'SO', court:6, jersey:33, active:true, tier:'garnet', gender:'F', csRank:1545},
+    {id:'sd12', firstName:'Dana',   lastName:'Dune',       classYear:'FR', court:6, jersey:18, active:true, tier:'garnet', gender:'M', csRank:1560},
+    {id:'sd13', firstName:'Tara',   lastName:'Tide',       classYear:'SO', court:7, jersey:2,  active:true, tier:'garnet', gender:'F', csRank:1535},
+    {id:'sd14', firstName:'Cora',   lastName:'Coral',      classYear:'FR', court:7, jersey:44, active:true, tier:'garnet', gender:'M', csRank:1580},
+    {id:'sd15', firstName:'Marina', lastName:'Mist',       classYear:'FR', court:8, jersey:11, active:true, tier:'garnet', gender:'F', csRank:1505},
+    {id:'sd16', firstName:'Shelly', lastName:'Shoal',      classYear:'SO', court:8, jersey:6,  active:true, tier:'garnet', gender:'M', csRank:1595}
   ],
   schedule: [
     {id:'sch01', date:'2026-04-08', opponent:'Coastal Prep',     location:'home', time:'4:00 PM', scoreUs:3, scoreThem:2},
@@ -735,6 +735,7 @@ body.demo{padding-top:32px;}
 .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -18px;padding:0 18px;}
 .roster-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(0,0,0,0.04);flex-wrap:wrap;}.roster-item:last-child{border-bottom:none;}
 .roster-name{font-weight:700;flex:1;min-width:120px;}
+.cs-rank{font-family:'Bebas Neue',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.5px;color:var(--gray);margin-left:6px;}
 .court-select{padding:4px 8px;border:1px solid var(--gray-light);border-radius:4px;font-size:12px;font-family:'Barlow',sans-serif;}
 .data-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
 .plan-add-row{background:var(--off-white);border:2px dashed var(--gray-lighter);border-radius:var(--radius);padding:16px;margin-bottom:14px;}
@@ -1333,13 +1334,13 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
     <div class="tab-content" id="tab-settings">
 <div class="card"><div class="card-title"><span class="bar"></span> Player Roster</div>
       <p style="font-size:12px;color:var(--gray);margin-bottom:12px;">Assign pair levels. Changes sync in real time.</p><div id="roster-list"></div></div>
-<div class="card"><div class="card-title"><span class="bar"></span> Add Player</div>
+${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar"></span> Add Player</div>
       <div class="form-row" style="margin-bottom:10px;"><input type="text" class="form-input" id="new-first" placeholder="First Name"><input type="text" class="form-input" id="new-last" placeholder="Last Name"></div>
       <div class="form-row" style="margin-bottom:10px;">
         <input type="number" class="form-input" id="new-jersey" placeholder="Jersey #" min="0" max="99" style="max-width:110px;">
         <select class="form-select" id="new-class"><option value="FR">Freshman</option><option value="SO">Sophomore</option><option value="JR">Junior</option><option value="SR">Senior</option></select>
         <select class="form-select" id="new-court"><option value="1">Court 1</option><option value="2">Court 2</option><option value="3">Court 3</option><option value="4">Court 4</option><option value="5">Court 5</option><option value="6">Court 6 — Exhib</option><option value="7">Court 7 — Exhib</option><option value="8">Court 8 — Exhib</option></select></div>
-      <button class="btn btn-secondary" id="add-player">Add Player</button></div>
+      <button class="btn btn-secondary" id="add-player">Add Player</button></div>`}
   </div>
   ${SC.chatEnabled?'<div class="tab-content" id="tab-broadcast"></div>':''}
   ${SC.tiersEnabled?'<div class="tab-content" id="tab-teamanalysis"></div>':''}
@@ -2716,7 +2717,11 @@ function renderPlayers(){
   });
 
   const tbody=document.querySelector('#players-table tbody');
-  const pNameCell=(p)=>currentRole==='coach'?`<button class="player-name" style="background:none;border:none;padding:0;cursor:pointer;text-decoration:underline dotted;color:var(--red);font-family:inherit;font-size:inherit;font-weight:700;text-align:left;-webkit-tap-highlight-color:transparent;" onclick="coachOpenPlayer('${p.id}')">${p.firstName} ${p.lastName.charAt(0)}.</button>`:`<span class="player-name">${p.firstName} ${p.lastName.charAt(0)}.</span>`;
+  const pNameCell=(p)=>{
+    // Exec-side CS ranking pill, club only and only when the player has a rank. Never shown player-side.
+    const rk=(SC.tiersEnabled&&p.csRank)?` <span class="cs-rank">${p.csRank}</span>`:'';
+    return currentRole==='coach'?`<button class="player-name" style="background:none;border:none;padding:0;cursor:pointer;text-decoration:underline dotted;color:var(--red);font-family:inherit;font-size:inherit;font-weight:700;text-align:left;-webkit-tap-highlight-color:transparent;" onclick="coachOpenPlayer('${p.id}')">${p.firstName} ${p.lastName.charAt(0)}.${rk}</button>`:`<span class="player-name">${p.firstName} ${p.lastName.charAt(0)}.${rk}</span>`;
+  };
   if(pType==='queens'){
     tbody.innerHTML=rows.map(r=>{const p=r.p,s=r.s;
       return`<tr><td>${pNameCell(p)}</td>
@@ -3109,7 +3114,7 @@ function renderRoster(){
     html+=`<div style="font-family:'Bebas Neue';font-size:12px;letter-spacing:1.5px;color:var(--red);margin:12px 0 6px;padding-top:8px;${last!==null?'border-top:2px solid var(--gray-lighter);':''}">
       <span class="court-badge court-${p.court}">PG ${p.court}</span></div>`;last=p.court;}
     html+=`<div class="roster-item" id="ritem-${p.id}"><span class="class-badge class-${p.classYear}">${p.classYear}</span>${SC.tiersEnabled?' '+playerBadge(p):''}
-      <span class="roster-name" id="rname-${p.id}">${p.firstName} ${p.lastName}</span>
+      <span class="roster-name" id="rname-${p.id}">${p.firstName} ${p.lastName}${SC.tiersEnabled&&p.csRank?` <span class="cs-rank">${p.csRank}</span>`:''}</span>
       ${!SC.tiersEnabled?`<input type="number" min="0" max="99" placeholder="#" title="Jersey #" value="${p.jersey||''}" style="width:52px;padding:4px 6px;border:1px solid var(--gray-lighter);border-radius:6px;font-family:'Bebas Neue',sans-serif;font-size:15px;text-align:center;color:var(--charcoal);" onchange="updJersey('${p.id}',this.value)">`:''}
       <select class="court-select" onchange="updCt('${p.id}',this.value)">${COURTS.map(c=>`<option value="${c}" ${p.court===c?'selected':''}>PG ${c}</option>`).join('')}</select>
       <button class="btn btn-small" onclick="editPlayerName('${p.id}')" style="padding:4px 8px;font-size:10px;background:var(--blue);color:var(--white);">✎</button>
@@ -3278,7 +3283,7 @@ const _elsave_sc_match=document.getElementById('save-sc-match');if(_elsave_sc_ma
 });
 
 // Roster
-document.getElementById('add-player').addEventListener('click',()=>{
+const _addP=document.getElementById('add-player'); if(_addP) _addP.addEventListener('click',()=>{
   const f=document.getElementById('new-first').value.trim(),l=document.getElementById('new-last').value.trim();
   if(!f||!l){toast('Enter first and last name');return;}
   const jersey=document.getElementById('new-jersey').value;
@@ -7759,7 +7764,7 @@ function renderPracticeGroups(){
       </div>`:'';
       return `<div style="padding:5px 0;border-bottom:1px solid var(--gray-lighter);font-size:13px;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
-          <span style="color:var(--charcoal);">${esc(x.p.firstName+' '+x.p.lastName)}</span>
+          <span style="color:var(--charcoal);">${esc(x.p.firstName+' '+x.p.lastName)}${SC.tiersEnabled&&x.p.csRank?` <span class="cs-rank">${x.p.csRank}</span>`:''}</span>
           <span style="color:var(--gray);font-size:12px;">${x.avg>0?x.avg.toFixed(1):'-'}</span>
         </div>
         ${ctrls}
