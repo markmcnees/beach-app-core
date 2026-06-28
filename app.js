@@ -987,7 +987,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       ${SC.tiersEnabled?`
       ${SC.chatEnabled?'<button class="tab active" data-tab="broadcast">Broadcast</button>':''}
       <button class="tab${SC.chatEnabled?'':' active'}" data-tab="settings">Roster</button>
-      <button class="tab" data-tab="teamanalysis">Practice Builder</button>
+      <button class="tab" data-tab="teamanalysis">Practice</button>
       <button class="tab" data-tab="players">Kings/Queens</button>
       <button class="tab" data-tab="goals">Goals</button>
       <button class="tab" data-tab="practicegroups" style="display:none;">Practice Groups</button>
