@@ -3387,6 +3387,15 @@ function loginAsCoach(){
   document.getElementById('header-username').textContent=COACH_LABEL;
   document.querySelector('.tabs').style.display='flex';
   refreshCurrent();
+  // Club only: the Broadcast tab is active on entry but the statically-active pane is
+  // tab-duals, so content and tab disagree on first paint. Fire the existing tab handler
+  // on the active button inside the VISIBLE manage bar (Broadcast) so it activates
+  // tab-broadcast and deactivates tab-duals. Manage-bar-scoped selector avoids the hidden
+  // recruiting tab. HS configs (chatEnabled false) are untouched and keep gameday/duals.
+  if(SC.chatEnabled){
+    const bc=document.querySelector('#sub-tabs-manage .tab.active');
+    if(bc)bc.click();
+  }
 }
 function playerLogin(){
   const pid=document.getElementById('login-player-select').value;
