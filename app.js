@@ -1575,10 +1575,16 @@ ${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar
 <div class="modal-overlay" id="coach-player-overlay" onclick="if(event.target===this)coachClosePlayer()">
   <div id="coach-player-modal" style="background:var(--white);border-radius:16px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;padding:0;">
     <div style="background:var(--primary);color:#fff;padding:16px 20px;border-radius:16px 16px 0 0;display:flex;justify-content:space-between;align-items:center;">
-      <div>
+      ${SC.tiersEnabled?`<div style="display:flex;align-items:center;gap:12px;">
+        <div id="cpm-photo"></div>
+        <div>
+          <div id="cpm-name" style="font-family:'Bebas Neue';font-size:22px;letter-spacing:1px;"></div>
+          <div id="cpm-meta" style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;"></div>
+        </div>
+      </div>`:`<div>
         <div id="cpm-name" style="font-family:'Bebas Neue';font-size:22px;letter-spacing:1px;"></div>
         <div id="cpm-meta" style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;"></div>
-      </div>
+      </div>`}
       <button onclick="coachClosePlayer()" style="background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:16px;">✕</button>
     </div>
     <div style="padding:16px 20px;display:flex;flex-direction:column;gap:20px;">
@@ -3512,13 +3518,14 @@ function renderPlayerPortal(){
       const req=(D.tierRequests||{})[pid];
       let rh=`<div class="card" style="padding:12px 14px;margin-top:10px;">
         <div style="font-family:'Bebas Neue';font-size:13px;letter-spacing:1px;color:var(--charcoal);margin-bottom:4px;">Tier Placement</div>
-        <div style="font-size:12px;color:var(--gray);margin-bottom:10px;line-height:1.5;">Your coach sets your tier. You can ask to be considered for one below. This is a request, not a final placement.</div>`;
+        <div style="font-size:12px;color:var(--gray);margin-bottom:10px;line-height:1.5;">Your coach sets your tier. You can ask to be considered for one below. This is a request, not a final placement.</div>
+        <div style="font-size:12px;color:var(--charcoal);margin-bottom:10px;line-height:1.5;">Gold is our entry level squad, a great place to start and grow. Garnet is for experienced players ready for a higher level of play.</div>`;
       if(req&&req.tier){
         rh+=`<div style="font-size:13px;margin-bottom:10px;">You requested: <span class="tier-badge tier-${req.tier}">${TIER_LABELS[req.tier]||req.tier}</span> <span style="color:var(--gray);font-size:12px;">Your coach will review it.</span></div>`;
       }
       rh+=`<div style="display:flex;gap:8px;">
-        <button class="btn btn-small" style="flex:1;background:#CEB888;color:#2d2d2d;border:none;" onclick="playerRequestTier('gold')">Request Gold</button>
-        <button class="btn btn-small" style="flex:1;background:#782F40;color:#ffffff;border:none;" onclick="playerRequestTier('garnet')">Request Garnet</button>
+        <button class="btn btn-small" style="flex:1;background:#CEB888;color:#2d2d2d;border:none;" onclick="playerRequestTier('gold')">Request Gold (entry level)</button>
+        <button class="btn btn-small" style="flex:1;background:#782F40;color:#ffffff;border:none;" onclick="playerRequestTier('garnet')">Request Garnet (experienced)</button>
       </div></div>`;
       tierReqEl.innerHTML=rh;
     } else {
@@ -4156,6 +4163,9 @@ function coachOpenPlayer(pid){
   if(!modal||!overlay)return;
   // Header
   document.getElementById('cpm-name').textContent=p.firstName+' '+p.lastName;
+  // Photo avatar (club only, null-safe): the cpm-photo mount exists only in the club header, so HS is
+  // untouched. Promoted prospects may carry a photo; existing players have none and fall back to initials.
+  const _cpmPhoto=document.getElementById('cpm-photo'); if(SC.tiersEnabled&&_cpmPhoto)_cpmPhoto.innerHTML=avatarHtml(p,56);
   document.getElementById('cpm-meta').innerHTML=`<span class="class-badge class-${p.classYear}">${p.classYear}</span> <span class="court-badge court-${p.court}">PG ${p.court} — ${CL_LABELS[p.court]||''}</span>`;
   // Tier control (Grass Club only, gated on SC.tiersEnabled so Leon, South Walton, and the demo never see it).
   // Badge shows the current tier; the coach role additionally gets a setter that writes onto the player record.
@@ -7826,44 +7836,286 @@ function renderPracticeGroups(){
 // LOGISTICS mockups (Grass Club only, gated on SC.tiersEnabled).
 // Pure in-memory demo previews: no Firebase, no fbSet, no network. State resets on refresh.
 // ============================================================
-// Recruiting: sample tryout sessions plus a prospect list with a live invite toggle into Session A.
+// Recruiting (Grass Club demo, in-memory only, resets on refresh): sample tryout sessions plus a
+// prospect list with a live invite toggle into Session A. Stage 1 upgraded prospects from plain
+// name strings to objects and added an FSU-skinned signup that creates new prospects.
+// Prospect object shape: { id, firstName, lastName, gender, classYear, truVolley, rating,
+// tierRequest, photo, status, team, sessionId }. rating defaults to 1500 when truVolley is null.
+// recruitSessions[].invited stores prospect ids (not names) so renames and dupes stay stable.
 let recruitSessions=[
-  {name:'Fall Tryout - Session A', date:'Sept 6', time:'9:00 AM', location:'Court 1', invited:['Ava Nguyen','Mia Torres']},
-  {name:'Fall Tryout - Session B', date:'Sept 7', time:'10:00 AM', location:'Court 2', invited:['Harper Lee']}
+  {name:'Fall Tryout - Session A', date:'Sept 6', time:'9:00 AM', location:'Court 1', invited:['prospect_seed1','prospect_seed2']},
+  {name:'Fall Tryout - Session B', date:'Sept 7', time:'10:00 AM', location:'Court 2', invited:['prospect_seed3']}
 ];
-let recruitProspects=['Ava Nguyen','Mia Torres','Harper Lee','Zoe Carter','Lily Brooks','Sofia Ramos'];
-function recruitToggleInvite(pi){
-  const name=recruitProspects[pi]; const s=recruitSessions[0];
-  if(!name||!s)return;
-  const idx=s.invited.indexOf(name);
-  if(idx>=0)s.invited.splice(idx,1); else s.invited.push(name);
+let recruitProspects=[
+  {id:'prospect_seed1', firstName:'Ava',    lastName:'Nguyen', gender:'F', classYear:'SO', truVolley:1620, rating:1620, tierRequest:'garnet', photo:null, status:'prospect', team:null, sessionId:null},
+  {id:'prospect_seed2', firstName:'Mia',    lastName:'Torres', gender:'F', classYear:'FR', truVolley:null, rating:1500, tierRequest:'gold',   photo:null, status:'prospect', team:null, sessionId:null},
+  {id:'prospect_seed3', firstName:'Harper', lastName:'Lee',    gender:'F', classYear:'JR', truVolley:1555, rating:1555, tierRequest:'garnet', photo:null, status:'prospect', team:null, sessionId:null},
+  {id:'prospect_seed4', firstName:'Zoe',    lastName:'Carter', gender:'F', classYear:'FR', truVolley:null, rating:1500, tierRequest:'gold',   photo:null, status:'prospect', team:null, sessionId:null},
+  {id:'prospect_seed5', firstName:'Lily',   lastName:'Brooks', gender:'F', classYear:'SO', truVolley:1480, rating:1480, tierRequest:null,     photo:null, status:'prospect', team:null, sessionId:null},
+  {id:'prospect_seed6', firstName:'Sofia',  lastName:'Ramos',  gender:'F', classYear:'SR', truVolley:null, rating:1500, tierRequest:'garnet', photo:null, status:'prospect', team:null, sessionId:null}
+];
+// Pending signup photo (data URL), held between the photo pick and submit so a re-render does not lose it.
+let _rcSignupPhoto=null;
+function recruitToggleInvite(id){
+  const s=recruitSessions[0];
+  if(!id||!s)return;
+  const idx=s.invited.indexOf(id);
+  if(idx>=0)s.invited.splice(idx,1); else s.invited.push(id);
   renderRecruiting();
+}
+// Local-preview-only photo: read the picked file to a data URL on the in-memory pending var and
+// show it. No upload, no Firebase Storage. Updates the preview directly so the form is not re-rendered.
+function rcSignupPhoto(input){
+  const f=input&&input.files&&input.files[0]; if(!f)return;
+  const r=new FileReader();
+  r.onload=function(e){
+    _rcSignupPhoto=e.target.result;
+    const pv=document.getElementById('rc-su-photo-preview');
+    if(pv)pv.innerHTML='<img src="'+_rcSignupPhoto+'" alt="preview" style="height:64px;width:64px;object-fit:cover;border-radius:8px;border:1px solid var(--gray-lighter);">';
+  };
+  r.readAsDataURL(f);
+}
+// Create an in-memory prospect from the demo signup form, push it, clear, re-render. Nothing persists.
+function rcAddSignup(){
+  const v=id=>{const el=document.getElementById(id);return el?el.value:'';};
+  const first=(v('rc-su-first')||'').trim();
+  const last=(v('rc-su-last')||'').trim();
+  if(!first||!last){toast('Enter first and last name');return;}
+  const tvRaw=v('rc-su-tv');
+  const tv=(tvRaw!==''&&tvRaw!=null&&!isNaN(parseInt(tvRaw,10)))?parseInt(tvRaw,10):null;
+  const tier=v('rc-su-tier')||null;
+  const prospect={
+    id:gi('prospect'),
+    firstName:first,
+    lastName:last,
+    gender:v('rc-su-gender')||'F',
+    classYear:v('rc-su-class')||'FR',
+    truVolley:tv,
+    rating:(tv!=null?tv:1500),
+    tierRequest:tier||null,
+    photo:_rcSignupPhoto||null,
+    status:'prospect',
+    team:null,
+    sessionId:null
+  };
+  recruitProspects.push(prospect);
+  _rcSignupPhoto=null;
+  renderRecruiting();
+  toast('Signup added: '+first+' '+last);
+}
+// Exec edits a tryout session in place (demo, in-memory, resets on refresh).
+function rcUpdateSession(si){
+  const s=recruitSessions[si]; if(!s)return;
+  const g=id=>{const el=document.getElementById(id);return el?el.value:undefined;};
+  const nmv=g('rc-se-name-'+si), dt=g('rc-se-date-'+si), tm=g('rc-se-time-'+si), lo=g('rc-se-loc-'+si);
+  if(nmv!=null&&nmv.trim())s.name=nmv.trim();
+  if(dt!=null)s.date=dt.trim();
+  if(tm!=null)s.time=tm.trim();
+  if(lo!=null)s.location=lo.trim();
+  renderRecruiting();
+  toast('Session updated');
+}
+function rcAddSession(){
+  recruitSessions.push({name:'New Tryout Session', date:'', time:'', location:'', invited:[]});
+  renderRecruiting();
+  toast('Session added');
+}
+// Exec places a prospect on Gold or Garnet (Exec choice, independent of what the player requested).
+// Promotes the prospect into the live in-memory roster (D.players) with a record that mirrors the
+// demo player shape so the roster, Kings/Queens, and coachOpenPlayer all work with it. csRank = the
+// prospect rating; photo carried for the Stage 3 profile. In-memory only, nothing persists.
+function rcAddToTeam(prospectId, tier){
+  const p=recruitProspects.find(x=>x.id===prospectId);
+  if(!p||p.status==='assigned')return;
+  if(tier!=='gold'&&tier!=='garnet')return;
+  const newId=gi('player');
+  const rec={
+    id:newId,
+    firstName:p.firstName,
+    lastName:p.lastName,
+    classYear:p.classYear||'FR',
+    court:(tier==='gold'?1:5),
+    jersey:null,
+    active:true,
+    tier:tier,
+    gender:p.gender||'F',
+    csRank:p.rating,
+    photo:p.photo||null
+  };
+  if(!Array.isArray(D.players))D.players=[];
+  D.players.push(rec);
+  p.team=tier; p.status='assigned'; p.playerId=newId;
+  renderRecruiting();
+  if(typeof renderRoster==='function')renderRoster();
+  if(typeof renderPlayers==='function')renderPlayers();
+  const TIER_LABELS={gold:'Gold',garnet:'Garnet'};
+  toast(p.firstName+' '+p.lastName+' added to '+(TIER_LABELS[tier]||tier));
+}
+// Undo a placement: remove the promoted roster record and return the prospect to the unplaced list.
+function rcUndoAssign(prospectId){
+  const p=recruitProspects.find(x=>x.id===prospectId);
+  if(!p||p.status!=='assigned')return;
+  if(p.playerId&&Array.isArray(D.players)){
+    const i=D.players.findIndex(pl=>pl.id===p.playerId);
+    if(i>=0)D.players.splice(i,1);
+  }
+  p.team=null; p.status='prospect'; p.playerId=null;
+  renderRecruiting();
+  if(typeof renderRoster==='function')renderRoster();
+  if(typeof renderPlayers==='function')renderPlayers();
+  toast('Placement undone');
+}
+// Shared avatar: the local-preview photo data URL if present, else an initials circle. Null-safe so
+// existing players (no photo field) render fine. Used by the prospect profile and the coach modal.
+function avatarHtml(person, size){
+  const s=size||56;
+  if(person&&person.photo){
+    return '<img src="'+person.photo+'" alt="" style="height:'+s+'px;width:'+s+'px;object-fit:cover;border-radius:50%;border:2px solid rgba(255,255,255,0.5);flex:none;">';
+  }
+  const fi=(person&&person.firstName?person.firstName.charAt(0):'');
+  const li=(person&&person.lastName?person.lastName.charAt(0):'');
+  const initials=((fi+li).toUpperCase()||'?').replace(/[&<>"']/g,'');
+  return '<div style="height:'+s+'px;width:'+s+'px;border-radius:50%;background:var(--gold,#CEB888);color:#2d2d2d;display:flex;align-items:center;justify-content:center;font-family:\'Bebas Neue\',sans-serif;font-size:'+Math.round(s*0.4)+'px;letter-spacing:1px;border:2px solid rgba(255,255,255,0.5);flex:none;">'+initials+'</div>';
+}
+// Clickable prospect name target (demo, club only). A placed prospect is a real roster record, so it
+// opens the normal coach player modal; an unplaced prospect opens a lightweight read-only profile built
+// from the signup object (name, class, gender, rating, tier request, photo). In-memory only.
+function rcOpenProspect(prospectId){
+  const p=recruitProspects.find(x=>x.id===prospectId); if(!p)return;
+  if(p.status==='assigned'&&p.playerId&&typeof coachOpenPlayer==='function'&&gP(p.playerId)){
+    coachOpenPlayer(p.playerId); return;
+  }
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const GENDER={F:'Female',M:'Male'};
+  const TIER_LABELS={gold:'Gold (entry level)',garnet:'Garnet (experienced)'};
+  const tierReqHtml = p.tierRequest
+    ? `<span class="tier-badge tier-${p.tierRequest}">${esc(TIER_LABELS[p.tierRequest]||p.tierRequest)}</span>`
+    : '<span style="font-size:12px;color:var(--gray);">No tier request</span>';
+  const ratingHtml = `<span class="cs-rank">${esc(p.rating)}</span>`+(p.truVolley==null
+    ? ' <span style="font-size:11px;color:var(--gray);">default, no TruVolley number</span>'
+    : ' <span style="font-size:11px;color:var(--gray);">from TruVolley</span>');
+  const old=document.getElementById('rc-prospect-overlay'); if(old)old.remove();
+  const ov=document.createElement('div');
+  ov.id='rc-prospect-overlay';
+  ov.className='modal-overlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;';
+  ov.onclick=function(e){ if(e.target===ov)ov.remove(); };
+  ov.innerHTML=`<div style="background:var(--white);border-radius:16px;max-width:460px;width:100%;max-height:90vh;overflow-y:auto;">
+    <div style="background:var(--primary);color:#fff;padding:16px 20px;border-radius:16px 16px 0 0;display:flex;justify-content:space-between;align-items:center;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        ${avatarHtml(p,56)}
+        <div>
+          <div style="font-family:'Bebas Neue';font-size:22px;letter-spacing:1px;">${esc(p.firstName+' '+p.lastName)}</div>
+          <div style="margin-top:4px;font-size:12px;color:rgba(255,255,255,0.85);">Prospect, not yet placed</div>
+        </div>
+      </div>
+      <button onclick="document.getElementById('rc-prospect-overlay').remove()" style="background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:16px;">✕</button>
+    </div>
+    <div style="padding:16px 20px;display:flex;flex-direction:column;gap:14px;">
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+        <span class="class-badge class-${esc(p.classYear)}">${esc(p.classYear)}</span>
+        <span style="font-size:12px;color:var(--charcoal);">${esc(GENDER[p.gender]||p.gender||'')}</span>
+      </div>
+      <div><div style="font-size:11px;letter-spacing:1px;color:var(--gray);text-transform:uppercase;margin-bottom:4px;">Rating</div>${ratingHtml}</div>
+      <div><div style="font-size:11px;letter-spacing:1px;color:var(--gray);text-transform:uppercase;margin-bottom:4px;">Tier requested</div>${tierReqHtml}</div>
+      <div style="border-top:1px solid var(--gray-lighter);padding-top:12px;font-size:12px;color:var(--gray);line-height:1.5;">Match stats, skills, and rankings appear once this prospect is placed on a team. Add them to Gold or Garnet from the Recruiting list.</div>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
 }
 function renderRecruiting(){
   const pane=document.getElementById('tab-recruiting'); if(!pane)return;
   const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const sessionsHtml=recruitSessions.map(s=>{
-    const names=s.invited.length?s.invited.map(esc).join(', '):'No one invited yet';
+  // Resolve invited prospect ids back to display names for the session summary.
+  const pById={}; recruitProspects.forEach(p=>{pById[p.id]=p;});
+  const nm=id=>{const p=pById[id]; return p?(p.firstName+' '+p.lastName):id;};
+  // Sessions are editable in the demo: the Exec can change name/date/time/court in place.
+  const sessionsHtml=recruitSessions.map((s,si)=>{
+    const names=s.invited.length?s.invited.map(id=>esc(nm(id))).join(', '):'No one invited yet';
     return `<div style="border:1px solid var(--gray-lighter);border-radius:8px;padding:10px 12px;margin-bottom:8px;">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:1px;color:var(--charcoal);">${esc(s.name)}</div>
-      <div style="font-size:12px;color:var(--gray);margin:2px 0 6px;">${esc(s.date)} · ${esc(s.time)} · ${esc(s.location)}</div>
-      <div style="font-size:12px;color:var(--charcoal);"><span style="font-weight:700;">${s.invited.length} invited</span> <span style="color:var(--gray);">${names}</span></div>
+      <input class="form-input" id="rc-se-name-${si}" value="${esc(s.name)}" placeholder="Session name" style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:1px;color:var(--charcoal);padding:6px 8px;margin-bottom:6px;width:100%;box-sizing:border-box;">
+      <div class="form-row" style="margin-bottom:6px;">
+        <input class="form-input" id="rc-se-date-${si}" value="${esc(s.date)}" placeholder="Date" style="padding:6px 8px;font-size:12px;">
+        <input class="form-input" id="rc-se-time-${si}" value="${esc(s.time)}" placeholder="Time" style="padding:6px 8px;font-size:12px;">
+        <input class="form-input" id="rc-se-loc-${si}" value="${esc(s.location)}" placeholder="Court" style="padding:6px 8px;font-size:12px;">
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+        <div style="font-size:12px;color:var(--charcoal);"><span style="font-weight:700;">${s.invited.length} invited</span> <span style="color:var(--gray);">${names}</span></div>
+        <button class="btn btn-small btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="rcUpdateSession(${si})">Save</button>
+      </div>
     </div>`;
   }).join('');
   const target=recruitSessions[0];
-  const prospectsHtml=recruitProspects.map((p,pi)=>{
-    const inv=target&&target.invited.indexOf(p)>=0;
-    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--gray-lighter);font-size:13px;">
-      <span style="color:var(--charcoal);">${esc(p)}</span>
-      <button class="btn btn-small ${inv?'btn-danger':'btn-secondary'}" style="padding:3px 10px;font-size:11px;" onclick="recruitToggleInvite(${pi})">${inv?'Invited (remove)':'Invite to Session A'}</button>
+  // Rating badge (cs-rank style, consistent with the roster). A subtle "default" hint marks the 1500
+  // fallback (no TruVolley number) vs a real TruVolley-derived rating.
+  const ratingBadge=p=>`<span class="cs-rank">${p.rating}</span>${p.truVolley==null?'<span style="font-size:10px;color:var(--gray);margin-left:4px;">default</span>':''}`;
+  // Tier-request badge, colored to match the gold/garnet tier badges used elsewhere.
+  const tierBadge=t=> t==='gold'?'<span class="tier-badge tier-gold">Gold</span>'
+    : t==='garnet'?'<span class="tier-badge tier-garnet">Garnet</span>'
+    : '<span style="font-size:11px;color:var(--gray);">No request</span>';
+  // Clickable prospect name (dotted-underline style, same as the Kings/Queens coach name button).
+  const nameBtn=p=>`<button class="player-name" style="background:none;border:none;padding:0;cursor:pointer;text-decoration:underline dotted;color:var(--red);font-family:inherit;font-size:inherit;font-weight:700;text-align:left;-webkit-tap-highlight-color:transparent;" onclick="rcOpenProspect('${esc(p.id)}')">${esc(p.firstName+' '+p.lastName)}</button>`;
+  const unplaced=recruitProspects.filter(p=>p.status!=='assigned');
+  const assigned=recruitProspects.filter(p=>p.status==='assigned');
+  const prospectsHtml=unplaced.length?unplaced.map(p=>{
+    const inv=target&&target.invited.indexOf(p.id)>=0;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--gray-lighter);font-size:13px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        ${nameBtn(p)}
+        ${ratingBadge(p)}
+        ${tierBadge(p.tierRequest)}
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+        <button class="btn btn-small ${inv?'btn-danger':'btn-secondary'}" style="padding:3px 10px;font-size:11px;" onclick="recruitToggleInvite('${esc(p.id)}')">${inv?'Invited (remove)':'Invite to Session A'}</button>
+        <button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:#CEB888;color:#2d2d2d;border:none;" onclick="rcAddToTeam('${esc(p.id)}','gold')">Add to Gold</button>
+        <button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:#782F40;color:#ffffff;border:none;" onclick="rcAddToTeam('${esc(p.id)}','garnet')">Add to Garnet</button>
+      </div>
+    </div>`;
+  }).join(''):'<div style="font-size:12px;color:var(--gray);padding:6px 0;">No prospects waiting to be placed.</div>';
+  const assignedHtml=assigned.map(p=>{
+    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--gray-lighter);font-size:13px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        ${nameBtn(p)}
+        ${ratingBadge(p)}
+        <span style="font-size:11px;color:var(--gray);">Added to</span> ${tierBadge(p.team)}
+      </div>
+      <button class="btn btn-small btn-danger" style="padding:3px 10px;font-size:11px;" onclick="rcUndoAssign('${esc(p.id)}')">Undo</button>
     </div>`;
   }).join('');
+  // FSU-skinned signup form (club only). Inherits the garnet/gold skin via the app's themed classes
+  // and CSS vars. Local-preview-only photo. In-memory only, nothing saves.
+  const signupHtml = SC.tiersEnabled ? `<div style="border:1px dashed var(--gray-lighter);border-radius:8px;padding:12px;margin-bottom:14px;background:var(--off-white,#faf8f9);">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1px;color:var(--charcoal);margin-bottom:2px;">PLAYER SIGNUP (DEMO)</div>
+      <p style="font-size:11px;color:var(--gray);margin-bottom:10px;">Demo of the player-facing signup. Creates an in-memory prospect below. Nothing saves.</p>
+      <div class="form-row" style="margin-bottom:8px;">
+        <input class="form-input" id="rc-su-first" placeholder="First name" style="padding:8px;font-size:13px;">
+        <input class="form-input" id="rc-su-last" placeholder="Last name" style="padding:8px;font-size:13px;">
+      </div>
+      <div class="form-row" style="margin-bottom:8px;">
+        <select class="form-select" id="rc-su-gender" style="padding:8px;font-size:13px;"><option value="F">Female</option><option value="M">Male</option></select>
+        <select class="form-select" id="rc-su-class" style="padding:8px;font-size:13px;"><option value="FR">FR</option><option value="SO">SO</option><option value="JR">JR</option><option value="SR">SR</option></select>
+      </div>
+      <div class="form-row" style="margin-bottom:8px;">
+        <input class="form-input" id="rc-su-tv" type="number" min="0" placeholder="TruVolley rating (optional)" style="padding:8px;font-size:13px;">
+        <select class="form-select" id="rc-su-tier" style="padding:8px;font-size:13px;"><option value="">No tier request</option><option value="gold">Request Gold (entry level)</option><option value="garnet">Request Garnet (experienced)</option></select>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <label class="btn btn-small btn-secondary" style="padding:6px 12px;font-size:11px;cursor:pointer;">Add photo<input type="file" accept="image/*" id="rc-su-photo" onchange="rcSignupPhoto(this)" style="display:none;"></label>
+        <div id="rc-su-photo-preview">${_rcSignupPhoto?`<img src="${_rcSignupPhoto}" alt="preview" style="height:64px;width:64px;object-fit:cover;border-radius:8px;border:1px solid var(--gray-lighter);">`:'<span style="font-size:11px;color:var(--gray);">No photo (preview only)</span>'}</div>
+      </div>
+      <button class="btn btn-primary btn-small" style="width:100%;" onclick="rcAddSignup()">Add Signup</button>
+    </div>` : '';
   pane.innerHTML=`<div class="card"><div class="card-title"><span class="bar"></span> 🎯 Recruiting</div>
     <p style="font-size:11px;color:var(--gray);margin-bottom:12px;">Demo preview, not yet saving.</p>
-    <div style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1px;color:var(--charcoal);margin-bottom:8px;">TRYOUT SESSIONS</div>
+    ${signupHtml}
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1px;color:var(--charcoal);">TRYOUT SESSIONS</div>
+      <button class="btn btn-small btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="rcAddSession()">Add session</button>
+    </div>
     ${sessionsHtml}
     <div style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1px;color:var(--charcoal);margin:14px 0 4px;">PROSPECTS</div>
     ${prospectsHtml}
+    ${assigned.length?`<div style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1px;color:var(--charcoal);margin:14px 0 4px;">PLACED ON A TEAM</div>${assignedHtml}`:''}
   </div>`;
 }
 // Accounting: sample dues table with a per-member paid toggle and a live collected summary.
