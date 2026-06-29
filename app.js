@@ -7846,8 +7846,8 @@ function renderPracticeGroups(){
 // recruitSessions[].invited stores prospect ids (not names) so renames and dupes stay stable; a
 // prospect may be invited to more than one session.
 let recruitSessions=[
-  {name:'Fall Tryout - Session A', date:'Sept 6', time:'9:00 AM', location:'Court 1', invited:['prospect_seed1','prospect_seed2']},
-  {name:'Fall Tryout - Session B', date:'Sept 7', time:'10:00 AM', location:'Court 2', invited:['prospect_seed3']}
+  {name:'Fall Tryout - Session A', date:'Sept 6', time:'9:00 AM', invited:['prospect_seed1','prospect_seed2']},
+  {name:'Fall Tryout - Session B', date:'Sept 7', time:'10:00 AM', invited:['prospect_seed3']}
 ];
 // TruVolley values are 0-10 decimals; ratings below match csSeedFromTruVolley (7.2->1800, 5.5->1600,
 // 4.0->1600, 2.8->1450). Mia and Zoe have no TruVolley, so they are unrated until the Exec sets one.
@@ -7961,16 +7961,15 @@ function rcAddSignup(){
 function rcUpdateSession(si){
   const s=recruitSessions[si]; if(!s)return;
   const g=id=>{const el=document.getElementById(id);return el?el.value:undefined;};
-  const nmv=g('rc-se-name-'+si), dt=g('rc-se-date-'+si), tm=g('rc-se-time-'+si), lo=g('rc-se-loc-'+si);
+  const nmv=g('rc-se-name-'+si), dt=g('rc-se-date-'+si), tm=g('rc-se-time-'+si);
   if(nmv!=null&&nmv.trim())s.name=nmv.trim();
   if(dt!=null)s.date=dt.trim();
   if(tm!=null)s.time=tm.trim();
-  if(lo!=null)s.location=lo.trim();
   renderRecruiting();
   toast('Session updated');
 }
 function rcAddSession(){
-  recruitSessions.push({name:'New Tryout Session', date:'', time:'', location:'', invited:[]});
+  recruitSessions.push({name:'New Tryout Session', date:'', time:'', invited:[]});
   renderRecruiting();
   toast('Session added');
 }
@@ -8092,7 +8091,6 @@ function renderRecruiting(){
       <div class="form-row" style="margin-bottom:6px;">
         <input class="form-input" id="rc-se-date-${si}" value="${esc(s.date)}" placeholder="Date" style="padding:6px 8px;font-size:12px;">
         <input class="form-input" id="rc-se-time-${si}" value="${esc(s.time)}" placeholder="Time" style="padding:6px 8px;font-size:12px;">
-        <input class="form-input" id="rc-se-loc-${si}" value="${esc(s.location)}" placeholder="Court" style="padding:6px 8px;font-size:12px;">
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
         <div style="font-size:12px;color:var(--charcoal);"><span style="font-weight:700;">${s.invited.length} invited</span> <span style="color:var(--gray);">${names}</span></div>
