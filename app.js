@@ -7839,29 +7839,80 @@ function renderPracticeGroups(){
 // Recruiting (Grass Club demo, in-memory only, resets on refresh): sample tryout sessions plus a
 // prospect list with a live invite toggle into Session A. Stage 1 upgraded prospects from plain
 // name strings to objects and added an FSU-skinned signup that creates new prospects.
-// Prospect object shape: { id, firstName, lastName, gender, classYear, truVolley, rating,
-// tierRequest, photo, status, team, sessionId }. rating defaults to 1500 when truVolley is null.
-// recruitSessions[].invited stores prospect ids (not names) so renames and dupes stay stable.
+// Prospect object shape: { id, firstName, lastName, gender, classYear, truVolley (0-10 decimal or
+// null), rating (CS rating from the real TruVolley band table, or null when no TruVolley), rd,
+// manualRating (Exec-set starting rating for unrated prospects, or null), tierRequest, photo, status,
+// team, sessionId }. Effective rating = rating if present, else manualRating, else unrated (no 1500).
+// recruitSessions[].invited stores prospect ids (not names) so renames and dupes stay stable; a
+// prospect may be invited to more than one session.
 let recruitSessions=[
   {name:'Fall Tryout - Session A', date:'Sept 6', time:'9:00 AM', location:'Court 1', invited:['prospect_seed1','prospect_seed2']},
   {name:'Fall Tryout - Session B', date:'Sept 7', time:'10:00 AM', location:'Court 2', invited:['prospect_seed3']}
 ];
+// TruVolley values are 0-10 decimals; ratings below match csSeedFromTruVolley (7.2->1800, 5.5->1600,
+// 4.0->1600, 2.8->1450). Mia and Zoe have no TruVolley, so they are unrated until the Exec sets one.
 let recruitProspects=[
-  {id:'prospect_seed1', firstName:'Ava',    lastName:'Nguyen', gender:'F', classYear:'SO', truVolley:1620, rating:1620, tierRequest:'garnet', photo:null, status:'prospect', team:null, sessionId:null},
-  {id:'prospect_seed2', firstName:'Mia',    lastName:'Torres', gender:'F', classYear:'FR', truVolley:null, rating:1500, tierRequest:'gold',   photo:null, status:'prospect', team:null, sessionId:null},
-  {id:'prospect_seed3', firstName:'Harper', lastName:'Lee',    gender:'F', classYear:'JR', truVolley:1555, rating:1555, tierRequest:'garnet', photo:null, status:'prospect', team:null, sessionId:null},
-  {id:'prospect_seed4', firstName:'Zoe',    lastName:'Carter', gender:'F', classYear:'FR', truVolley:null, rating:1500, tierRequest:'gold',   photo:null, status:'prospect', team:null, sessionId:null},
-  {id:'prospect_seed5', firstName:'Lily',   lastName:'Brooks', gender:'F', classYear:'SO', truVolley:1480, rating:1480, tierRequest:null,     photo:null, status:'prospect', team:null, sessionId:null},
-  {id:'prospect_seed6', firstName:'Sofia',  lastName:'Ramos',  gender:'F', classYear:'SR', truVolley:null, rating:1500, tierRequest:'garnet', photo:null, status:'prospect', team:null, sessionId:null}
+  {id:'prospect_seed1', firstName:'Ava',    lastName:'Nguyen', gender:'F', classYear:'SO', truVolley:7.2,  rating:1800, rd:150,  manualRating:null, tierRequest:'garnet', photo:null, status:'prospect', team:null, sessionId:null},
+  {id:'prospect_seed2', firstName:'Mia',    lastName:'Torres', gender:'F', classYear:'FR', truVolley:null, rating:null, rd:null, manualRating:null, tierRequest:'gold',   photo:null, status:'prospect', team:null, sessionId:null},
+  {id:'prospect_seed3', firstName:'Harper', lastName:'Lee',    gender:'F', classYear:'JR', truVolley:5.5,  rating:1600, rd:200,  manualRating:null, tierRequest:'garnet', photo:null, status:'prospect', team:null, sessionId:null},
+  {id:'prospect_seed4', firstName:'Zoe',    lastName:'Carter', gender:'F', classYear:'FR', truVolley:null, rating:null, rd:null, manualRating:null, tierRequest:'gold',   photo:null, status:'prospect', team:null, sessionId:null},
+  {id:'prospect_seed5', firstName:'Lily',   lastName:'Brooks', gender:'F', classYear:'SO', truVolley:4.0,  rating:1600, rd:200,  manualRating:null, tierRequest:null,     photo:null, status:'prospect', team:null, sessionId:null},
+  {id:'prospect_seed6', firstName:'Sofia',  lastName:'Ramos',  gender:'F', classYear:'SR', truVolley:2.8,  rating:1450, rd:250,  manualRating:null, tierRequest:'garnet', photo:null, status:'prospect', team:null, sessionId:null}
 ];
+// Real CS conversion, replicated EXACTLY from courtsense/community/profile/index.html truvolleySeed:
+// a 0-to-10 TruVolley decimal maps to a Glicko-2 seed. Blank/non-numeric returns null (unrated, no seed).
+function csSeedFromTruVolley(raw){
+  const v=parseFloat(raw);
+  if(!isFinite(v)) return null;
+  if(v < 2)  return { rating:1300, rd:300 };
+  if(v < 4)  return { rating:1450, rd:250 };
+  if(v < 6)  return { rating:1600, rd:200 };
+  if(v < 8)  return { rating:1800, rd:150 };
+  if(v < 10) return { rating:2000, rd:150 };
+  return { rating:2200, rd:100 };
+}
+// Effective rating shown for a prospect: the TruVolley-derived rating if present, else the Exec-set
+// manual rating, else null (unrated). No 1500 default.
+function rcEffectiveRating(p){
+  if(!p) return null;
+  if(p.rating!=null) return p.rating;
+  if(p.manualRating!=null) return p.manualRating;
+  return null;
+}
+// Exec sets a starting rating for an unrated prospect (mirrors admin-players.html manual entry).
+function rcSetManualRating(prospectId){
+  const el=document.getElementById('rc-mr-'+prospectId);
+  if(!el) return;
+  const v=parseFloat(el.value);
+  if(!isFinite(v)){ toast('Enter a starting rating'); return; }
+  const p=recruitProspects.find(x=>x.id===prospectId);
+  if(!p) return;
+  p.manualRating=Math.round(v);
+  renderRecruiting();
+  toast('Starting rating set');
+}
 // Pending signup photo (data URL), held between the photo pick and submit so a re-render does not lose it.
 let _rcSignupPhoto=null;
-function recruitToggleInvite(id){
-  const s=recruitSessions[0];
+// Toggle a prospect's invite to a specific session (by index). Multi-session capable: a prospect can
+// be invited to more than one session. Used by the per-session remove tags.
+function recruitToggleInvite(id, si){
+  const s=recruitSessions[si!=null?si:0];
   if(!id||!s)return;
   const idx=s.invited.indexOf(id);
   if(idx>=0)s.invited.splice(idx,1); else s.invited.push(id);
   renderRecruiting();
+}
+// Invite a prospect to the session chosen in their per-prospect dropdown (add only; removal is via the
+// session tags). Reads the selected session index from the dropdown, then re-renders.
+function rcInviteSelected(prospectId){
+  const sel=document.getElementById('rc-inv-sel-'+prospectId);
+  if(!sel) return;
+  const si=parseInt(sel.value,10);
+  const s=recruitSessions[si];
+  if(!s) return;
+  if(s.invited.indexOf(prospectId)<0) s.invited.push(prospectId);
+  renderRecruiting();
+  toast('Invited to '+s.name);
 }
 // Local-preview-only photo: read the picked file to a data URL on the in-memory pending var and
 // show it. No upload, no Firebase Storage. Updates the preview directly so the form is not re-rendered.
@@ -7882,7 +7933,8 @@ function rcAddSignup(){
   const last=(v('rc-su-last')||'').trim();
   if(!first||!last){toast('Enter first and last name');return;}
   const tvRaw=v('rc-su-tv');
-  const tv=(tvRaw!==''&&tvRaw!=null&&!isNaN(parseInt(tvRaw,10)))?parseInt(tvRaw,10):null;
+  const tv=(tvRaw!==''&&tvRaw!=null&&isFinite(parseFloat(tvRaw)))?parseFloat(tvRaw):null;
+  const seed=csSeedFromTruVolley(tv); // null when no TruVolley -> unrated, no 1500 default
   const tier=v('rc-su-tier')||null;
   const prospect={
     id:gi('prospect'),
@@ -7891,7 +7943,9 @@ function rcAddSignup(){
     gender:v('rc-su-gender')||'F',
     classYear:v('rc-su-class')||'FR',
     truVolley:tv,
-    rating:(tv!=null?tv:1500),
+    rating:seed?seed.rating:null,
+    rd:seed?seed.rd:null,
+    manualRating:null,
     tierRequest:tier||null,
     photo:_rcSignupPhoto||null,
     status:'prospect',
@@ -7939,7 +7993,7 @@ function rcAddToTeam(prospectId, tier){
     active:true,
     tier:tier,
     gender:p.gender||'F',
-    csRank:p.rating,
+    csRank:rcEffectiveRating(p),
     photo:p.photo||null
   };
   if(!Array.isArray(D.players))D.players=[];
@@ -7991,9 +8045,10 @@ function rcOpenProspect(prospectId){
   const tierReqHtml = p.tierRequest
     ? `<span class="tier-badge tier-${p.tierRequest}">${esc(TIER_LABELS[p.tierRequest]||p.tierRequest)}</span>`
     : '<span style="font-size:12px;color:var(--gray);">No tier request</span>';
-  const ratingHtml = `<span class="cs-rank">${esc(p.rating)}</span>`+(p.truVolley==null
-    ? ' <span style="font-size:11px;color:var(--gray);">default, no TruVolley number</span>'
-    : ' <span style="font-size:11px;color:var(--gray);">from TruVolley</span>');
+  const _eff=rcEffectiveRating(p);
+  const ratingHtml = _eff==null
+    ? '<span style="font-size:13px;color:var(--gray);font-style:italic;">Unrated</span>'
+    : `<span class="cs-rank">${esc(_eff)}</span> <span style="font-size:11px;color:var(--gray);">${p.rating!=null?'from TruVolley':'set by exec'}</span>`;
   const old=document.getElementById('rc-prospect-overlay'); if(old)old.remove();
   const ov=document.createElement('div');
   ov.id='rc-prospect-overlay';
@@ -8045,10 +8100,14 @@ function renderRecruiting(){
       </div>
     </div>`;
   }).join('');
-  const target=recruitSessions[0];
-  // Rating badge (cs-rank style, consistent with the roster). A subtle "default" hint marks the 1500
-  // fallback (no TruVolley number) vs a real TruVolley-derived rating.
-  const ratingBadge=p=>`<span class="cs-rank">${p.rating}</span>${p.truVolley==null?'<span style="font-size:10px;color:var(--gray);margin-left:4px;">default</span>':''}`;
+  // Rating badge (cs-rank style, consistent with the roster). Shows the effective rating with a subtle
+  // source hint (TruVolley vs Exec-set), or a muted "Unrated" when there is no rating yet.
+  const ratingBadge=p=>{
+    const eff=rcEffectiveRating(p);
+    if(eff==null) return '<span style="font-size:11px;color:var(--gray);font-style:italic;">Unrated</span>';
+    const src=p.rating!=null?'TruVolley':'exec';
+    return `<span class="cs-rank">${eff}</span><span style="font-size:10px;color:var(--gray);margin-left:4px;">${src}</span>`;
+  };
   // Tier-request badge, colored to match the gold/garnet tier badges used elsewhere.
   const tierBadge=t=> t==='gold'?'<span class="tier-badge tier-gold">Gold</span>'
     : t==='garnet'?'<span class="tier-badge tier-garnet">Garnet</span>'
@@ -8058,17 +8117,32 @@ function renderRecruiting(){
   const unplaced=recruitProspects.filter(p=>p.status!=='assigned');
   const assigned=recruitProspects.filter(p=>p.status==='assigned');
   const prospectsHtml=unplaced.length?unplaced.map(p=>{
-    const inv=target&&target.invited.indexOf(p.id)>=0;
-    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--gray-lighter);font-size:13px;flex-wrap:wrap;">
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-        ${nameBtn(p)}
-        ${ratingBadge(p)}
-        ${tierBadge(p.tierRequest)}
+    // Per-prospect session invite: a dropdown of every session plus removable tags for current invites.
+    const sessOpts=recruitSessions.map((s,si)=>`<option value="${si}">${esc(s.name)}</option>`).join('');
+    const inviteTags=recruitSessions.map((s,si)=>({s,si})).filter(x=>x.s.invited.indexOf(p.id)>=0)
+      .map(x=>`<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;background:var(--gray-lighter);color:var(--charcoal);border-radius:10px;padding:2px 8px;">${esc(x.s.name)}<button onclick="recruitToggleInvite('${esc(p.id)}',${x.si})" style="background:none;border:none;color:var(--gray);cursor:pointer;font-size:12px;line-height:1;padding:0;" title="Remove invite">✕</button></span>`).join('');
+    const unrated=rcEffectiveRating(p)==null;
+    const setRatingHtml=unrated?`<div style="display:flex;align-items:center;gap:4px;">
+          <input id="rc-mr-${esc(p.id)}" type="number" min="0" max="3000" step="10" placeholder="Rating" style="width:78px;padding:3px 6px;font-size:11px;border:1px solid var(--gray-lighter);border-radius:6px;">
+          <button class="btn btn-small btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="rcSetManualRating('${esc(p.id)}')">Set rating</button>
+        </div>`:'';
+    return `<div style="padding:8px 0;border-bottom:1px solid var(--gray-lighter);font-size:13px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          ${nameBtn(p)}
+          ${ratingBadge(p)}
+          ${tierBadge(p.tierRequest)}
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:#CEB888;color:#2d2d2d;border:none;" onclick="rcAddToTeam('${esc(p.id)}','gold')">Add to Gold</button>
+          <button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:#782F40;color:#ffffff;border:none;" onclick="rcAddToTeam('${esc(p.id)}','garnet')">Add to Garnet</button>
+        </div>
       </div>
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-        <button class="btn btn-small ${inv?'btn-danger':'btn-secondary'}" style="padding:3px 10px;font-size:11px;" onclick="recruitToggleInvite('${esc(p.id)}')">${inv?'Invited (remove)':'Invite to Session A'}</button>
-        <button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:#CEB888;color:#2d2d2d;border:none;" onclick="rcAddToTeam('${esc(p.id)}','gold')">Add to Gold</button>
-        <button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:#782F40;color:#ffffff;border:none;" onclick="rcAddToTeam('${esc(p.id)}','garnet')">Add to Garnet</button>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px;">
+        <select id="rc-inv-sel-${esc(p.id)}" class="form-select" style="padding:3px 8px;font-size:11px;max-width:200px;">${sessOpts}</select>
+        <button class="btn btn-small btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="rcInviteSelected('${esc(p.id)}')">Invite</button>
+        ${inviteTags?`<span style="display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;">${inviteTags}</span>`:'<span style="font-size:11px;color:var(--gray);">Not invited yet</span>'}
+        ${setRatingHtml}
       </div>
     </div>`;
   }).join(''):'<div style="font-size:12px;color:var(--gray);padding:6px 0;">No prospects waiting to be placed.</div>';
@@ -8096,7 +8170,7 @@ function renderRecruiting(){
         <select class="form-select" id="rc-su-class" style="padding:8px;font-size:13px;"><option value="FR">FR</option><option value="SO">SO</option><option value="JR">JR</option><option value="SR">SR</option></select>
       </div>
       <div class="form-row" style="margin-bottom:8px;">
-        <input class="form-input" id="rc-su-tv" type="number" min="0" placeholder="TruVolley rating (optional)" style="padding:8px;font-size:13px;">
+        <input class="form-input" id="rc-su-tv" type="number" min="0" max="10" step="0.1" placeholder="TruVolley rating 0-10, e.g. 5.1" style="padding:8px;font-size:13px;">
         <select class="form-select" id="rc-su-tier" style="padding:8px;font-size:13px;"><option value="">No tier request</option><option value="gold">Request Gold (entry level)</option><option value="garnet">Request Garnet (experienced)</option></select>
       </div>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
