@@ -3176,17 +3176,17 @@ function switchMode(mode){
     gdBar.style.display='flex';mgBar.style.display='none';
     if(gdBtn)gdBtn.classList.add('active');
     if(mgBtn)mgBtn.classList.remove('active');
-    // Activate first game day tab if none active
-    const activeGD=gdBar.querySelector('.tab.active');
-    if(!activeGD){const first=gdBar.querySelector('.tab');if(first)first.click();}
-    else{refreshTab(activeGD.dataset.tab);}
+    // Fire the now-visible bar's active (or first) tab via the existing click handler so the content
+    // pane follows the mode switch, not just refreshTab (which renders without swapping the visible pane).
+    const t=gdBar.querySelector('.tab.active')||gdBar.querySelector('.tab');
+    if(t)t.click();
   }else{
     gdBar.style.display='none';mgBar.style.display='flex';
     if(mgBtn)mgBtn.classList.add('active');
     if(gdBtn)gdBtn.classList.remove('active');
-    const activeMG=mgBar.querySelector('.tab.active');
-    if(!activeMG){const first=mgBar.querySelector('.tab');if(first)first.click();}
-    else{refreshTab(activeMG.dataset.tab);}
+    // Same as the gameday branch: click the now-visible bar's active (or first) tab so the pane follows.
+    const t=mgBar.querySelector('.tab.active')||mgBar.querySelector('.tab');
+    if(t)t.click();
   }
 }
 
