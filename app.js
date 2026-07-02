@@ -2310,6 +2310,13 @@ function fbSetResult(node,id,obj){fbSet(node+'/'+id,Object.assign({},obj,{season
 function _activeSeason(){ return SC.demoMode ? '2026' : _currentSeasonId; }
 // A result belongs to the active season if stamped with it. null-tolerant as belt-and-suspenders: live data is fully backfilled, so an unstamped record is only a straggler and should still show in the active season rather than vanish.
 function inSeason(r){ return !!r && (r.seasonId===_activeSeason() || r.seasonId==null); }
+// Distinct seasonIds present across every result node, newest first. Always includes the active season so a fresh season shows even before its first result. Today this is just ['2026']; it grows a season per year automatically.
+function allSeasonIds(){
+  const s=new Set();
+  [D.schedule,D.matches,D.gamedays,D.duals,D.scrimmages].forEach(a=>(a||[]).forEach(r=>{if(r&&r.seasonId)s.add(r.seasonId);}));
+  if(!s.size)s.add(_activeSeason());
+  return [...s].sort().reverse();
+}
 
 // ============================================================
 // UTILS
@@ -2360,11 +2367,15 @@ function extStats(pid,matchList,opts){
   return{setsWon:setsW,setsLost:setsL,diff:pf-pa,pf,pa,sets:totalSets,matches:matchesPlayed,matchesWon,matchesLost,k,b,a,se,re,he,de};
 }
 
-// Combined stats for Players tab "All" view
-function combinedStats(pid){
-  const qs=queensStats(pid,D.matches);
-  const gs=extStats(pid,D.gamedays);
-  const ss=extStats(pid,D.scrimmages);
+// Combined stats for Players tab "All" view.
+// sel undefined -> active season (unchanged default). sel={season:S} -> that season only. sel={allSeasons:true} -> all-time.
+function combinedStats(pid, sel){
+  let mArr=D.matches, gArr=D.gamedays, sArr=D.scrimmages, opts;
+  if(sel && sel.allSeasons){ opts={allSeasons:true}; }
+  else if(sel && sel.season){ const S=sel.season; mArr=(D.matches||[]).filter(r=>r.seasonId===S); gArr=(D.gamedays||[]).filter(r=>r.seasonId===S); sArr=(D.scrimmages||[]).filter(r=>r.seasonId===S); opts={allSeasons:true}; }
+  const qs=queensStats(pid,mArr,opts);
+  const gs=extStats(pid,gArr,opts);
+  const ss=extStats(pid,sArr,opts);
   return{
     qWins:qs.wins,qLosses:qs.losses,qDiff:qs.diff,qGP:qs.gp,
     gdSets:gs.sets,gdDiff:gs.diff,gdK:gs.k,gdB:gs.b,gdA:gs.a,gdSE:gs.se,gdRE:gs.re,gdHE:gs.he,gdDE:gs.de,
@@ -8871,10 +8882,12 @@ function pgdSaveNotes(){
 // ============================================================
 // DUALS
 // ============================================================
-function getDualRecord(){
+function getDualRecord(seasonId){
   let w=0,l=0;
-  // Season-scoped views of the result nodes (active season only).
-  const sched=(D.schedule||[]).filter(inSeason), duals=(D.duals||[]).filter(inSeason), gds=(D.gamedays||[]).filter(inSeason);
+  // Season-scoped views of the result nodes. Defaults to the active season (zero-arg call is unchanged); a passed seasonId scopes to that season for career rollups.
+  const _S = seasonId || _activeSeason();
+  const _inS = r => r && (r.seasonId===_S || r.seasonId==null);
+  const sched=(D.schedule||[]).filter(_inS), duals=(D.duals||[]).filter(_inS), gds=(D.gamedays||[]).filter(_inS);
   // Dual W-L: from schedule (dual-level wins)
   sched.forEach(g=>{if(g.type==='scrimmage')return;if(g.scoreUs!=null&&g.scoreThem!=null&&g.scoreUs!==''&&g.scoreThem!==''){parseInt(g.scoreUs)>parseInt(g.scoreThem)?w++:l++;}});
   // Also count from D.duals that have no matching schedule entry with scores
