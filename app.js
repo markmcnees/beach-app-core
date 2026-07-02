@@ -1382,6 +1382,8 @@ ${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar
   <!-- ══ MY STATS PANEL ══ -->
   <div class="pp-panel active" id="pp-panel-stats">
 
+    <button class="btn btn-blue btn-small" style="width:100%;margin-bottom:12px;" onclick="showAthleteCard(currentPlayerId)">View Athlete Card</button>
+
     <!-- Season Summary -->
     <div class="card"><div class="card-title"><span class="bar"></span> My Season Summary</div>
       <div style="display:flex;gap:8px;margin-bottom:10px;" id="pp-stat-toggle">
@@ -1608,6 +1610,7 @@ ${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar
           <select id="cpm-id-hand" class="form-select" style="flex:1;min-width:100px;padding:8px;font-size:13px;"><option value="">Hand</option><option value="R">Right</option><option value="L">Left</option></select>
         </div>
         <button class="btn btn-red btn-small" style="width:100%;" onclick="coachSaveIdentity()">Save Identity</button>
+        <button class="btn btn-secondary btn-small" style="width:100%;margin-top:8px;" onclick="showAthleteCard(document.getElementById('coach-player-overlay').dataset.pid)">View Athlete Card</button>
       </div>
       <div>
         <div style="font-family:'Bebas Neue';font-size:16px;letter-spacing:1px;color:var(--gray);margin-bottom:8px;">⭐ Skills (1–10)</div>
@@ -1718,6 +1721,17 @@ ${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar
         <div id="lf-email-error" style="color:#f87171;font-size:12px;margin-top:6px;text-align:center;"></div>
       </div>
     </div>
+  </div>
+</div>
+<div id="athlete-overlay" style="display:none;position:fixed;inset:0;background:linear-gradient(160deg,${SC.colors.primaryDeeper} 0%,${SC.colors.primary} 50%,${SC.colors.primaryDark} 100%);z-index:10000;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+  <div style="max-width:480px;margin:0 auto;padding:12px 14px 40px;">
+    <div style="text-align:right;padding:4px 0 8px;">
+      <button onclick="hideAthleteCard()" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1px;padding:7px 18px;border-radius:20px;cursor:pointer;">&#x2715; Close</button>
+    </div>
+    <div id="ac-header"></div>
+    <div id="ac-record"></div>
+    <div id="ac-seasons"></div>
+    <div id="ac-athletic"></div>
   </div>
 </div>
 ${SC.demoMode ? `
@@ -4130,6 +4144,19 @@ function unapproveGoal(pid,gid){
   toast('Feedback moved back to draft');
 }
 
+// Read-only identity glance line (Position / Side / Hand / Class of gradYear), shared by the profile modal and the athlete card so the two cannot diverge. Returns a plain text string; missing fields are omitted exactly as before, and an empty record yields the same placeholder.
+function athleteGlanceLine(pid){
+  const _idp=profilesData?.players?.[pid]||{};
+  const _cap=s=>s?s.charAt(0).toUpperCase()+s.slice(1):s;
+  const _sideL={L:'Left',R:'Right'},_handL={R:'Right',L:'Left'};
+  const _pieces=[];
+  if(_idp.position)_pieces.push('Position: '+_cap(_idp.position));
+  if(_idp.preferredSide)_pieces.push('Side: '+(_sideL[_idp.preferredSide]||_idp.preferredSide));
+  if(_idp.dominantHand)_pieces.push('Hand: '+(_handL[_idp.dominantHand]||_idp.dominantHand));
+  if(_idp.gradYear)_pieces.push('Class of '+_idp.gradYear);
+  return _pieces.length?_pieces.join('  ·  '):'No identity details set yet';
+}
+
 // Player portal goals rendering
 function renderPlayerProfileData(pid){
   const skillNames=['serving','passing','setting','hitting','blocking','defense','courtSense','communication'];
@@ -4280,18 +4307,9 @@ function coachOpenPlayer(pid){
   _setIdV('cpm-id-position',_idp.position);
   _setIdV('cpm-id-side',_idp.preferredSide);
   _setIdV('cpm-id-hand',_idp.dominantHand);
-  // Read-only glance line summarizing the durable identity record.
+  // Read-only glance line summarizing the durable identity record (shared helper, also used by the athlete card).
   const _idSum=document.getElementById('cpm-id-summary');
-  if(_idSum){
-    const _cap=s=>s?s.charAt(0).toUpperCase()+s.slice(1):s;
-    const _sideL={L:'Left',R:'Right'},_handL={R:'Right',L:'Left'};
-    const _pieces=[];
-    if(_idp.position)_pieces.push('Position: '+_cap(_idp.position));
-    if(_idp.preferredSide)_pieces.push('Side: '+(_sideL[_idp.preferredSide]||_idp.preferredSide));
-    if(_idp.dominantHand)_pieces.push('Hand: '+(_handL[_idp.dominantHand]||_idp.dominantHand));
-    if(_idp.gradYear)_pieces.push('Class of '+_idp.gradYear);
-    _idSum.textContent=_pieces.length?_pieces.join('  ·  '):'No identity details set yet';
-  }
+  if(_idSum)_idSum.textContent=athleteGlanceLine(pid);
   // Render existing data
   coachRenderDrillHistory(pid);
   coachRenderVertHistory(pid);
@@ -10287,6 +10305,156 @@ function lfManualRefresh(){
   if(dot){dot.style.opacity='1';setTimeout(function(){dot.style.opacity='0.4';},600);}
 }
 
+// ============================================================
+// ATHLETE CARD (shareable player profile, internal-only for now)
+// ============================================================
+function showAthleteCard(pid){
+  var ol=document.getElementById('athlete-overlay');
+  if(!ol)return;
+  ol.dataset.pid=pid;
+  var loginOl=document.getElementById('login-overlay');
+  if(loginOl)loginOl.classList.add('hidden');
+  ol.style.display='block';
+  renderAthleteCard(pid);
+  history.pushState({athletePage:true},'');
+  // No auto-refresh timer: this is a static profile, not a live scoreboard.
+}
+
+function hideAthleteCard(){
+  var ol=document.getElementById('athlete-overlay');
+  if(ol)ol.style.display='none';
+  if(!currentRole){
+    var loginOl=document.getElementById('login-overlay');
+    if(loginOl)loginOl.classList.remove('hidden');
+  }
+}
+
+function renderAthleteCard(pid){
+  var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});};
+  var BN="font-family:'Bebas Neue',sans-serif", BODY="font-family:'Barlow',sans-serif";
+  var RED=SC.colors.primary, DARK=SC.colors.primaryDeeper, GOLD=SC.colors.gold||'#d4a843';
+  var rp=gP(pid)||{};                          // roster record: name, jersey, csRank, photo
+  var pp=(profilesData&&profilesData.players&&profilesData.players[pid])||{}; // identity: height, reach, gradYear, position, side, hand
+  var person=Object.assign({}, rp, pp);        // merged for avatar (name from roster, identity/photo layered on)
+
+  // ac-header: avatar, name, class of gradYear, shared glance line, CS rating when present.
+  var hdr=document.getElementById('ac-header');
+  if(hdr){
+    var name=((rp.firstName||'')+' '+(rp.lastName||'')).trim()||pN(pid);
+    var glance=athleteGlanceLine(pid);
+    var rating=(rp.csRank!=null&&rp.csRank!==0)?rp.csRank:null; // csRank lives on the roster record; omit when absent or unassessed (0)
+    hdr.innerHTML=
+      '<div style="display:flex;flex-direction:column;align-items:center;text-align:center;padding:6px 0 14px;">'
+      +'<div style="margin-bottom:10px;">'+avatarHtml(person,96)+'</div>'
+      +'<div style="'+BN+';font-size:34px;letter-spacing:2px;color:#fff;line-height:1;">'+esc(name)+'</div>'
+      +(pp.gradYear?'<div style="'+BN+';font-size:14px;letter-spacing:2px;color:'+GOLD+';margin-top:4px;">CLASS OF '+esc(pp.gradYear)+'</div>':'')
+      +(glance?'<div style="'+BODY+';font-size:13px;color:rgba(255,255,255,0.85);margin-top:8px;">'+esc(glance)+'</div>':'')
+      +(rating!=null?'<div style="'+BN+';font-size:13px;letter-spacing:2px;color:rgba(255,255,255,0.6);margin-top:6px;">CS RATING '+esc(rating)+'</div>':'')
+      +'</div>';
+  }
+
+  // Strict per-season team dual record from schedule (seasonId===S, NO null fallback) so a future
+  // unstamped straggler cannot leak into every season row. The career headline is the sum of these,
+  // keeping the headline and the per-season strip consistent.
+  function teamDualRec(S){
+    var g=(D.schedule||[]).filter(function(x){return x.seasonId===S && x.type!=='scrimmage' && x.scoreUs!=null && x.scoreUs!=='' && x.scoreThem!=null && x.scoreThem!=='';});
+    var w=0,l=0; g.forEach(function(x){ parseInt(x.scoreUs)>parseInt(x.scoreThem)?w++:l++; });
+    return {w:w,l:l};
+  }
+  var seasons=allSeasonIds();
+  var careerW=0,careerL=0; seasons.forEach(function(S){var r=teamDualRec(S); careerW+=r.w; careerL+=r.l;});
+  var careerTot=careerW+careerL;
+  var careerPct=careerTot?Math.round((careerW/careerTot)*100):0;
+
+  // ac-record LEADS: headline is career dual W-L and win percentage. Player set/skill detail is secondary text only.
+  var rec=document.getElementById('ac-record');
+  if(rec){
+    var cs=combinedStats(pid,{allSeasons:true}); // player career detail (secondary only)
+    var setsLine='Sets '+(cs.gdSets||0)+' · +/- '+((cs.totalDiff>=0?'+':'')+cs.totalDiff);
+    var queensLine=(cs.qGP>0)?('Queens '+cs.qWins+'-'+cs.qLosses):'';
+    var secondary=esc(setsLine)+(queensLine?' · '+esc(queensLine):'');
+    // Individual pair-match record from gamedays. combinedStats does not surface matchesWon/matchesLost, so read extStats directly.
+    var indStats=extStats(pid, D.gamedays||[], {allSeasons:true});
+    var indW=indStats.matchesWon||0, indL=indStats.matchesLost||0, hasInd=(indW+indL)>0;
+    var headLabel, headNum, headPct, subLine;
+    if(hasInd){
+      // Auto-promote: once real gameday data exists, the athlete's own pair-match record leads; the team dual record moves to a muted secondary line.
+      var indTot=indW+indL;
+      headLabel='CAREER MATCHES'; headNum=indW+'-'+indL; headPct=indTot?Math.round((indW/indTot)*100):0;
+      subLine='Team duals '+careerW+'-'+careerL;
+    } else {
+      // No individual data yet (today's live Leon state): keep the team-dual headline exactly as before, and show no 0-0 individual placeholder.
+      headLabel='CAREER DUALS'; headNum=careerW+'-'+careerL; headPct=careerPct;
+      subLine='';
+    }
+    rec.innerHTML=
+      '<div style="background:#ffffff;border-radius:14px;padding:18px 16px;margin-bottom:14px;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,0.15);">'
+      +'<div style="'+BN+';font-size:12px;letter-spacing:3px;color:'+RED+';margin-bottom:6px;">'+headLabel+'</div>'
+      +'<div style="'+BN+';font-size:52px;line-height:1;color:'+DARK+';">'+headNum+'</div>'
+      +'<div style="'+BN+';font-size:18px;letter-spacing:1px;color:'+GOLD+';margin-top:4px;">'+headPct+'% WIN</div>'
+      +(subLine?'<div style="'+BODY+';font-size:12px;color:#aaa;margin-top:8px;">'+esc(subLine)+'</div>':'')
+      +'<div style="'+BODY+';font-size:12px;color:#888;margin-top:'+(subLine?'4px':'10px')+';">'+secondary+'</div>'
+      +'</div>';
+  }
+
+  // ac-seasons: per-season strip. Team record strict via teamDualRec(S); player detail strict via combinedStats(pid,{season:S}).
+  var seasBox=document.getElementById('ac-seasons');
+  if(seasBox){
+    var rows=seasons.map(function(S){
+      var t=teamDualRec(S);
+      var pcs=combinedStats(pid,{season:S});
+      var detail=(pcs.qGP>0?('Q '+pcs.qWins+'-'+pcs.qLosses+'  '):'')+'Sets '+(pcs.gdSets||0);
+      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.15);">'
+        +'<div style="'+BN+';font-size:18px;letter-spacing:1px;color:#fff;">'+esc(S)+'</div>'
+        +'<div style="text-align:right;">'
+        +'<div style="'+BN+';font-size:18px;color:'+GOLD+';">'+t.w+'-'+t.l+' <span style="font-size:11px;color:rgba(255,255,255,0.6);">DUALS</span></div>'
+        +'<div style="'+BODY+';font-size:11px;color:rgba(255,255,255,0.7);">'+esc(detail)+'</div>'
+        +'</div></div>';
+    }).join('');
+    seasBox.innerHTML=
+      '<div style="'+BN+';font-size:13px;letter-spacing:2px;color:rgba(255,255,255,0.9);margin:4px 0 8px;">BY SEASON</div>'
+      +'<div style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:12px;overflow:hidden;margin-bottom:14px;">'+rows+'</div>';
+  }
+
+  // ac-athletic: read the same underlying data the modal athletic blocks use (identity height/reach,
+  // latest jumpTests block/approach, best star drill) and render fresh here. We do NOT call
+  // coachRenderVertHistory / coachRenderDrillHistory: those write into the cpm-* modal mounts.
+  var ath=document.getElementById('ac-athletic');
+  if(ath){
+    var verts=Object.values((profilesData&&(profilesData.jumpTests||profilesData.verticals))||{})
+      .filter(function(v){return v.playerId===pid||v.player===pid;}).sort(function(a,b){return (b.date||'').localeCompare(a.date||'');});
+    var latest=verts[0]||{};
+    var drills=Object.values((profilesData&&profilesData.starDrills)||{}).filter(function(d){return d.playerId===pid||d.player===pid;});
+    var bestDrill=drills.length?Math.min.apply(null,drills.map(function(d){return d.time;})):null;
+    var items=[];
+    if(pp.height)items.push(['Height',pp.height]);
+    if(pp.reach)items.push(['Standing Reach',pp.reach]);
+    var bj=latest.blockJump||latest.block||latest.blockJumpTouch||'';
+    var aj=latest.approachJump||latest.approach||latest.approachJumpTouch||'';
+    if(bj)items.push(['Block Jump',bj]);
+    if(aj)items.push(['Approach Jump',aj]);
+    if(bestDrill!=null)items.push(['Best Star Drill',bestDrill.toFixed(1)+'s']);
+    var rowsA=items.map(function(it){
+      return '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.12);">'
+        +'<span style="'+BODY+';font-size:13px;color:rgba(255,255,255,0.7);">'+esc(it[0])+'</span>'
+        +'<span style="'+BN+';font-size:17px;color:#fff;">'+esc(it[1])+'</span></div>';
+    }).join('');
+    // Parent-gated share affordance. Display-only stub: the button is disabled (not clickable) and writes nothing.
+    // athleteOptIn is intentionally NOT created or written here; it stays a future field for the parent-accounts step.
+    var shareHtml=
+      '<div style="opacity:0.55;margin-bottom:8px;">'
+      +'<button disabled style="width:100%;'+BN+';font-size:15px;letter-spacing:1.5px;padding:11px;border-radius:10px;border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.10);color:#fff;cursor:not-allowed;">MAKE PUBLIC</button>'
+      +'<div style="'+BODY+';font-size:11px;color:rgba(255,255,255,0.65);text-align:center;margin-top:6px;">Public sharing requires parent approval. Coming with parent accounts.</div>'
+      +'</div>';
+    ath.innerHTML=
+      '<div style="'+BN+';font-size:13px;letter-spacing:2px;color:rgba(255,255,255,0.9);margin:4px 0 8px;">ATHLETIC</div>'
+      +'<div style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:12px;padding:6px 14px;margin-bottom:14px;">'
+      +(rowsA||'<div style="'+BODY+';font-size:12px;color:rgba(255,255,255,0.6);text-align:center;padding:10px;">No measurements yet</div>')
+      +'</div>'
+      +shareHtml;
+  }
+}
+
 function renderFans(){
   var BN='font-family:"Bebas Neue",sans-serif';
   var WIN_C='#0a9e5c',LOSS_C='#e63946',RED=SC.colors.primary,DARK_RED=SC.colors.primaryDeeper,GOLD=SC.colors.gold||'#d4a843';
@@ -10747,6 +10915,8 @@ initFB();
 window.addEventListener('popstate',function(e){
   var ol=document.getElementById('school-fans-overlay');
   if(ol&&ol.style.display!=='none'){ol.style.display='none';if(typeof hideFans==='function')hideFans();}
+  var ao=document.getElementById('athlete-overlay');
+  if(ao&&ao.style.display!=='none'){if(typeof hideAthleteCard==='function')hideAthleteCard();else ao.style.display='none';}
 });
 setTimeout(runMigration,2000);
 setTimeout(function(){
