@@ -11,9 +11,9 @@ const LOGO_H = (SC && SC.logoHeight) ? SC.logoHeight : 64;
 // ============================================================
 const _DEMO = {
   players: [
-    {id:'sd01', firstName:'Suzie',  lastName:'Spiker',     classYear:'SR', court:1, jersey:1,  active:true, tier:'gold', leadership:'exec', gender:'F', csRank:1480},
+    {id:'sd01', firstName:'Suzie',  lastName:'Spiker',     classYear:'SR', court:1, jersey:1,  active:true, tier:'gold', leadership:'exec', gender:'F', csRank:1480, gradYear:2027, height:"5'11\"", reach:"7'8\"", hand:'R', side:'L', role:'split'},
     {id:'sd02', firstName:'Debby',  lastName:'Digger',     classYear:'SR', court:1, jersey:7,  active:true, tier:'gold', leadership:'faculty', gender:'F', csRank:1465},
-    {id:'sd03', firstName:'Bonnie', lastName:'Blocker',    classYear:'JR', court:2, jersey:12, active:true, tier:'gold', gender:'F', csRank:1440},
+    {id:'sd03', firstName:'Bonnie', lastName:'Blocker',    classYear:'JR', court:2, jersey:12, active:true, tier:'gold', gender:'F', csRank:1440, gradYear:2028, height:"6'0\"", reach:"7'10\"", hand:'R', side:'R', role:'block'},
     {id:'sd04', firstName:'Sammy',  lastName:'Setter',     classYear:'JR', court:2, jersey:3,  active:true, tier:'gold', gender:'M', csRank:1455},
     {id:'sd05', firstName:'Penny',  lastName:'Passer',     classYear:'JR', court:3, jersey:24, active:true, tier:'gold', gender:'F', csRank:1420},
     {id:'sd06', firstName:'Sandy',  lastName:'Server',     classYear:'SO', court:3, jersey:9,  active:true, tier:'gold', gender:'M', csRank:1410},
@@ -1340,6 +1340,13 @@ ${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar
         <input type="number" class="form-input" id="new-jersey" placeholder="Jersey #" min="0" max="99" style="max-width:110px;">
         <select class="form-select" id="new-class"><option value="FR">Freshman</option><option value="SO">Sophomore</option><option value="JR">Junior</option><option value="SR">Senior</option></select>
         <select class="form-select" id="new-court"><option value="1">Court 1</option><option value="2">Court 2</option><option value="3">Court 3</option><option value="4">Court 4</option><option value="5">Court 5</option><option value="6">Court 6 — Exhib</option><option value="7">Court 7 — Exhib</option><option value="8">Court 8 — Exhib</option></select></div>
+      <div class="form-row" style="margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+        <input type="number" class="form-input" id="new-gradyear" placeholder="Grad Year" min="2025" max="2035" style="max-width:130px;">
+        <input type="text" class="form-input" id="new-height" placeholder="Height e.g. 5'11&quot;" style="max-width:150px;">
+        <input type="text" class="form-input" id="new-reach" placeholder="Standing reach e.g. 7'8&quot;" style="max-width:190px;">
+        <select class="form-select" id="new-hand"><option value="">Hand</option><option value="R">Right</option><option value="L">Left</option></select>
+        <select class="form-select" id="new-side"><option value="">Side</option><option value="L">Left</option><option value="R">Right</option></select>
+        <select class="form-select" id="new-role"><option value="">Role</option><option value="block">Block</option><option value="defense">Defense</option><option value="split">Split</option></select></div>
       <button class="btn btn-secondary" id="add-player">Add Player</button></div>`}
   </div>
   ${SC.chatEnabled?'<div class="tab-content" id="tab-broadcast"></div>':''}
@@ -3293,8 +3300,8 @@ const _addP=document.getElementById('add-player'); if(_addP) _addP.addEventListe
   const f=document.getElementById('new-first').value.trim(),l=document.getElementById('new-last').value.trim();
   if(!f||!l){toast('Enter first and last name');return;}
   const jersey=document.getElementById('new-jersey').value;
-  const id=gi('p');fbSet('players/'+id,{id,firstName:f,lastName:l,classYear:document.getElementById('new-class').value,court:parseInt(document.getElementById('new-court').value),jersey:jersey?parseInt(jersey):null});
-  document.getElementById('new-first').value='';document.getElementById('new-last').value='';document.getElementById('new-jersey').value='';toast('Player added!');});
+  const id=gi('p');fbSet('players/'+id,{id,firstName:f,lastName:l,classYear:document.getElementById('new-class').value,court:parseInt(document.getElementById('new-court').value),jersey:jersey?parseInt(jersey):null,gradYear:parseInt(document.getElementById('new-gradyear').value)||null,height:document.getElementById('new-height').value.trim()||null,reach:document.getElementById('new-reach').value.trim()||null,hand:document.getElementById('new-hand').value||null,side:document.getElementById('new-side').value||null,role:document.getElementById('new-role').value||null});
+  document.getElementById('new-first').value='';document.getElementById('new-last').value='';document.getElementById('new-jersey').value='';document.getElementById('new-gradyear').value='';document.getElementById('new-height').value='';document.getElementById('new-reach').value='';document.getElementById('new-hand').value='';document.getElementById('new-side').value='';document.getElementById('new-role').value='';toast('Player added!');});
 
 // Data management
 document.getElementById('export-data').addEventListener('click',()=>{
