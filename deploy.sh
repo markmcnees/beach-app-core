@@ -83,6 +83,17 @@ while IFS= read -r -d '' file; do
   fi
 done < <(find . -name "index.html" -print0)
 
+# Cache-bust: bump the ?v= query on the served shells so browsers/CDN fetch the new
+# app.js immediately instead of aging out on the ~10-min GitHub Pages edge TTL.
+# Only rewrites shells that ALREADY carry a ?v= (the 4 served shells). Bare
+# src="/app.js" references (e.g. the onboard generator template) are left untouched.
+while IFS= read -r -d '' file; do
+  if grep -q 'src="/app\.js?v=' "$file"; then
+    sed -i -E "s|src=\"/app\.js\?v=[0-9]+\.[0-9]+\.[0-9]+\"|src=\"/app.js?v=${NEW_TAG#v}\"|g" "$file"
+    echo "  Cache-bust app.js -> ?v=${NEW_TAG#v} in: $file"
+  fi
+done < <(find . -name "index.html" -print0)
+
 # Stage only app.js plus any HTML files the sed-replace block touched.
 # Never use git add -A here; courtsense often has untracked notes files
 # in its working tree that should not be swept into a deploy commit.
