@@ -2154,14 +2154,16 @@ function initFB(){
   if(SC.demoMode){
     // DEMO MODE: hydrate D from _DEMO fixture, no Firebase touched.
     D.players     = JSON.parse(JSON.stringify(_DEMO.players));
-    D.duals       = JSON.parse(JSON.stringify(_DEMO.duals));
-    D.schedule    = JSON.parse(JSON.stringify(_DEMO.schedule));
+    // Demo result fixtures are the 2026 season; stamp so they pass the season filter (_activeSeason() returns '2026' in demo mode).
+    const _stampSeason=arr=>JSON.parse(JSON.stringify(arr)).map(r=>({...r,seasonId:r.seasonId||'2026'}));
+    D.duals       = _stampSeason(_DEMO.duals);
+    D.schedule    = _stampSeason(_DEMO.schedule);
     D.standings   = JSON.parse(JSON.stringify(_DEMO.standings));
     D.assignments = JSON.parse(JSON.stringify(_DEMO.assignments));
     D.opponents   = JSON.parse(JSON.stringify(_DEMO.opponents));
-    D.gamedays    = JSON.parse(JSON.stringify(_DEMO.gamedays));
-    D.scrimmages  = JSON.parse(JSON.stringify(_DEMO.scrimmages));
-    D.matches     = JSON.parse(JSON.stringify(_DEMO.matches));
+    D.gamedays    = _stampSeason(_DEMO.gamedays);
+    D.scrimmages  = _stampSeason(_DEMO.scrimmages);
+    D.matches     = _stampSeason(_DEMO.matches);
     D.tierRequests= {};
     // Layer 5a demo seed: a couple of starter messages across channels so switching shows content. Authored by existing demo player ids.
     D.chat        = {
@@ -2304,6 +2306,10 @@ function fbRemove(path){if(db)db.ref(DB_ROOT+'/'+path).remove();}
 // Result-create writer: stamps seasonId onto full-object result creates (matches/duals/gamedays/scrimmages/schedule).
 // Preserves an explicit seasonId if the object already carries one. fbSet stays generic for non-result writes.
 function fbSetResult(node,id,obj){fbSet(node+'/'+id,Object.assign({},obj,{seasonId:obj.seasonId||_currentSeasonId}));}
+// Active competitive season for read-side filtering. In demo mode the fixtures are the 2026 season regardless of wall-clock year.
+function _activeSeason(){ return SC.demoMode ? '2026' : _currentSeasonId; }
+// A result belongs to the active season if stamped with it. null-tolerant as belt-and-suspenders: live data is fully backfilled, so an unstamped record is only a straggler and should still show in the active season rather than vanish.
+function inSeason(r){ return !!r && (r.seasonId===_activeSeason() || r.seasonId==null); }
 
 // ============================================================
 // UTILS
@@ -2320,7 +2326,8 @@ function pmClass(v){return v>0?'pm-positive':v<0?'pm-negative':'pm-zero';}
 function pmStr(v){return(v>0?'+':'')+v;}
 
 // Queens stats (Leon vs Leon — each side gets their own score)
-function queensStats(pid,matches){
+function queensStats(pid,matches,opts){
+  if(!opts||!opts.allSeasons) matches=(matches||[]).filter(inSeason);
   let w=0,l=0,pf=0,pa=0;
   matches.forEach(m=>{
     const t1=(m.team1||[]).includes(pid),t2=(m.team2||[]).includes(pid);
@@ -2332,7 +2339,8 @@ function queensStats(pid,matches){
 }
 
 // External match stats (game day or scrimmage — both partners share score)
-function extStats(pid,matchList){
+function extStats(pid,matchList,opts){
+  if(!opts||!opts.allSeasons) matchList=(matchList||[]).filter(inSeason);
   let setsW=0,setsL=0,pf=0,pa=0,k=0,b=0,a=0,se=0,re=0,he=0,de=0,totalSets=0,matchesPlayed=0,matchesWon=0,matchesLost=0;
   matchList.forEach(m=>{
     if(!(m.pair||[]).includes(pid))return;
@@ -2387,24 +2395,26 @@ function renderDash(){
   const _drEl=document.getElementById('dash-dual-rec');if(_drEl)_drEl.textContent=_dr.w+'-'+_dr.l;
   const _crEl=document.getElementById('dash-courts-rec');if(_crEl)_crEl.textContent=_dr.cw+'-'+_dr.cl;
   const _srEl=document.getElementById('dash-sets-rec');if(_srEl)_srEl.textContent=_dr.sw+'-'+_dr.sl;
-  const totalQM=D.matches.length;
+  // Season-scoped result views for the dashboard summary.
+  const _sMatches=D.matches.filter(inSeason), _sGamedays=D.gamedays.filter(inSeason), _sScrimmages=D.scrimmages.filter(inSeason);
+  const totalQM=_sMatches.length;
 
   // Game Day sets
   let gdSW=0,gdSL=0,gdPF=0,gdPA=0,gdDays=new Set(),gdMatches=0;
-  D.gamedays.forEach(m=>{gdDays.add(m.date);gdMatches++;
+  _sGamedays.forEach(m=>{gdDays.add(m.date);gdMatches++;
     (m.sets||[]).forEach(s=>{const su=s.scoreUs||0,st=s.scoreThem||0;gdPF+=su;gdPA+=st;su>st?gdSW++:gdSL++;});
   });
   const _gdRecEl=document.getElementById('dash-gd-rec');if(_gdRecEl)_gdRecEl.textContent=gdSW+'-'+gdSL;
 
   // Scrimmage sets
   let scSW=0,scSL=0;
-  D.scrimmages.forEach(m=>{(m.sets||[]).forEach(s=>{(s.scoreUs||0)>(s.scoreThem||0)?scSW++:scSL++;});});
+  _sScrimmages.forEach(m=>{(m.sets||[]).forEach(s=>{(s.scoreUs||0)>(s.scoreThem||0)?scSW++:scSL++;});});
 
   // Total match days
   const allDates=new Set();
-  D.matches.forEach(m=>allDates.add(m.date));
-  D.gamedays.forEach(m=>allDates.add(m.date));
-  D.scrimmages.forEach(m=>allDates.add(m.date));
+  _sMatches.forEach(m=>allDates.add(m.date));
+  _sGamedays.forEach(m=>allDates.add(m.date));
+  _sScrimmages.forEach(m=>allDates.add(m.date));
 
   // (gd-overview/table/top-performers removed — elements not in HTML)
     // Season Schedule
@@ -2417,7 +2427,7 @@ function renderDash(){
 }
 
 function renderSchedule(){
-  const games=[...D.schedule].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  const games=[...D.schedule.filter(inSeason)].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
   if(!games.length){document.getElementById('dash-schedule').innerHTML='<div style="color:var(--gray);font-size:13px;text-align:center;padding:12px;">No schedule data yet.</div>';return;}
   const today=td();
   let wins=0,losses=0;
@@ -2485,7 +2495,7 @@ function normTeam(name){
 }
 function renderStandings(){
   // Leon's record from schedule
-  const games=[...D.schedule];
+  const games=[...D.schedule.filter(inSeason)];
   let leonW=0,leonL=0;
   const oppFromSchedule={}; // auto-compute opponent records vs Leon
   games.forEach(g=>{
@@ -3818,7 +3828,7 @@ function renderPlayerPortal(){
 }
 
 function renderPlayerSchedule(){
-  const games=[...D.schedule].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  const games=[...D.schedule.filter(inSeason)].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
   if(!games.length){document.getElementById('pp-schedule').innerHTML='<div style="color:var(--gray);font-size:13px;text-align:center;padding:12px;">No schedule yet.</div>';return;}
   const today=td();
   let h='';
@@ -3842,7 +3852,7 @@ function renderPlayerSchedule(){
 }
 
 function renderPlayerStandings(){
-  const games=[...D.schedule];
+  const games=[...D.schedule.filter(inSeason)];
   let leonW=0,leonL=0;
   const oppFromSchedule={};
   games.forEach(g=>{
@@ -4718,7 +4728,7 @@ function buildTeamDataForPairings(){
   // Add pair history from Queens
   data+='\nPAIR HISTORY (Queens matches — who paired together and their combined record):\n';
   const pairHist={};
-  D.matches.forEach(m=>{
+  D.matches.filter(inSeason).forEach(m=>{
     const t1=(m.team1||[]).sort().join('+'),t2=(m.team2||[]).sort().join('+');
     [t1,t2].forEach((key,i)=>{
       if(!pairHist[key])pairHist[key]={w:0,l:0,diff:0};
@@ -4735,7 +4745,7 @@ function buildTeamDataForPairings(){
   });
   // Add Game Day pair history
   data+='\nGAME DAY PAIR HISTORY:\n';
-  D.gamedays.forEach(m=>{
+  D.gamedays.filter(inSeason).forEach(m=>{
     if(!m.pair||m.pair.length<2)return;
     const names=m.pair.map(id=>{const p=gP(id);return p?p.firstName+' '+p.lastName.charAt(0)+'.':id;}).join(' & ');
     const sets=m.sets||[];let sw=0,sl=0;
@@ -4908,6 +4918,12 @@ document.getElementById('export-excel').addEventListener('click',exportExcel);
 function exportExcel(){
   if(typeof XLSX==='undefined'){toast('XLSX library not loaded');return;}
   const wb=XLSX.utils.book_new();
+  // Export scope: default is all seasons (all data). OK = current season only.
+  const _xAllSeasons = !confirm('Export the current season only?\n\nOK = current season\nCancel = all seasons (all data)');
+  const _xM = _xAllSeasons ? D.matches : D.matches.filter(inSeason);
+  const _xG = _xAllSeasons ? D.gamedays : D.gamedays.filter(inSeason);
+  const _xS = _xAllSeasons ? D.scrimmages : D.scrimmages.filter(inSeason);
+  const _xOpts = {allSeasons:_xAllSeasons};
 
   // Sheet 1: Roster (comprehensive — all available data per player)
   const allDrillsX=Object.values(profilesData?.starDrills||{});
@@ -4915,9 +4931,9 @@ function exportExcel(){
   const rosterData=D.players.map(p=>{
     const pp=profilesData?.players?.[p.id]||{};
     const sk=profilesData?.skills?.[p.id]||{};
-    const qs=queensStats(p.id,D.matches);
-    const gs=extStats(p.id,D.gamedays);
-    const ss=extStats(p.id,D.scrimmages);
+    const qs=queensStats(p.id,_xM,_xOpts);
+    const gs=extStats(p.id,_xG,_xOpts);
+    const ss=extStats(p.id,_xS,_xOpts);
     // Best star drill
     const myDrills=allDrillsX.filter(d=>(d.playerId===p.id||d.player===p.id));
     const bestDrill=myDrills.length?Math.min(...myDrills.map(d=>d.time)):'';
@@ -4949,7 +4965,7 @@ function exportExcel(){
   XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rosterData),'Roster');
 
   // Sheet 2: Queens Matches
-  const qData=D.matches.map(m=>{
+  const qData=_xM.map(m=>{
     const t1=(m.team1||[]).map(id=>{const p=gP(id);return p?p.firstName+' '+p.lastName:id;}).join(' & ');
     const t2=(m.team2||[]).map(id=>{const p=gP(id);return p?p.firstName+' '+p.lastName:id;}).join(' & ');
     return{Date:m.date,Court:m.court,'Team A':t1,'Team B':t2,'Score A':m.score1,'Score B':m.score2,Winner:m.score1>m.score2?'Team A':'Team B'};
@@ -4957,14 +4973,14 @@ function exportExcel(){
   XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(qData),'Queens Matches');
 
   // Sheet 3: Queens Player Stats
-  const qStats=D.players.map(p=>{const s=queensStats(p.id,D.matches);
+  const qStats=D.players.map(p=>{const s=queensStats(p.id,_xM,_xOpts);
     return{Player:p.firstName+' '+p.lastName,Court:p.court,Class:p.classYear,W:s.wins,L:s.losses,'Win%':s.gp>0?Math.round(s.pct)+'%':'','+/-':s.diff,GP:s.gp};
   }).filter(r=>r.GP>0).sort((a,b)=>b['+/-']-a['+/-']);
   XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(qStats),'Queens Stats');
 
   // Sheet 4: Game Day Matches
   const gdData=[];
-  D.gamedays.forEach(m=>{
+  _xG.forEach(m=>{
     const pair=(m.pair||[]).map(id=>{const p=gP(id);return p?p.firstName+' '+p.lastName:id;}).join(' & ');
     (m.sets||[]).forEach((s,i)=>{
       const row={Date:m.date,Court:m.court,Pair:pair,Opponent:m.opponent||'',Set:i+1,Leon:s.scoreUs,Opp:s.scoreThem,
@@ -4977,14 +4993,14 @@ function exportExcel(){
   XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(gdData),'Game Day');
 
   // Sheet 5: Game Day Player Stats
-  const gdStats=D.players.map(p=>{const s=extStats(p.id,D.gamedays);
+  const gdStats=D.players.map(p=>{const s=extStats(p.id,_xG,_xOpts);
     return{Player:p.firstName+' '+p.lastName,Court:p.court,Sets:s.sets,'Sets W':s.setsWon,'Sets L':s.setsLost,'+/-':s.diff,K:s.k,B:s.b,A:s.a,D:s.d,E:s.e};
   }).filter(r=>r.Sets>0).sort((a,b)=>b['+/-']-a['+/-']);
   XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(gdStats),'GD Player Stats');
 
   // Sheet 6: Scrimmage Matches
   const scData=[];
-  D.scrimmages.forEach(m=>{
+  _xS.forEach(m=>{
     const pair=(m.pair||[]).map(id=>{const p=gP(id);return p?p.firstName+' '+p.lastName:id;}).join(' & ');
     (m.sets||[]).forEach((s,i)=>{
       scData.push({Date:m.date,Court:m.court,Pair:pair,Opponent:m.opponent||'',Set:i+1,Leon:s.scoreUs,Opp:s.scoreThem,Result:(s.scoreUs||0)>(s.scoreThem||0)?'W':'L'});
@@ -8857,19 +8873,21 @@ function pgdSaveNotes(){
 // ============================================================
 function getDualRecord(){
   let w=0,l=0;
+  // Season-scoped views of the result nodes (active season only).
+  const sched=(D.schedule||[]).filter(inSeason), duals=(D.duals||[]).filter(inSeason), gds=(D.gamedays||[]).filter(inSeason);
   // Dual W-L: from schedule (dual-level wins)
-  (D.schedule||[]).forEach(g=>{if(g.type==='scrimmage')return;if(g.scoreUs!=null&&g.scoreThem!=null&&g.scoreUs!==''&&g.scoreThem!==''){parseInt(g.scoreUs)>parseInt(g.scoreThem)?w++:l++;}});
+  sched.forEach(g=>{if(g.type==='scrimmage')return;if(g.scoreUs!=null&&g.scoreThem!=null&&g.scoreUs!==''&&g.scoreThem!==''){parseInt(g.scoreUs)>parseInt(g.scoreThem)?w++:l++;}});
   // Also count from D.duals that have no matching schedule entry with scores
-  (D.duals||[]).forEach(d=>{
+  duals.forEach(d=>{
     if(d.leonCourts==null&&d.oppCourts==null)return;
-    const hasSchedEntry=(D.schedule||[]).some(g=>g.type!=='scrimmage'&&g.date===d.date&&(g.opponent||'').toLowerCase()===(d.opponent||'').toLowerCase()&&g.scoreUs!=null&&g.scoreUs!=='');
+    const hasSchedEntry=sched.some(g=>g.type!=='scrimmage'&&g.date===d.date&&(g.opponent||'').toLowerCase()===(d.opponent||'').toLowerCase()&&g.scoreUs!=null&&g.scoreUs!=='');
     if(!hasSchedEntry){d.dualWin?w++:l++;}
   });
 
   // Match W-L (court-level): sum scoreUs/scoreThem from schedule
   // Schedule stores court scores per dual (e.g. 4-1 means Leon won 4 courts)
   let cw=0,cl=0;
-  (D.schedule||[]).forEach(g=>{
+  sched.forEach(g=>{
     if(g.scoreUs!=null&&g.scoreThem!=null&&g.scoreUs!==''&&g.scoreThem!==''){
       cw+=parseInt(g.scoreUs)||0;
       cl+=parseInt(g.scoreThem)||0;
@@ -8878,14 +8896,14 @@ function getDualRecord(){
 
   // Sets W-L: from gameday individual set records (most accurate source)
   let sw=0,sl=0;
-  (D.gamedays||[]).forEach(m=>{
+  gds.forEach(m=>{
     if(m.isExhibition||(m.court||0)>=6)return;
     (m.sets||[]).forEach(s=>{
       (s.scoreUs||0)>(s.scoreThem||0)?sw++:sl++;
     });
   });
   // Also count from structured duals if present
-  (D.duals||[]).forEach(d=>{(d.courts||[]).filter(c=>!c.isExhibition).forEach(c=>{
+  duals.forEach(d=>{(d.courts||[]).filter(c=>!c.isExhibition).forEach(c=>{
     (c.sets||[]).forEach(s=>{(s.scoreUs||0)>(s.scoreThem||0)?sw++:sl++;});
   });});
 
@@ -8896,7 +8914,7 @@ function getDualRecord(){
 function buildDualsFromGamedays(){
   // Schedule lookup: date → game
   const schedByDate={};
-  D.schedule.forEach(g=>{if(g.date)schedByDate[g.date]=g;});
+  D.schedule.filter(inSeason).forEach(g=>{if(g.date)schedByDate[g.date]=g;});
 
   // First pass: strip court suffixes from opponent names
   function cleanOpp(raw){
@@ -8909,7 +8927,7 @@ function buildDualsFromGamedays(){
 
   // Group gamedays by date + cleaned opponent
   const groups={};
-  D.gamedays.forEach(m=>{
+  D.gamedays.filter(inSeason).forEach(m=>{
     let oppBase=cleanOpp(m.opponent);
     const sched=schedByDate[m.date];
     if(isGenericName(oppBase)&&sched){oppBase=sched.opponent||'Unknown';}
@@ -10266,7 +10284,7 @@ function renderFans(){
     return {jersey:p.jersey||'',name:p.firstName+' '+p.lastName,cls:p.classYear||''};
   });
 
-  var allSched=(D.schedule||[]).slice().sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
+  var allSched=(D.schedule||[]).filter(inSeason).sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
   var schedPast=allSched.filter(function(g){return g.type!=='scrimmage'&&g.scoreUs!=null&&g.scoreUs!==''&&g.scoreThem!=null&&g.scoreThem!=='';});
   var schedUpcoming=allSched.filter(function(g){return (g.scoreUs==null||g.scoreUs==='')&&g.date>=today;});
   var schedToday=allSched.find(function(g){return g.date===today;});
@@ -10277,7 +10295,7 @@ function renderFans(){
   if(recEl)recEl.textContent=dW+'-'+dL;
 
   var gdByDate={};
-  (D.gamedays||[]).forEach(function(m){if(!gdByDate[m.date])gdByDate[m.date]={};gdByDate[m.date][m.court]=m;});
+  (D.gamedays||[]).filter(inSeason).forEach(function(m){if(!gdByDate[m.date])gdByDate[m.date]={};gdByDate[m.date][m.court]=m;});
 
   var PAST=schedPast.map(function(g){
     var gd=gdByDate[g.date]||{},courts=[];
@@ -10353,7 +10371,7 @@ function renderFans(){
   if(hasActivity){
     if(tc)tc.style.display='block';
     if(tcc){
-      var schedT=(D.schedule||[]).find(function(g){return g.date===today;});
+      var schedT=(D.schedule||[]).filter(inSeason).find(function(g){return g.date===today;});
       var oppName2=schedT?schedT.opponent:(todayAssign.opponent||'Today\'s Dual');
       var courts2=[];
       (todayAssign.courts||[]).sort(function(a,b){return (a.court||0)-(b.court||0);}).forEach(function(c,idx){
