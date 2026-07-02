@@ -1732,6 +1732,10 @@ ${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar
     <div id="ac-record"></div>
     <div id="ac-seasons"></div>
     <div id="ac-athletic"></div>
+    <div id="ac-academics"></div>
+    <div id="ac-club"></div>
+    <div id="ac-highlights"></div>
+    <div id="ac-share"></div>
   </div>
 </div>
 ${SC.demoMode ? `
@@ -10439,20 +10443,60 @@ function renderAthleteCard(pid){
         +'<span style="'+BODY+';font-size:13px;color:rgba(255,255,255,0.7);">'+esc(it[0])+'</span>'
         +'<span style="'+BN+';font-size:17px;color:#fff;">'+esc(it[1])+'</span></div>';
     }).join('');
-    // Parent-gated share affordance. Display-only stub: the button is disabled (not clickable) and writes nothing.
-    // athleteOptIn is intentionally NOT created or written here; it stays a future field for the parent-accounts step.
-    var shareHtml=
-      '<div style="opacity:0.55;margin-bottom:8px;">'
-      +'<button disabled style="width:100%;'+BN+';font-size:15px;letter-spacing:1.5px;padding:11px;border-radius:10px;border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.10);color:#fff;cursor:not-allowed;">MAKE PUBLIC</button>'
-      +'<div style="'+BODY+';font-size:11px;color:rgba(255,255,255,0.65);text-align:center;margin-top:6px;">Public sharing requires parent approval. Coming with parent accounts.</div>'
-      +'</div>';
     ath.innerHTML=
       '<div style="'+BN+';font-size:13px;letter-spacing:2px;color:rgba(255,255,255,0.9);margin:4px 0 8px;">ATHLETIC</div>'
       +'<div style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:12px;padding:6px 14px;margin-bottom:14px;">'
       +(rowsA||'<div style="'+BODY+';font-size:12px;color:rgba(255,255,255,0.6);text-align:center;padding:10px;">No measurements yet</div>')
-      +'</div>'
-      +shareHtml;
+      +'</div>';
   }
+
+  // College-profile preview sections: field LABELS AND STRUCTURE ONLY, clearly marked COMING SOON.
+  // No fabricated data anywhere: every value cell is a neutral dash. Display-only, no Firebase writes, no new profile fields.
+  var csBadge='<span style="'+BN+';font-size:10px;letter-spacing:1px;color:'+GOLD+';padding:2px 8px;border:1px solid '+GOLD+';border-radius:10px;margin-left:8px;">COMING SOON</span>';
+  function csRow(label){
+    return '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.12);">'
+      +'<span style="'+BODY+';font-size:13px;color:rgba(255,255,255,0.7);">'+esc(label)+'</span>'
+      +'<span style="'+BN+';font-size:17px;color:rgba(255,255,255,0.4);">-</span></div>';
+  }
+  function csSection(title, bodyHtml, helper){
+    return '<div style="opacity:0.55;margin-bottom:14px;">'
+      +'<div style="display:flex;align-items:center;margin:4px 0 8px;"><span style="'+BN+';font-size:13px;letter-spacing:2px;color:rgba(255,255,255,0.9);">'+title+'</span>'+csBadge+'</div>'
+      +'<div style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:12px;padding:6px 14px;">'+bodyHtml+'</div>'
+      +'<div style="'+BODY+';font-size:11px;color:rgba(255,255,255,0.65);margin-top:6px;">'+esc(helper)+'</div>'
+      +'</div>';
+  }
+
+  var acad=document.getElementById('ac-academics');
+  if(acad){
+    acad.innerHTML=csSection('ACADEMICS',
+      csRow('GPA')+csRow('SAT')+csRow('ACT')+csRow('Intended Major'),
+      'Academics are coming with the full athlete profile, shared once a parent approves it.');
+  }
+
+  var club=document.getElementById('ac-club');
+  if(club){
+    club.innerHTML=csSection('CLUB & TOURNAMENTS',
+      csRow('Club Team')+csRow('Years Club Experience')+csRow('National Tournament Results (USAV / AAU / AVP)'),
+      'Club history and tournament results are coming with the full athlete profile, shared once a parent approves it.');
+  }
+
+  var hi=document.getElementById('ac-highlights');
+  if(hi){
+    var hiBody='<div style="'+BODY+';font-size:13px;color:rgba(255,255,255,0.6);text-align:center;padding:14px;">Highlight reel and match photos will live here.</div>';
+    hi.innerHTML=csSection('HIGHLIGHT VIDEO & PHOTOS', hiBody,
+      'Video and photo highlights are coming with the full athlete profile, shared once a parent approves it.');
+  }
+
+  // MAKE PUBLIC renders LAST, into its own mount below every section. Definition and use are adjacent so a future
+  // edit to the ATHLETIC section cannot break this. Display-only stub: disabled button, no Firebase write.
+  // athleteOptIn is intentionally NOT created or written here; it stays a future field for the parent-accounts step.
+  var shareHtml=
+    '<div style="opacity:0.55;margin-bottom:8px;">'
+    +'<button disabled style="width:100%;'+BN+';font-size:15px;letter-spacing:1.5px;padding:11px;border-radius:10px;border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.10);color:#fff;cursor:not-allowed;">MAKE PUBLIC</button>'
+    +'<div style="'+BODY+';font-size:11px;color:rgba(255,255,255,0.65);text-align:center;margin-top:6px;">Public sharing requires parent approval. Coming with parent accounts.</div>'
+    +'</div>';
+  var share=document.getElementById('ac-share');
+  if(share)share.innerHTML=shareHtml;
 }
 
 function renderFans(){
