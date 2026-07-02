@@ -2141,6 +2141,8 @@ const DEF_M=[
 ];
 
 let D={players:[],matches:[],planned:[],gamedays:[],scrimmages:[],schedule:[],standings:{},goals:{},assignments:{},duals:[],opponents:{},liveScoring:{},quizScores:{},tierRequests:{}};
+// Active competitive season. Config leaf at DB_ROOT/config/currentSeasonId; defaults to the current year, overwritten by the init read below if a stored value exists. Result creates are stamped with this via fbSetResult.
+let _currentSeasonId=(new Date()).getFullYear().toString();
 let profilesData={}; // from leon_queens node for AI context
 let pgdNotes={}; // player self-notes per date: pgdNotes[pid][date]
 let _autoLoginDone=false;
@@ -2198,6 +2200,7 @@ function initFB(){
 function setSS(on){const d=document.getElementById('sync-dot');d.className='sync-dot '+(on?'online':'offline');d.title=on?'Connected':'Offline';}
 function listenData(){if(!db)return;
   db.ref(DB_ROOT+'/config/coachPin').once('value',function(snap){if(snap.val())window._coachPin=snap.val();});
+  db.ref(DB_ROOT+'/config/currentSeasonId').once('value',function(snap){if(snap.val())_currentSeasonId=snap.val();});
   db.ref(SC.dbRoots.profiles+'/quizScores').on('value',snap=>{D.quizScores=snap.val()||{};if(currentRole==='player')renderPlayerPortal();});
   db.ref(DB_ROOT).on('value',snap=>{
     const val=snap.val();
@@ -2298,6 +2301,9 @@ function seedDB(){if(!db || !SC.allowAutoSeed)return;
 }
 function fbSet(path,val){if(db)db.ref(DB_ROOT+'/'+path).set(val);}
 function fbRemove(path){if(db)db.ref(DB_ROOT+'/'+path).remove();}
+// Result-create writer: stamps seasonId onto full-object result creates (matches/duals/gamedays/scrimmages/schedule).
+// Preserves an explicit seasonId if the object already carries one. fbSet stays generic for non-result writes.
+function fbSetResult(node,id,obj){fbSet(node+'/'+id,Object.assign({},obj,{seasonId:obj.seasonId||_currentSeasonId}));}
 
 // ============================================================
 // UTILS
@@ -2461,7 +2467,7 @@ function addScheduleGame(){
   const id=gi('sch');
   const entry={id,date,opponent:opp,location:loc,time:time||null};
   if(us!==''&&them!==''){entry.scoreUs=parseInt(us);entry.scoreThem=parseInt(them);}
-  fbSet('schedule/'+id,entry);
+  fbSetResult('schedule',id,entry);
   toast('Game added!');
   document.getElementById('sched-opp').value='';document.getElementById('sched-us').value='';
   document.getElementById('sched-them').value='';document.getElementById('sched-time').value='';
@@ -2864,7 +2870,7 @@ function saveQueensEdit(){
   if(!date){toast('Select a date');return;}if(!a1||!a2||!b1||!b2){toast('Select all 4 players');return;}
   if(new Set([a1,a2,b1,b2]).size<4){toast('Players must be unique');return;}
   if(isNaN(s1)||isNaN(s2)){toast('Enter both scores');return;}if(s1===s2){toast('Scores cannot be tied');return;}
-  fbSet('matches/'+editQId,{id:editQId,date,court,team1:[a1,a2],team2:[b1,b2],score1:s1,score2:s2});
+  fbSetResult('matches',editQId,{id:editQId,date,court,team1:[a1,a2],team2:[b1,b2],score1:s1,score2:s2});
   closeEdit();toast('Match updated!');
 }
 function closeEdit(){editQId=null;document.getElementById('edit-modal').classList.remove('active');}
@@ -3269,7 +3275,7 @@ const _elsave_queens=document.getElementById('save-queens');if(_elsave_queens)_e
     if(s2a1&&s2a2&&s2b1&&s2b2)matchData.splitPairs={set1:[a1,a2,b1,b2],set2:[s2a1,s2a2,s2b1,s2b2]};
     matchData.isExhibition=true;
   }
-  fbSet('matches/'+matchData.id,matchData);
+  fbSetResult('matches',matchData.id,matchData);
   toast(isSplit?'Split exhibition match saved!':'Queens match saved!');
   document.getElementById('q-sa').value='';document.getElementById('q-sb').value='';
   ['q-a1','q-a2','q-b1','q-b2','q-s2a1','q-s2a2','q-s2b1','q-s2b2'].forEach(x=>{const el=document.getElementById(x);if(el)el.value='';});
@@ -3306,7 +3312,7 @@ const _elsave_sc_match=document.getElementById('save-sc-match');if(_elsave_sc_ma
   const opp=document.getElementById('sc-opp').value.trim();
   if(!date){toast('Select a date');return;}if(!p1||!p2){toast('Select both players');return;}
   if(p1===p2){toast('Select two different players');return;}if(!opp){toast('Enter opponent name');return;}
-  const id=gi('sc');fbSet('scrimmages/'+id,{id,date,court,pair:[p1,p2],opponent:opp,sets:[]});
+  const id=gi('sc');fbSetResult('scrimmages',id,{id,date,court,pair:[p1,p2],opponent:opp,sets:[]});
   toast('Scrimmage match created!');document.getElementById('sc-opp').value='';
   document.getElementById('sc-p1').value='';document.getElementById('sc-p2').value='';
   document.getElementById('sc-filter-date').value=date;
@@ -5613,7 +5619,7 @@ function confirmScan(){
       const team2=[t2a,t2b].filter(Boolean);
       if(team1.length<2||team2.length<2){toast('Match '+(i+1)+': select all 4 players');return;}
       const id=gi('q');
-      fbSet('matches/'+id,{id,date,court,team1,team2,score1:s1,score2:s2});
+      fbSetResult('matches',id,{id,date,court,team1,team2,score1:s1,score2:s2});
     }
   }else{
     const node=matchType==='gameday'?'gamedays':'scrimmages';
@@ -5636,7 +5642,7 @@ function confirmScan(){
         sets.push({scoreUs,scoreThem,stats});
       }
       const id=gi(matchType==='gameday'?'gd':'sc');
-      fbSet(node+'/'+id,{id,date,court,pair,opponent:opp,sets});
+      fbSetResult(node,id,{id,date,court,pair,opponent:opp,sets});
     }
   }
   toast(count+' match(es) saved!');
@@ -6543,7 +6549,7 @@ function closeDual(){
   const existing=D.duals.find(d=>d.date===date&&(d.opponent||'').toLowerCase()===opponent.toLowerCase());
   const id=existing?existing.id:dualId;
 
-  fbSet('duals/'+id,{id,date,opponent,location:loc,leonCourts,oppCourts,dualWin,createdAt:existing?existing.createdAt:td()});
+  fbSetResult('duals',id,{id,date,opponent,location:loc,leonCourts,oppCourts,dualWin,createdAt:existing?existing.createdAt:td()});
   const _normOpp=s=>(s||'').toLowerCase().replace(/^[@\s]+/,'').replace(/[^a-z0-9]/g,'');
   const _oppNorm=_normOpp(opponent);
   let schedMatch=(D.schedule||[]).find(g=>g.date===date&&_normOpp(g.opponent)===_oppNorm);
@@ -6853,7 +6859,7 @@ function saveLiveSet(idx,p1,p2,date,court,subCourt,existingId,opponent,fbNode){
     fbSet(node+'/'+existingId+'/sets',sets);
   }else{
     const id=gi(idPrefix);
-    fbSet(node+'/'+id,{id,date,court:parseInt(court),pair,opponent:opp,sets:[newSet]});
+    fbSetResult(node,id,{id,date,court:parseInt(court),pair,opponent:opp,sets:[newSet]});
   }
   toast((us>them?'\u2713 Win':'\u2717 Loss')+' — '+us+'-'+them+' saved');
   // Immediately zero scores so user sees 0-0 right away (no need to hit minus)
@@ -7138,7 +7144,7 @@ function saveQueensLiveSet(idx,p1,p2,date,court){
   const stats={};
   pair.forEach(pid=>{stats[pid]=statsOpen&&window._lseStats&&window._lseStats[idx]&&window._lseStats[idx][pid]?{...window._lseStats[idx][pid]}:{k:0,b:0,a:0,se:0,re:0,he:0,de:0};});
   const id=gi('qm');
-  fbSet('matches/'+id,{id,date,court:parseInt(court),team1:[p1,p2].filter(Boolean),team2:[op1,op2].filter(Boolean),score1:sa,score2:sb,stats});
+  fbSetResult('matches',id,{id,date,court:parseInt(court),team1:[p1,p2].filter(Boolean),team2:[op1,op2].filter(Boolean),score1:sa,score2:sb,stats});
   toast((sa>sb?'✓ Win':'✗ Loss')+' saved — '+sa+'–'+sb);
   if(db)db.ref(DB_ROOT+'/live_scoring/'+idx).remove();
   setTimeout(()=>refreshSingleQueensCard(idx,date),600);
@@ -7165,7 +7171,7 @@ function generateMatchesFromLineup(assignId){
     const courtLabel=c.court+(c.subCourt?c.subCourt:'');
     const opp=(a.opponent?a.opponent:'Opponent')+' CT'+courtLabel;
     const id=gi(aType==='scrimmage'?'sc':'gd');
-    fbSet(node+'/'+id,{id,date:a.date,court:parseInt(c.court),pair,opponent:opp,sets:[]});
+    fbSetResult(node,id,{id,date:a.date,court:parseInt(c.court),pair,opponent:opp,sets:[]});
     created++;
   });
   toast(created>0?'Created '+created+' match record'+(created>1?'s':'')+'! Load them in Live Score Entry.':'All matches already exist for this lineup.');
@@ -8654,7 +8660,7 @@ function pgdSubmitSet(prefix,pairStr){
     const courtNum=courtEntry?courtEntry.court:(gP(pair[0])?.court||1);
     const opp=(assignment?.opponent||'Opponent')+' CT'+courtNum;
     const id=gi('gd');
-    fbSet('gamedays/'+id,{id,date:matchDate,court:courtNum,pair,opponent:opp,sets:[newSet]});
+    fbSetResult('gamedays',id,{id,date:matchDate,court:courtNum,pair,opponent:opp,sets:[newSet]});
     if(prefix==='own')pgdCurrentMatchId=id;
   }
 
@@ -9327,13 +9333,13 @@ function confirmDualSave(){
         if(!already){
           const mid=gi('gd');
           const matchSets=sets.map(s=>{const stats={};pair.forEach(pid=>{stats[pid]={k:0,b:0,a:0,se:0,re:0,he:0,de:0};});return{...s,stats};});
-          fbSet('gamedays/'+mid,{id:mid,date,court,pair,opponent:opponent+' CT'+court,sets:matchSets,isExhibition});
+          fbSetResult('gamedays',mid,{id:mid,date,court,pair,opponent:opponent+' CT'+court,sets:matchSets,isExhibition});
           matchesCreated++;
         }
       }
     });
     const dualId=gi('dual');
-    fbSet('duals/'+dualId,{id:dualId,date,opponent,location,leonCourts,oppCourts,dualWin:leonCourts>oppCourts,courts,createdAt:td()});
+    fbSetResult('duals',dualId,{id:dualId,date,opponent,location,leonCourts,oppCourts,dualWin:leonCourts>oppCourts,courts,createdAt:td()});
     dualsSaved++;
     // Auto-update schedule result if date+opponent match
     const schedMatch=D.schedule.find(g=>g.date===date&&(g.opponent||'').toLowerCase().includes(opponent.toLowerCase().split(' ')[0]));
@@ -9464,7 +9470,7 @@ function dhSaveNewPair(date,opponent){
   if(!court||!p1||!p2){toast('Court and both players required');return;}
   if(p1===p2){toast('Players must be different');return;}
   const id='gd_'+Date.now();
-  fbSet('gamedays/'+id,{id,date,court,pair:[p1,p2],opponent,isExhibition:exhib,sets:[],addedByCoach:true,createdAt:td()});
+  fbSetResult('gamedays',id,{id,date,court,pair:[p1,p2],opponent,isExhibition:exhib,sets:[],addedByCoach:true,createdAt:td()});
   toast('Pair added!');
   closeEdit();
 }
@@ -9823,7 +9829,7 @@ function ppSaveLiveSet(idx,p1,p2,date,court,existingId,opponent,fbNode,statsPref
     fbSet(node+'/'+existingId+'/sets',sets);
   }else{
     const id=gi('gd');
-    fbSet(node+'/'+id,{id,date,court:parseInt(court),pair,opponent:opp,sets:[newSet]});
+    fbSetResult(node,id,{id,date,court:parseInt(court),pair,opponent:opp,sets:[newSet]});
   }
   toast((us>them?'✓ Win':'✗ Loss')+' — '+us+'-'+them+' saved · Court '+court);
   pair.forEach(pid=>{delete pgdStats[pid];});
@@ -10597,7 +10603,7 @@ function scScanSave(count,date){
     }
     if(!sets.length)continue;
     const id=gi('sc');
-    fbSet('scrimmages/'+id,{id,date,court,pair:[p1,p2],opponent:opp,sets});
+    fbSetResult('scrimmages',id,{id,date,court,pair:[p1,p2],opponent:opp,sets});
     saved++;
   }
   toast('Saved '+saved+' scrimmage match'+(saved===1?'':'es')+'!');
@@ -10696,7 +10702,7 @@ function qsScanSave(count,date){
     const s2=parseInt(document.getElementById('qs-scan-s2-'+i)?.value)||0;
     if(s1===s2)continue;
     const id=gi('qm');
-    fbSet('matches/'+id,{id,date,court,team1:[a1,a2],team2:[b1,b2],score1:s1,score2:s2});
+    fbSetResult('matches',id,{id,date,court,team1:[a1,a2],team2:[b1,b2],score1:s1,score2:s2});
     saved++;
   }
   toast('Saved '+saved+' Queens match'+(saved===1?'':'es')+'!');
