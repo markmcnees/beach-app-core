@@ -1596,6 +1596,19 @@ ${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar
     </div>
     <div style="padding:16px 20px;display:flex;flex-direction:column;gap:20px;">
       <div style="border-top:1px solid var(--gray-lighter);padding-top:16px;"><div style="font-family:'Bebas Neue';font-size:16px;letter-spacing:1px;color:var(--gray);margin-bottom:8px;">📊 Team Rankings</div><div id="cpm-rankings"></div></div>
+      <div id="cpm-identity" style="border-top:1px solid var(--gray-lighter);padding-top:16px;">
+        <div style="font-family:'Bebas Neue';font-size:16px;letter-spacing:1px;color:var(--gray);margin-bottom:8px;">🪪 Player Identity</div>
+        <div id="cpm-id-summary" style="font-size:12px;color:var(--gray);margin-bottom:8px;"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+          <input type="text" id="cpm-id-height" class="form-input" placeholder="Height e.g. 5'11&quot;" style="flex:1;min-width:120px;padding:8px;font-size:13px;">
+          <input type="text" id="cpm-id-reach" class="form-input" placeholder="Standing reach e.g. 7'8&quot;" style="flex:1;min-width:150px;padding:8px;font-size:13px;">
+          <input type="number" id="cpm-id-gradyear" class="form-input" placeholder="Grad Year" min="2025" max="2035" style="flex:1;min-width:110px;padding:8px;font-size:13px;">
+          <select id="cpm-id-position" class="form-select" style="flex:1;min-width:110px;padding:8px;font-size:13px;"><option value="">Position</option><option value="block">Block</option><option value="defense">Defense</option><option value="split">Split</option></select>
+          <select id="cpm-id-side" class="form-select" style="flex:1;min-width:100px;padding:8px;font-size:13px;"><option value="">Side</option><option value="L">Left</option><option value="R">Right</option></select>
+          <select id="cpm-id-hand" class="form-select" style="flex:1;min-width:100px;padding:8px;font-size:13px;"><option value="">Hand</option><option value="R">Right</option><option value="L">Left</option></select>
+        </div>
+        <button class="btn btn-red btn-small" style="width:100%;" onclick="coachSaveIdentity()">Save Identity</button>
+      </div>
       <div>
         <div style="font-family:'Bebas Neue';font-size:16px;letter-spacing:1px;color:var(--gray);margin-bottom:8px;">⭐ Skills (1–10)</div>
         <div id="cpm-skills"></div>
@@ -1614,7 +1627,6 @@ ${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar
         <div style="font-family:'Bebas Neue';font-size:16px;letter-spacing:1px;color:var(--gray);margin-bottom:8px;">📏 Verticals</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
           <input type="date" id="cpm-vert-date" class="form-input" style="flex:1;min-width:120px;padding:8px;font-size:13px;">
-          <input type="text" id="cpm-vert-sr" class="form-input" placeholder="Standing Reach" style="flex:1;min-width:120px;padding:8px;font-size:13px;">
           <input type="text" id="cpm-vert-bj" class="form-input" placeholder="Block Jump" style="flex:1;min-width:120px;padding:8px;font-size:13px;">
           <input type="text" id="cpm-vert-aj" class="form-input" placeholder="Approach Jump" style="flex:1;min-width:120px;padding:8px;font-size:13px;">
         </div>
@@ -4232,6 +4244,27 @@ function coachOpenPlayer(pid){
   if(drillDateEl)drillDateEl.value=t;
   if(vertDateEl)vertDateEl.value=t;
   if(noteDateEl)noteDateEl.value=t;
+  // Prefill the identity card from the durable profiles record (empty when unset).
+  const _idp=profilesData?.players?.[pid]||{};
+  const _setIdV=(elId,val)=>{const el=document.getElementById(elId);if(el)el.value=(val==null?'':val);};
+  _setIdV('cpm-id-height',_idp.height);
+  _setIdV('cpm-id-reach',_idp.reach);
+  _setIdV('cpm-id-gradyear',_idp.gradYear);
+  _setIdV('cpm-id-position',_idp.position);
+  _setIdV('cpm-id-side',_idp.preferredSide);
+  _setIdV('cpm-id-hand',_idp.dominantHand);
+  // Read-only glance line summarizing the durable identity record.
+  const _idSum=document.getElementById('cpm-id-summary');
+  if(_idSum){
+    const _cap=s=>s?s.charAt(0).toUpperCase()+s.slice(1):s;
+    const _sideL={L:'Left',R:'Right'},_handL={R:'Right',L:'Left'};
+    const _pieces=[];
+    if(_idp.position)_pieces.push('Position: '+_cap(_idp.position));
+    if(_idp.preferredSide)_pieces.push('Side: '+(_sideL[_idp.preferredSide]||_idp.preferredSide));
+    if(_idp.dominantHand)_pieces.push('Hand: '+(_handL[_idp.dominantHand]||_idp.dominantHand));
+    if(_idp.gradYear)_pieces.push('Class of '+_idp.gradYear);
+    _idSum.textContent=_pieces.length?_pieces.join('  ·  '):'No identity details set yet';
+  }
   // Render existing data
   coachRenderDrillHistory(pid);
   coachRenderVertHistory(pid);
@@ -4255,6 +4288,23 @@ function coachSaveSkills(){
   SKILL_KEYS.forEach(k=>{skills[k]=parseInt(document.getElementById('cpm-skill-'+k)?.value)||0;});
   db.ref(SC.dbRoots.profiles+'/skills/'+pid).set(skills);
   toast('Skills saved!');
+}
+
+function coachSaveIdentity(){
+  const overlay=document.getElementById('coach-player-overlay');
+  const pid=overlay?.dataset.pid;if(!pid)return;
+  const gv=elId=>document.getElementById(elId)?.value.trim()||null;
+  // Merge-write to profiles/players so skills/notes/jumpTests under this player are never clobbered.
+  if(db)db.ref(SC.dbRoots.profiles+'/players/'+pid).update({
+    height:gv('cpm-id-height'),
+    reach:gv('cpm-id-reach'),
+    gradYear:parseInt(document.getElementById('cpm-id-gradyear')?.value)||null,
+    position:document.getElementById('cpm-id-position')?.value||null,
+    preferredSide:document.getElementById('cpm-id-side')?.value||null,
+    dominantHand:document.getElementById('cpm-id-hand')?.value||null
+  });
+  toast('Identity saved');
+  setTimeout(()=>renderPlayerProfileData(pid),600);
 }
 
 function coachAddDrill(){
@@ -4285,13 +4335,13 @@ function coachAddVertical(){
   const overlay=document.getElementById('coach-player-overlay');
   const pid=overlay?.dataset.pid;if(!pid)return;
   const date=document.getElementById('cpm-vert-date')?.value;
-  const sr=document.getElementById('cpm-vert-sr')?.value.trim();
   const bj=document.getElementById('cpm-vert-bj')?.value.trim();
   const aj=document.getElementById('cpm-vert-aj')?.value.trim();
-  if(!date||(! sr&&!bj&&!aj)){toast('Enter date and at least one measurement');return;}
+  if(!date||(!bj&&!aj)){toast('Enter date and at least one measurement');return;}
   const id='jt-'+pid+'-'+Date.now();
-  db.ref(SC.dbRoots.profiles+'/jumpTests/'+id).set({id,playerId:pid,player:pid,date,standingReach:sr||null,blockJump:bj||null,approachJump:aj||null});
-  ['cpm-vert-sr','cpm-vert-bj','cpm-vert-aj'].forEach(i=>{const el=document.getElementById(i);if(el)el.value='';});
+  // Standing reach is now a durable identity field (profiles/players), not a per-test value.
+  db.ref(SC.dbRoots.profiles+'/jumpTests/'+id).set({id,playerId:pid,player:pid,date,blockJump:bj||null,approachJump:aj||null});
+  ['cpm-vert-bj','cpm-vert-aj'].forEach(i=>{const el=document.getElementById(i);if(el)el.value='';});
   toast('Vertical added!');
   setTimeout(()=>coachRenderVertHistory(pid),600);
 }
@@ -4300,31 +4350,29 @@ function coachRenderVertHistory(pid){
   const el=document.getElementById('cpm-vert-history');if(!el)return;
   const pp=profilesData?.players?.[pid]||{};
   const verts=Object.values(profilesData?.jumpTests||profilesData?.verticals||{}).filter(v=>v.playerId===pid||v.player===pid).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const row=(lbl,val)=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(0,0,0,0.06);font-size:13px;"><span style="color:var(--gray);font-weight:600;">${lbl}</span><span style="font-weight:700;">${val}</span></div>`;
   let h='';
-  // Show height from player profile
-  if(pp.height){
-    h+=`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(0,0,0,0.06);font-size:13px;"><span style="color:var(--gray);font-weight:600;">Height</span><span style="font-weight:700;">${pp.height}</span></div>`;
-  }
+  // Height and standing reach are durable identity fields (profiles/players), not per-test values.
+  if(pp.height)h+=row('Height',pp.height);
+  if(pp.reach)h+=row('Standing Reach',pp.reach);
   if(verts.length){
     const v=verts[0];
-    const sr=v.standingReach||v.reach||'';
     const bj=v.blockJump||v.block||v.blockJumpTouch||'';
     const aj=v.approachJump||v.approach||v.approachJumpTouch||'';
-    if(sr)h+=`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(0,0,0,0.06);font-size:13px;"><span style="color:var(--gray);font-weight:600;">Standing Reach</span><span style="font-weight:700;">${sr}</span></div>`;
-    if(bj)h+=`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(0,0,0,0.06);font-size:13px;"><span style="color:var(--gray);font-weight:600;">Block Jump</span><span style="font-weight:700;">${bj}</span></div>`;
-    if(aj)h+=`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(0,0,0,0.06);font-size:13px;"><span style="color:var(--gray);font-weight:600;">Approach Jump</span><span style="font-weight:700;">${aj}</span></div>`;
+    if(bj)h+=row('Block Jump',bj);
+    if(aj)h+=row('Approach Jump',aj);
     h+=`<div style="font-size:11px;color:var(--gray);margin-top:4px;">Measured ${fD(v.date)}${verts.length>1?' · '+verts.length+' measurements on record':''}</div>`;
     if(verts.length>1){
       h+='<details style="margin-top:8px;"><summary style="font-size:11px;color:var(--gray);cursor:pointer;">Show all measurements</summary>';
+      // Existing records keep their historical standing-reach so past measurements stay readable.
       h+=verts.map(v=>`<div style="padding:4px 0;border-bottom:1px solid rgba(0,0,0,0.04);font-size:12px;">
         <div style="color:var(--gray);font-weight:600;">${fD(v.date)}</div>
         <div style="display:flex;gap:12px;flex-wrap:wrap;">${v.standingReach?`<span>Reach: <strong>${v.standingReach}</strong></span>`:''}${v.blockJump?`<span>Block: <strong>${v.blockJump}</strong></span>`:''}${v.approachJump?`<span>App: <strong>${v.approachJump}</strong></span>`:''}</div>
       </div>`).join('');
       h+='</details>';
     }
-  }else if(!pp.height){
-    h='<div style="color:var(--gray);font-size:12px;text-align:center;padding:8px;">No measurements yet</div>';
   }
+  if(!h)h='<div style="color:var(--gray);font-size:12px;text-align:center;padding:8px;">No measurements yet</div>';
   el.innerHTML=h;
 }
 
