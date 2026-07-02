@@ -11,9 +11,9 @@ const LOGO_H = (SC && SC.logoHeight) ? SC.logoHeight : 64;
 // ============================================================
 const _DEMO = {
   players: [
-    {id:'sd01', firstName:'Suzie',  lastName:'Spiker',     classYear:'SR', court:1, jersey:1,  active:true, tier:'gold', leadership:'exec', gender:'F', csRank:1480, gradYear:2027, height:"5'11\"", reach:"7'8\"", hand:'R', side:'L', role:'split'},
+    {id:'sd01', firstName:'Suzie',  lastName:'Spiker',     classYear:'SR', court:1, jersey:1,  active:true, tier:'gold', leadership:'exec', gender:'F', csRank:1480},
     {id:'sd02', firstName:'Debby',  lastName:'Digger',     classYear:'SR', court:1, jersey:7,  active:true, tier:'gold', leadership:'faculty', gender:'F', csRank:1465},
-    {id:'sd03', firstName:'Bonnie', lastName:'Blocker',    classYear:'JR', court:2, jersey:12, active:true, tier:'gold', gender:'F', csRank:1440, gradYear:2028, height:"6'0\"", reach:"7'10\"", hand:'R', side:'R', role:'block'},
+    {id:'sd03', firstName:'Bonnie', lastName:'Blocker',    classYear:'JR', court:2, jersey:12, active:true, tier:'gold', gender:'F', csRank:1440},
     {id:'sd04', firstName:'Sammy',  lastName:'Setter',     classYear:'JR', court:2, jersey:3,  active:true, tier:'gold', gender:'M', csRank:1455},
     {id:'sd05', firstName:'Penny',  lastName:'Passer',     classYear:'JR', court:3, jersey:24, active:true, tier:'gold', gender:'F', csRank:1420},
     {id:'sd06', firstName:'Sandy',  lastName:'Server',     classYear:'SO', court:3, jersey:9,  active:true, tier:'gold', gender:'M', csRank:1410},
@@ -2160,7 +2160,12 @@ function initFB(){
     profilesData  = {
       skills:     JSON.parse(JSON.stringify(_DEMO.skills)),
       jumpTests:  JSON.parse(JSON.stringify(_DEMO.jumpTests)),
-      starDrills: JSON.parse(JSON.stringify(_DEMO.starDrills))
+      starDrills: JSON.parse(JSON.stringify(_DEMO.starDrills)),
+      // Recruiting identity fields for the demo, on the profiles node so the profile modal (pp = profilesData.players[pid]) resolves.
+      players: {
+        sd01: { height: "5'11\"", reach: "7'8\"",  gradYear: 2027, position: "split", preferredSide: "L", dominantHand: "R" },
+        sd03: { height: "6'0\"",  reach: "7'10\"", gradYear: 2028, position: "block", preferredSide: "R", dominantHand: "R" }
+      }
     };
     // Demo-only: shift the first assignment and the live-scoring entry to today's
     // date (td(), the same YYYY-MM-DD the renderFans "today" gate compares against)
@@ -3300,7 +3305,10 @@ const _addP=document.getElementById('add-player'); if(_addP) _addP.addEventListe
   const f=document.getElementById('new-first').value.trim(),l=document.getElementById('new-last').value.trim();
   if(!f||!l){toast('Enter first and last name');return;}
   const jersey=document.getElementById('new-jersey').value;
-  const id=gi('p');fbSet('players/'+id,{id,firstName:f,lastName:l,classYear:document.getElementById('new-class').value,court:parseInt(document.getElementById('new-court').value),jersey:jersey?parseInt(jersey):null,gradYear:parseInt(document.getElementById('new-gradyear').value)||null,height:document.getElementById('new-height').value.trim()||null,reach:document.getElementById('new-reach').value.trim()||null,hand:document.getElementById('new-hand').value||null,side:document.getElementById('new-side').value||null,role:document.getElementById('new-role').value||null});
+  const id=gi('p');fbSet('players/'+id,{id,firstName:f,lastName:l,classYear:document.getElementById('new-class').value,court:parseInt(document.getElementById('new-court').value),jersey:jersey?parseInt(jersey):null});
+  // Recruiting identity fields live on the profiles node (existing model: pp.height/position/preferredSide/dominantHand),
+  // written with merge semantics so skills/notes/jumpTests under this player are never clobbered. gradYear/reach are new keys.
+  if(db)db.ref(SC.dbRoots.profiles+'/players/'+id).update({height:document.getElementById('new-height').value.trim()||null,reach:document.getElementById('new-reach').value.trim()||null,gradYear:parseInt(document.getElementById('new-gradyear').value)||null,position:document.getElementById('new-role').value||null,preferredSide:document.getElementById('new-side').value||null,dominantHand:document.getElementById('new-hand').value||null});
   document.getElementById('new-first').value='';document.getElementById('new-last').value='';document.getElementById('new-jersey').value='';document.getElementById('new-gradyear').value='';document.getElementById('new-height').value='';document.getElementById('new-reach').value='';document.getElementById('new-hand').value='';document.getElementById('new-side').value='';document.getElementById('new-role').value='';toast('Player added!');});
 
 // Data management
