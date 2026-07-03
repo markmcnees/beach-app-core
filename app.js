@@ -522,6 +522,8 @@ body{font-family:'Barlow',sans-serif;background:var(--cream);color:var(--black);
 .mode-bar{display:flex;gap:8px;padding:8px 12px 0;border-bottom:1px solid rgba(255,255,255,0.15);margin-bottom:4px;}
 .mode-btn{flex:1;padding:9px 12px;font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:1.5px;border:none;border-radius:8px 8px 0 0;cursor:pointer;transition:all 0.2s;color:rgba(255,255,255,0.55);background:transparent;white-space:nowrap;min-width:0;}
 .mode-btn.active{background:rgba(255,255,255,0.18);color:#fff;}
+/* HS five-button nav only: shrink font, tracking, and side padding so all five labels fit a phone width without overflowing into the next tab. Club two-button nav is unaffected. */
+.mode-bar-hs .mode-btn{font-size:12px;letter-spacing:0.5px;padding:9px 6px;}
 .sub-tabs{display:flex;padding:6px 12px 6px;gap:6px;}
 .sub-tabs .tab{flex:1;padding:9px 8px;font-size:13px;letter-spacing:1px;border-radius:8px;text-align:center;}
 .tab.active{background:rgba(255,255,255,0.2);color:var(--white);}.tab:hover{color:var(--white);}
@@ -975,7 +977,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
     </div>
   </div>
   <div class="tabs" id="tabs">
-    <div class="mode-bar" id="mode-bar">
+    <div class="mode-bar${SC.tiersEnabled?'':' mode-bar-hs'}" id="mode-bar">
       ${SC.tiersEnabled?`
       <button class="mode-btn active" id="mode-manage" onclick="switchMode('manage')">⚙️ Manage</button>
       <button class="mode-btn" id="mode-gameday" onclick="switchMode('gameday')">🏐 Logistics</button>
