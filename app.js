@@ -121,6 +121,13 @@ const _DEMO = {
         {court:4, p1:'sd07', p2:'sd08'},
         {court:5, p1:'sd09', p2:'sd10'}
       ],
+      scorers:{
+        "1":{primary:'sd11',secondary:'sd12'},
+        "2":{primary:'sd13',secondary:null},
+        "3":{primary:'sd14',secondary:'sd15'},
+        "4":{primary:'sd16',secondary:null},
+        "5":{primary:'sd11',secondary:'sd13'}
+      },
       notes:null, createdAt:'2026-05-09'
     },
     asg02: {
@@ -133,6 +140,13 @@ const _DEMO = {
         {court:4, p1:'sd07', p2:'sd08'},
         {court:5, p1:'sd09', p2:'sd10'}
       ],
+      scorers:{
+        "1":{primary:'sd13',secondary:'sd14'},
+        "2":{primary:'sd15',secondary:null},
+        "3":{primary:'sd16',secondary:'sd11'},
+        "4":{primary:'sd12',secondary:null},
+        "5":{primary:'sd14',secondary:'sd16'}
+      },
       notes:null, createdAt:'2026-05-09'
     },
     asg03: {
@@ -145,6 +159,13 @@ const _DEMO = {
         {court:4, p1:'sd07', p2:'sd08'},
         {court:5, p1:'sd09', p2:'sd10'}
       ],
+      scorers:{
+        "1":{primary:'sd15',secondary:'sd16'},
+        "2":{primary:'sd11',secondary:null},
+        "3":{primary:'sd12',secondary:'sd13'},
+        "4":{primary:'sd14',secondary:null},
+        "5":{primary:'sd16',secondary:'sd12'}
+      },
       notes:null, createdAt:'2026-05-09'
     }
   },
