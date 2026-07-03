@@ -2249,6 +2249,8 @@ function initFB(){
     // the _DEMO source literals stay static.
     var _t = td();
     if(D.assignments && D.assignments.asg01) D.assignments.asg01.date = _t;
+    if(D.assignments && D.assignments.asg02) D.assignments.asg02.date = _t;
+    if(D.assignments && D.assignments.asg03) D.assignments.asg03.date = _t;
     if(D.liveScoring && D.liveScoring['0']) D.liveScoring['0'].date = _t;
     setSS(true);
     refreshCurrent();
