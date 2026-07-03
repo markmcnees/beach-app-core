@@ -968,8 +968,11 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       <button class="mode-btn active" id="mode-manage" onclick="switchMode('manage')">⚙️ Manage</button>
       <button class="mode-btn" id="mode-gameday" onclick="switchMode('gameday')">🏐 Logistics</button>
       `:`
-      <button class="mode-btn active" id="mode-gameday" onclick="switchMode('gameday')">🏐 Game Day</button>
-      <button class="mode-btn" id="mode-manage" onclick="switchMode('manage')">⚙️ Manage</button>
+      <button class="mode-btn" onclick="hsGo('roster',this)">Roster</button>
+      <button class="mode-btn" onclick="hsGo('practice',this)">Practice</button>
+      <button class="mode-btn" onclick="hsGo('communicate',this)">Communicate</button>
+      <button class="mode-btn active" onclick="hsGo('gameday',this)">Game Day</button>
+      <button class="mode-btn" onclick="hsGo('stats',this)">Stats</button>
       `}
     </div>
     <div class="sub-tabs" id="sub-tabs-gameday"${SC.tiersEnabled?' style="display:none;"':''}>
@@ -998,8 +1001,6 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       <button class="tab" data-tab="players">Players</button>
       <button class="tab" data-tab="goals">Goals</button>
       <button class="tab" data-tab="scouts">Scouts</button>
-      <button class="tab" data-tab="settings">Roster</button>
-      ${SC.chatEnabled?'<button class="tab" data-tab="broadcast">Broadcast</button>':''}
       `}
     </div>
   </div>
@@ -1349,6 +1350,33 @@ ${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar
         <select class="form-select" id="new-role"><option value="">Role</option><option value="block">Block</option><option value="defense">Defense</option><option value="split">Split</option></select></div>
       <button class="btn btn-secondary" id="add-player">Add Player</button></div>`}
   </div>
+  ${SC.tiersEnabled?'':'<div class="tab-content" id="tab-practice"></div>'}
+  ${SC.tiersEnabled?'':`<div class="tab-content" id="tab-communicate">
+    <div class="card">
+      <div class="card-title"><span class="bar"></span> 💬 Communicate</div>
+      <p style="font-size:13px;color:var(--charcoal);line-height:1.7;margin-bottom:14px;">Here is how your team stays in the loop. Everything below is built to keep players and families informed without adding noise.</p>
+      <div style="font-family:'Bebas Neue';font-size:14px;letter-spacing:1px;color:var(--charcoal);margin-bottom:8px;">Available now</div>
+      <div style="border:1px solid var(--gray-lighter);border-radius:10px;padding:12px 14px;margin-bottom:10px;">
+        <div style="font-size:13px;font-weight:700;color:var(--charcoal);margin-bottom:4px;">Coach Notes</div>
+        <p style="font-size:12px;color:var(--gray);line-height:1.6;margin:0;">Private coach-to-player notes, kept by date. You write them in the Planner today, and each player is notified when a new note is posted for them.</p>
+      </div>
+      <div style="border:1px solid var(--gray-lighter);border-radius:10px;padding:12px 14px;margin-bottom:16px;">
+        <div style="font-size:13px;font-weight:700;color:var(--charcoal);margin-bottom:4px;">Player notifications</div>
+        <p style="font-size:12px;color:var(--gray);line-height:1.6;margin:0 0 6px;">Players get an email when something that matters to them happens, and they choose which ones to receive in their own notification preferences.</p>
+        <ul style="font-size:12px;color:var(--gray);line-height:1.6;margin:0;padding-left:18px;">
+          <li>Court assignments and lineup updates</li>
+          <li>Training plan approved by coach</li>
+          <li>New coach notes for them</li>
+          <li>Game results posted</li>
+        </ul>
+      </div>
+      <div style="font-family:'Bebas Neue';font-size:14px;letter-spacing:1px;color:var(--gray);margin-bottom:8px;">Coming with parent accounts</div>
+      <div style="opacity:0.7;border:1px dashed var(--gray-lighter);border-radius:10px;padding:12px 14px;background:var(--off-white,#faf8f9);">
+        <div style="font-size:13px;font-weight:700;color:var(--charcoal);margin-bottom:4px;">Two-way team chat with parent visibility</div>
+        <p style="font-size:12px;color:var(--gray);line-height:1.6;margin:0;">A team message space that parents can see is on the way this fall, built on top of parent accounts so families are looped in from the start. We are getting the parent side right first.</p>
+      </div>
+    </div>
+  </div>`}
   ${SC.chatEnabled?'<div class="tab-content" id="tab-broadcast"></div>':''}
   ${SC.tiersEnabled?'<div class="tab-content" id="tab-teamanalysis"></div>':''}
   ${SC.tiersEnabled?'<div class="tab-content" id="tab-practicegroups"></div>':''}
@@ -3225,6 +3253,7 @@ function refreshTab(id){
     case'settings':renderRoster();break;
     case'broadcast':renderExecBroadcast();break;
     case'teamanalysis':renderTeamAnalysis();break;
+    case'practice':renderTeamAnalysis();break;
     case'practicegroups':renderPracticeGroups();break;
     case'recruiting':renderRecruiting();break;
     case'accounting':renderAccounting();break;
@@ -3257,6 +3286,33 @@ function switchMode(mode){
     const t=mgBar.querySelector('.tab.active')||mgBar.querySelector('.tab');
     if(t)t.click();
   }
+}
+
+// HS-only flat five-destination nav. Additive and guarded on !SC.tiersEnabled so the club keeps switchMode
+// untouched. Reuses the existing .tab click handler and refreshTab: for Game Day and Stats it reveals a
+// secondary .tab row (sub-tabs-gameday, and sub-tabs-manage repurposed as the Stats row in HS) and clicks its
+// first tab, the same pattern switchMode uses; the three single-pane destinations activate their pane directly.
+// A single active .tab is kept across both secondary rows so refreshCurrent (which reads the first .tab.active)
+// always matches the visible pane. No changes to the shared switching machinery.
+function hsGo(dest, btn){
+  if(SC.tiersEnabled) return;
+  document.querySelectorAll('#mode-bar .mode-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  const gd=document.getElementById('sub-tabs-gameday'); // Game Day secondary row
+  const st=document.getElementById('sub-tabs-manage');  // Stats secondary row in HS
+  if(gd) gd.style.display='none';
+  if(st) st.style.display='none';
+  document.querySelectorAll('#sub-tabs-gameday .tab, #sub-tabs-manage .tab').forEach(x=>x.classList.remove('active'));
+  if(dest==='gameday' || dest==='stats'){
+    const row = dest==='gameday' ? gd : st;
+    if(row){ row.style.display='flex'; const t=row.querySelector('.tab'); if(t) t.click(); }
+    return;
+  }
+  // Single-pane destinations: activate the pane exactly the way the .tab click handler does.
+  const key = dest==='roster' ? 'settings' : dest;
+  document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('active'));
+  const tc=document.getElementById('tab-'+key); if(tc) tc.classList.add('active');
+  refreshTab(key);
 }
 
 // ============================================================
@@ -7760,7 +7816,8 @@ function renderBuilder(){
 function analyzeTierSkills(tier){
   const SKILL_KEYS=['serving','passing','setting','hitting','blocking','defense','courtSense','communication'];
   const SKILL_LABELS={serving:'Serving',passing:'Passing',setting:'Setting',hitting:'Hitting',blocking:'Blocking',defense:'Defense',courtSense:'Court Sense',communication:'Communication'};
-  const players=D.players.filter(p=>(p.tier||'unassigned')===tier);
+  // 'all' is the HS whole-roster sentinel: no tier filter. The club still passes 'gold'/'garnet', so its per-tier counts are unchanged.
+  const players=tier==='all'?D.players.filter(p=>p.id):D.players.filter(p=>(p.tier||'unassigned')===tier);
   const perSkill=SKILL_KEYS.map(k=>{
     let sum=0,n=0;
     players.forEach(p=>{
@@ -8389,14 +8446,17 @@ function renderTravel(){
 }
 
 function renderTeamAnalysis(){
-  const pane=document.getElementById('tab-teamanalysis');
+  // Club renders into tab-teamanalysis; HS renders the same analysis into the Practice destination mount.
+  const pane=document.getElementById(SC.tiersEnabled?'tab-teamanalysis':'tab-practice');
   if(!pane)return;
   const tierLabel=t=>t==='gold'?'Gold':'Garnet';
-  const picker=`<div style="display:flex;gap:8px;margin-bottom:12px;" id="ta-tier-toggle">`+
+  // HS (no tiers) analyzes the whole roster with no Gold/Garnet picker and a neutral team label; the club path is unchanged.
+  const teamHead=SC.tiersEnabled?(tierLabel(analysisTier)+' team'):(SC.displayName||SC.schoolName||'Your team');
+  const picker=SC.tiersEnabled?(`<div style="display:flex;gap:8px;margin-bottom:12px;" id="ta-tier-toggle">`+
     [['gold','Gold'],['garnet','Garnet']].map(([v,lbl])=>
       `<button class="filter-btn${analysisTier===v?' active':''}" onclick="setAnalysisTier('${v}')" style="flex:1;text-align:center;">${lbl}</button>`).join('')+
-    `</div>`;
-  const a=analyzeTierSkills(analysisTier);
+    `</div>`):'';
+  const a=analyzeTierSkills(SC.tiersEnabled?analysisTier:'all');
   let body;
   if(!tierDataSufficient(a)){
     body=`<p style="color:var(--gray);font-size:13px;padding:10px 0;line-height:1.5;">Not enough assessment data yet to analyze this team. Complete more skill assessments first.</p>`;
@@ -8412,7 +8472,7 @@ function renderTeamAnalysis(){
         <span>${s.avg.toFixed(1)} <span style="color:var(--gray);font-weight:400;">(${s.assessedCount} assessed)</span></span>
       </div>`;
     }).join('');
-    body=`<div style="font-size:12px;color:var(--gray);margin-bottom:8px;">${tierLabel(analysisTier)} team: ${a.playerCount} player${a.playerCount===1?'':'s'}, skill averages weakest first (assessed scores only).</div>
+    body=`<div style="font-size:12px;color:var(--gray);margin-bottom:8px;">${teamHead}: ${a.playerCount} player${a.playerCount===1?'':'s'}, skill averages weakest first (assessed scores only).</div>
       <div style="margin-bottom:12px;">${rows}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn btn-primary btn-small" style="flex:1;min-width:160px;" onclick="generatePracticePlan()">Generate Practice Plan</button>
@@ -8433,9 +8493,10 @@ function renderTeamAnalysis(){
 // Demo + live, mirroring generateAIPlan. Ephemeral: result is held in
 // analysisPlanText and rendered into #ta-plan-output, never written to Firebase.
 async function generatePracticePlan(){
-  const a=analyzeTierSkills(analysisTier);
+  const a=analyzeTierSkills(SC.tiersEnabled?analysisTier:'all');
   if(!tierDataSufficient(a))return;
-  const tierLabel=analysisTier==='gold'?'Gold':'Garnet';
+  // Club labels the plan by tier; HS uses the neutral school/team name so the AI prompt and canned plan read naturally.
+  const tierLabel=SC.tiersEnabled?(analysisTier==='gold'?'Gold':'Garnet'):(SC.displayName||SC.schoolName||'this');
   const ranked=[...a.assessedSkills].sort((x,y)=>x.avg-y.avg);
   const weak=ranked.slice(0,Math.min(3,ranked.length));
   const weakLabels=weak.map(s=>s.label);
