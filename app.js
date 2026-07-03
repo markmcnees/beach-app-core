@@ -9965,8 +9965,9 @@ function renderPlayerLiveScoring(){
       });
       h+='</div>';
     }
-    // New set entry
-    h+=`<div style="background:var(--off-white);border-radius:8px;padding:10px;">
+    // New set entry, gated by best-of-3 completion (mirrors coach side): stop offering sets at 2 wins.
+    if(sw<2&&sl<2){
+      h+=`<div style="background:var(--off-white);border-radius:8px;padding:10px;">
       <div style="font-size:11px;font-weight:700;color:var(--gray);margin-bottom:10px;letter-spacing:1px;">SET ${sets.length+1}</div>
       <span id="pp-setnum-${idx}" style="display:none;">${sets.length+1}</span>
       <div class="live-score-row">
@@ -9997,6 +9998,12 @@ function renderPlayerLiveScoring(){
       </div>
       <button class="btn btn-blue btn-small" style="width:100%;margin-top:8px;" onclick="ppSaveLiveSet(${idx},'${c.p1||''}','${c.p2||''}','${today}',${c.court},'${matchId||''}','${assignment.opponent||''}','${fbNode}','pp-st-${idx}')">✓ Save Set — Court ${c.court}</button>
     </div></div>`;
+    }else{
+      h+=`<div style="background:var(--off-white);border-radius:8px;padding:10px;margin-top:4px;text-align:center;">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:1px;color:${sw>sl?'var(--green)':'var(--loss-red)'};">MATCH COMPLETE</div>
+        <div style="font-size:12px;color:var(--gray);margin-top:4px;">${sw>sl?(partnerLabel||'Our pair'):(assignment.opponent||'Opponent')} won ${Math.max(sw,sl)}-${Math.min(sw,sl)}</div>
+      </div></div>`;
+    }
   });
   container.innerHTML=h;
   applyLiveScoringToCounters();
@@ -10033,7 +10040,9 @@ function ppLoadCourts(assignmentId){
         <div style="text-align:right;">${sets.length?`<div style="font-family:'Bebas Neue';font-size:18px;color:${sw>sl?'var(--green)':'var(--loss-red)'};">${sw}-${sl}</div>`:'<div style="font-size:12px;color:var(--gray);">No sets yet</div>'}</div>
       </div>`;
     if(sets.length){h+='<div style="margin-bottom:8px;padding:0 4px;">';sets.forEach((sv,si)=>{const win=(sv.scoreUs||0)>(sv.scoreThem||0);h+=`<span class="live-set-chip ${win?'win':'loss'}">S${si+1}: ${sv.scoreUs}-${sv.scoreThem} <button style="background:none;border:none;color:inherit;cursor:pointer;font-size:11px;" onclick="ppDelLiveSet('${matchId}','${fbNode}',${si})">✕</button></span>`;});h+='</div>';}
-    h+=`<div style="background:var(--off-white);border-radius:8px;padding:10px;">
+    // Set-entry block, gated by best-of-3 completion (mirrors coach side): stop offering sets at 2 wins.
+    if(sw<2&&sl<2){
+      h+=`<div style="background:var(--off-white);border-radius:8px;padding:10px;">
       <div style="font-size:11px;font-weight:700;color:var(--gray);margin-bottom:10px;">SET ${sets.length+1}</div>
       <span id="pp-setnum-${idx}" style="display:none;">${sets.length+1}</span>
       <div class="live-score-row">
@@ -10060,6 +10069,12 @@ function ppLoadCourts(assignmentId){
       </div>
       <button class="btn btn-blue btn-small" style="width:100%;margin-top:8px;" onclick="ppSaveLiveSet(${idx},'${c.p1||''}','${c.p2||''}','${a.date}',${c.court},'${matchId||''}','${a.opponent||''}','${fbNode}','pp-st-${idx}')">✓ Save Set — Court ${c.court}</button>
     </div></div>`;
+    }else{
+      h+=`<div style="background:var(--off-white);border-radius:8px;padding:10px;margin-top:4px;text-align:center;">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:1px;color:${sw>sl?'var(--green)':'var(--loss-red)'};">MATCH COMPLETE</div>
+        <div style="font-size:12px;color:var(--gray);margin-top:4px;">${sw>sl?(partnerLabel||'Our pair'):(a.opponent||'Opponent')} won ${Math.max(sw,sl)}-${Math.min(sw,sl)}</div>
+      </div></div>`;
+    }
   });
   container.innerHTML=h;
 }
