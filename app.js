@@ -134,6 +134,18 @@ const _DEMO = {
         {court:5, p1:'sd09', p2:'sd10'}
       ],
       notes:null, createdAt:'2026-05-09'
+    },
+    asg03: {
+      id:'asg03', date:'2026-05-20', type:'gameday', opponent:'Tidewater HS',
+      location:'home', time:'6:00 PM',
+      courts:[
+        {court:1, p1:'sd01', p2:'sd02'},
+        {court:2, p1:'sd03', p2:'sd04'},
+        {court:3, p1:'sd05', p2:'sd06'},
+        {court:4, p1:'sd07', p2:'sd08'},
+        {court:5, p1:'sd09', p2:'sd10'}
+      ],
+      notes:null, createdAt:'2026-05-09'
     }
   },
   opponents: {
