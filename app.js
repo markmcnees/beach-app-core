@@ -2340,8 +2340,8 @@ function listenData(){if(!db)return;
         const usEl=document.getElementById('pp-us-'+idx);
         const themEl=document.getElementById('pp-them-'+idx);
         if(usEl&&themEl){
-          usEl.textContent=live.us;
-          themEl.textContent=live.them;
+          if(usEl.tagName==='INPUT'){usEl.value=live.us;}else{usEl.textContent=live.us;}
+          if(themEl.tagName==='INPUT'){themEl.value=live.them;}else{themEl.textContent=live.them;}
           const card=document.getElementById('pp-lc-'+idx);
           if(card&&live.scoredBy){
             let lbl=card.querySelector('.live-scored-by');
@@ -6878,8 +6878,8 @@ function applyLiveScoringToCounters(){
     const pUs=document.getElementById('pp-us-'+idx);
     const pThem=document.getElementById('pp-them-'+idx);
     if(pUs&&pThem){
-      pUs.textContent=live.us;
-      pThem.textContent=live.them;
+      if(pUs.tagName==='INPUT'){pUs.value=live.us;}else{pUs.textContent=live.us;}
+      if(pThem.tagName==='INPUT'){pThem.value=live.them;}else{pThem.textContent=live.them;}
       if(live.scoredBy){
         const card=document.getElementById('pp-lc-'+idx);
         if(card){
@@ -10007,8 +10007,7 @@ function renderPlayerLiveScoring(){
           <div class="live-score-label">${SC.abbrev}</div>
           <div class="ls-counter">
             <button class="ls-btn ls-btn-plus" onclick="lsAdj('pp-us-${idx}',1)">+</button>
-            <div class="ls-num" id="pp-us-${idx}">0</div>
-            <input type="number" id="pp-us-${idx}-inp" value="0" min="0" oninput="lsInpChange('pp-us-${idx}')" style="width:100%;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:18px;border:1px solid var(--gray-lighter);border-radius:6px;padding:4px;margin-top:2px;">
+            <input type="number" class="ls-inp" id="pp-us-${idx}" value="0" min="0" inputmode="numeric" pattern="[0-9]*" onchange="lsAdj('pp-us-${idx}',0)">
             <button class="ls-btn ls-btn-minus" onclick="lsAdj('pp-us-${idx}',-1)">−</button>
           </div>
         </div>
@@ -10017,8 +10016,7 @@ function renderPlayerLiveScoring(){
           <div class="live-score-label">OPP</div>
           <div class="ls-counter">
             <button class="ls-btn ls-btn-plus" onclick="lsAdj('pp-them-${idx}',1)">+</button>
-            <div class="ls-num" id="pp-them-${idx}">0</div>
-            <input type="number" id="pp-them-${idx}-inp" value="0" min="0" oninput="lsInpChange('pp-them-${idx}')" style="width:100%;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:18px;border:1px solid var(--gray-lighter);border-radius:6px;padding:4px;margin-top:2px;">
+            <input type="number" class="ls-inp" id="pp-them-${idx}" value="0" min="0" inputmode="numeric" pattern="[0-9]*" onchange="lsAdj('pp-them-${idx}',0)">
             <button class="ls-btn ls-btn-minus" onclick="lsAdj('pp-them-${idx}',-1)">−</button>
           </div>
         </div>
@@ -10081,16 +10079,14 @@ function ppLoadCourts(assignmentId){
         <div class="live-score-col"><div class="live-score-label">${SC.abbrev}</div>
           <div class="ls-counter">
             <button class="ls-btn ls-btn-plus" onclick="lsAdj('pp-us-${idx}',1)">+</button>
-            <div class="ls-num" id="pp-us-${idx}">0</div>
-            <input type="number" id="pp-us-${idx}-inp" value="0" min="0" oninput="lsInpChange('pp-us-${idx}')" style="width:100%;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:18px;border:1px solid var(--gray-lighter);border-radius:6px;padding:4px;margin-top:2px;">
+            <input type="number" class="ls-inp" id="pp-us-${idx}" value="0" min="0" inputmode="numeric" pattern="[0-9]*" onchange="lsAdj('pp-us-${idx}',0)">
             <button class="ls-btn ls-btn-minus" onclick="lsAdj('pp-us-${idx}',-1)">−</button>
           </div></div>
         <div style="font-family:'Bebas Neue';font-size:24px;color:var(--gray-light);">—</div>
         <div class="live-score-col"><div class="live-score-label">OPP</div>
           <div class="ls-counter">
             <button class="ls-btn ls-btn-plus" onclick="lsAdj('pp-them-${idx}',1)">+</button>
-            <div class="ls-num" id="pp-them-${idx}">0</div>
-            <input type="number" id="pp-them-${idx}-inp" value="0" min="0" oninput="lsInpChange('pp-them-${idx}')" style="width:100%;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:18px;border:1px solid var(--gray-lighter);border-radius:6px;padding:4px;margin-top:2px;">
+            <input type="number" class="ls-inp" id="pp-them-${idx}" value="0" min="0" inputmode="numeric" pattern="[0-9]*" onchange="lsAdj('pp-them-${idx}',0)">
             <button class="ls-btn ls-btn-minus" onclick="lsAdj('pp-them-${idx}',-1)">−</button>
           </div></div>
       </div>
@@ -10114,8 +10110,8 @@ function ppLoadCourts(assignmentId){
 function ppSaveLiveSet(idx,p1,p2,date,court,existingId,opponent,fbNode,statsPrefix){
   const usEl=document.getElementById('pp-us-'+idx);
   const themEl=document.getElementById('pp-them-'+idx);
-  const us=parseInt(usEl?.textContent||0);
-  const them=parseInt(themEl?.textContent||0);
+  const us=parseInt(usEl?.tagName==='INPUT'?usEl.value:usEl?.textContent);
+  const them=parseInt(themEl?.tagName==='INPUT'?themEl.value:themEl?.textContent);
   if(isNaN(us)||isNaN(them)){toast('Enter both scores');return;}
   if(us===them){toast('Scores cannot be tied');return;}
   const node=fbNode||'gamedays';
