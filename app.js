@@ -9984,7 +9984,10 @@ function renderPlayerLiveScoring(){
   const container=document.getElementById('pp-live-courts');
   if(!container)return;
   const today=td();
-  const assignment=Object.values(D.assignments).find(a=>a.date===today);
+  // Honor the portal switcher so the board and the scored dual agree; fall back to the first today dual.
+  const assignment=(ppSelectedDualId&&D.assignments[ppSelectedDualId]&&D.assignments[ppSelectedDualId].date===today)
+    ?D.assignments[ppSelectedDualId]
+    :Object.values(D.assignments).find(a=>a.date===today);
   if(!assignment||!(assignment.courts||[]).length){
     // Show all available assignments
     const allA=Object.values(D.assignments||{}).filter(a=>a.courts&&a.courts.length>0).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
@@ -10003,7 +10006,12 @@ function renderPlayerLiveScoring(){
   const aType=assignment.type||'gameday';
   const fbNode=aType==='scrimmage'?'scrimmages':'gamedays';
   const matchList=aType==='scrimmage'?D.scrimmages:D.gamedays;
-  let h='';
+  // Dual context line so the player knows which dual they are scoring (matches ppLoadCourts header style).
+  let h=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:8px 12px;background:var(--blue-bg);border-radius:8px;">
+    <span style="font-size:18px;">🏐</span>
+    <div style="flex:1;"><div style="font-weight:700;font-size:14px;">Scoring: ${assignment.opponent?'vs '+assignment.opponent:'Practice'}</div>
+    <div style="font-size:11px;color:var(--gray);">${fD(assignment.date)}${assignment.time?' · '+assignment.time:''}</div></div>
+  </div>`;
   (assignment.courts||[]).sort((a,b)=>(a.court||0)-(b.court||0)).forEach((c,idx)=>{
     const p1=gP(c.p1),p2=gP(c.p2);
     const courtLabel='Court '+c.court;
@@ -10016,6 +10024,10 @@ function renderPlayerLiveScoring(){
     sets.forEach(s=>{const us=s.scoreUs||0,them=s.scoreThem||0;us>them?sw++:sl++;ptDiff+=(us-them);});
     const diffStr=ptDiff>0?'+'+ptDiff:String(ptDiff);
     const diffColor=ptDiff>0?'var(--green)':ptDiff<0?'var(--loss-red)':'var(--gray)';
+    // Coach-assigned scorer tag (responsibility only, any player can still score any court).
+    const _sc=(assignment.scorers||{})[c.court]||{};
+    const _scNm=id2=>{const pp=gP(id2);return pp?pp.firstName+' '+pp.lastName.charAt(0)+'.':'';};
+    const _scTag=_sc.primary?`<div style="font-size:11px;color:var(--blue);margin-top:2px;">✎ Scorer: ${_scNm(_sc.primary)}${_sc.secondary?' (backup: '+_scNm(_sc.secondary)+')':''}</div>`:'';
 
     h+=`<div class="live-court-card" id="pp-lc-${idx}">
       <div class="live-court-header">
@@ -10023,6 +10035,7 @@ function renderPlayerLiveScoring(){
           <span class="court-badge court-${c.court}" style="font-size:12px;">${courtLabel}</span>
           <div class="live-pair-name" style="margin-top:4px;">${partnerLabel||'TBD'}</div>
           <div class="live-opp-name">vs ${opp}</div>
+          ${_scTag}
         </div>
         <div style="text-align:right;">
           ${sets.length?`<div style="font-family:'Bebas Neue';font-size:18px;color:${sw>sl?'var(--green)':'var(--loss-red)'};">${sw}-${sl}</div><div style="font-family:'Bebas Neue';font-size:15px;color:${diffColor};">${diffStr} pts</div>`:'<div style="font-size:12px;color:var(--gray);">No sets yet</div>'}
@@ -10102,11 +10115,15 @@ function ppLoadCourts(assignmentId){
     const p1o=gP(c.p1),p2o=gP(c.p2);
     const partnerLabel=[p1o,p2o].filter(Boolean).map(p=>p.firstName+' '+p.lastName.charAt(0)+'.').join(' & ');
     const opp=(a.opponent||'Opponent')+' CT'+c.court;
+    // Coach-assigned scorer tag (responsibility only, any player can still score any court).
+    const _sc=(a.scorers||{})[c.court]||{};
+    const _scNm=id2=>{const pp=gP(id2);return pp?pp.firstName+' '+pp.lastName.charAt(0)+'.':'';};
+    const _scTag=_sc.primary?`<div style="font-size:11px;color:var(--blue);margin-top:2px;">✎ Scorer: ${_scNm(_sc.primary)}${_sc.secondary?' (backup: '+_scNm(_sc.secondary)+')':''}</div>`:'';
     h+=`<div class="live-court-card">
       <div class="live-court-header">
         <div><span class="court-badge court-${c.court}" style="font-size:12px;">Court ${c.court}</span>
           <div class="live-pair-name" style="margin-top:4px;">${partnerLabel||'TBD'}</div>
-          <div class="live-opp-name">vs ${opp}</div></div>
+          <div class="live-opp-name">vs ${opp}</div>${_scTag}</div>
         <div style="text-align:right;">${sets.length?`<div style="font-family:'Bebas Neue';font-size:18px;color:${sw>sl?'var(--green)':'var(--loss-red)'};">${sw}-${sl}</div>`:'<div style="font-size:12px;color:var(--gray);">No sets yet</div>'}</div>
       </div>`;
     if(sets.length){h+='<div style="margin-bottom:8px;padding:0 4px;">';sets.forEach((sv,si)=>{const win=(sv.scoreUs||0)>(sv.scoreThem||0);h+=`<span class="live-set-chip ${win?'win':'loss'}">S${si+1}: ${sv.scoreUs}-${sv.scoreThem} <button style="background:none;border:none;color:inherit;cursor:pointer;font-size:11px;" onclick="ppDelLiveSet('${matchId}','${fbNode}',${si})">✕</button></span>`;});h+='</div>';}
