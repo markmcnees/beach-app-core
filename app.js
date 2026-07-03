@@ -6928,8 +6928,15 @@ function renderLiveScoring(dateOverride,assignOverride){
       h+='</div>';
     }
 
-    // Score entry row
-    h+=`<div style="background:var(--off-white);border-radius:8px;padding:10px;margin-top:4px;">
+    // Score entry row, gated by best-of-3 completion: once a pair wins 2 sets the
+    // court match is decided, so show Match Complete instead of offering another set.
+    if(sw>=2||sl>=2){
+      h+=`<div style="background:var(--off-white);border-radius:8px;padding:10px;margin-top:4px;text-align:center;">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:1px;color:${sw>sl?'var(--green)':'var(--loss-red)'};">MATCH COMPLETE</div>
+        <div style="font-size:12px;color:var(--gray);margin-top:4px;">${sw>sl?(partnerLabel||'Our pair'):(assignment.opponent||'Opponent')} won ${Math.max(sw,sl)}-${Math.min(sw,sl)}</div>
+      </div>`;
+    }else{
+      h+=`<div style="background:var(--off-white);border-radius:8px;padding:10px;margin-top:4px;">
       <div style="font-size:11px;font-weight:700;color:var(--gray);margin-bottom:10px;letter-spacing:1px;">SET ${sets.length+1}</div>
       <span id="ls-setnum-${idx}" style="display:none;">${sets.length+1}</span>
       <div class="live-score-row">
@@ -6958,6 +6965,7 @@ function renderLiveScoring(dateOverride,assignOverride){
     </div>
     <button class="btn btn-blue btn-small" style="width:100%;margin-top:6px;" onclick="saveLiveSet(${idx},'${c.p1||''}','${c.p2||''}','${date}',${c.court},'${c.subCourt||''}','${existingMatch?existingMatch.id:''}','${assignment.opponent||''}','${fbNode}')">✓ Save Set</button>
     </div>`;
+    }
     h+='</div>';
   });
 
@@ -7174,7 +7182,14 @@ function refreshSingleCourtCard(idx, date, fbNode){
     inner+='</div>';
   }
 
-  inner+=`<div style="background:var(--off-white);border-radius:8px;padding:10px;margin-top:4px;">
+  // Match-complete guard mirrors renderLiveScoring: best-of-3, stop offering sets at 2 wins.
+  if(sw>=2||sl>=2){
+    inner+=`<div style="background:var(--off-white);border-radius:8px;padding:10px;margin-top:4px;text-align:center;">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:1px;color:${sw>sl?'var(--green)':'var(--loss-red)'};">MATCH COMPLETE</div>
+      <div style="font-size:12px;color:var(--gray);margin-top:4px;">${sw>sl?(partnerLabel||'Our pair'):(assignment.opponent||'Opponent')} won ${Math.max(sw,sl)}-${Math.min(sw,sl)}</div>
+    </div>`;
+  }else{
+    inner+=`<div style="background:var(--off-white);border-radius:8px;padding:10px;margin-top:4px;">
     <div style="font-size:11px;font-weight:700;color:var(--gray);margin-bottom:10px;letter-spacing:1px;">SET ${sets.length+1}</div>
     <span id="ls-setnum-${idx}" style="display:none;">${sets.length+1}</span>
     <div class="live-score-row">
@@ -7203,6 +7218,7 @@ function refreshSingleCourtCard(idx, date, fbNode){
     </div>
     <button class="btn btn-blue btn-small" style="width:100%;margin-top:6px;" onclick="saveLiveSet(${idx},'${c.p1||''}','${c.p2||''}','${date}',${c.court},'${c.subCourt||''}','${matchId||''}','${assignment.opponent||''}','${node}')">✓ Save Set</button>
   </div>`;
+  }
   cardEl.innerHTML=inner;
 }
 
