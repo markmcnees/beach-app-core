@@ -5977,6 +5977,8 @@ function openAssignEditModal(id){
   </div>`;
   const courts=a.courts||[];
   courts.sort((x,y)=>(x.court||0)-(y.court||0)).forEach((c,i)=>{
+    // Scorer assignments live in a parallel map a.scorers keyed by court number; pre-fill if present.
+    const _sc=(a.scorers&&a.scorers[c.court])||{};
     h+=`<div style="background:var(--off-white);border-radius:8px;padding:10px;margin-bottom:8px;">
       <div style="font-family:'Bebas Neue';font-size:12px;letter-spacing:1px;margin-bottom:6px;">
         COURT <input type="number" id="ae-ct-${i}" value="${c.court}" min="1" max="8"
@@ -5985,6 +5987,12 @@ function openAssignEditModal(id){
       <div class="form-row">
         <select class="form-select" id="ae-p1-${i}" style="padding:6px;font-size:12px;">${pOpts(c.p1)}</select>
         <select class="form-select" id="ae-p2-${i}" style="padding:6px;font-size:12px;">${pOpts(c.p2)}</select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+        <div><label style="font-size:10px;font-weight:700;color:var(--gray);">Scorer</label>
+          <select class="form-select" id="ae-scorer1-${i}" style="padding:6px;font-size:12px;">${pOpts(_sc.primary)}</select></div>
+        <div><label style="font-size:10px;font-weight:700;color:var(--gray);">Backup</label>
+          <select class="form-select" id="ae-scorer2-${i}" style="padding:6px;font-size:12px;">${pOpts(_sc.secondary)}</select></div>
       </div></div>`;
   });
   window._editAssignCourtCount=courts.length;
@@ -6386,6 +6394,12 @@ function addAssignEditCourt(){
   <div class="form-row">
     <select class="form-select" id="ae-p1-${i}" style="padding:6px;font-size:12px;">${pOpts()}</select>
     <select class="form-select" id="ae-p2-${i}" style="padding:6px;font-size:12px;">${pOpts()}</select>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+    <div><label style="font-size:10px;font-weight:700;color:var(--gray);">Scorer</label>
+      <select class="form-select" id="ae-scorer1-${i}" style="padding:6px;font-size:12px;">${pOpts()}</select></div>
+    <div><label style="font-size:10px;font-weight:700;color:var(--gray);">Backup</label>
+      <select class="form-select" id="ae-scorer2-${i}" style="padding:6px;font-size:12px;">${pOpts()}</select></div>
   </div>`;
   document.getElementById('assign-edit-body').appendChild(div);
   window._editAssignCourtCount=i+1;
@@ -6402,14 +6416,20 @@ function saveAssignEdit(){
   const atime=document.getElementById('ae-time')?.value||'';
   const n=window._editAssignCourtCount||0;
   const courts=[];
+  // Scorer assignments as a parallel map keyed by court number, kept separate from the rebuilt
+  // courts array so it survives lineup edits. Only courts with a primary scorer are recorded.
+  const scorers={};
   for(let i=0;i<n;i++){
     const ct=parseInt(document.getElementById('ae-ct-'+i)?.value)||1;
     const p1=document.getElementById('ae-p1-'+i)?.value||'';
     const p2=document.getElementById('ae-p2-'+i)?.value||'';
     if(p1||p2)courts.push({court:ct,p1,p2});
+    const s1=document.getElementById('ae-scorer1-'+i)?.value||'';
+    const s2=document.getElementById('ae-scorer2-'+i)?.value||'';
+    if(s1)scorers[ct]={primary:s1,secondary:s2||null};
   }
   if(!courts.length){toast('At least one court required');return;}
-  fbSet('assignments/'+id,{...a,date,type,opponent:opp,location:loc,time:atime,courts});
+  fbSet('assignments/'+id,{...a,date,type,opponent:opp,location:loc,time:atime,courts,scorers});
   closeAssignEditModal();
   toast('Assignment updated!');
   renderLiveAssignmentList();
