@@ -2305,7 +2305,7 @@ function listenData(){if(!db)return;
     var fo=document.getElementById('school-fans-overlay');
     if(fo&&fo.style.display!=='none')renderFans();
     const today=td();
-    Object.entries(D.liveScoring).forEach(([idx,live])=>{
+    Object.entries(lsView()).forEach(([idx,live])=>{
       if(!live||live.date!==today)return;
       // Coach view
       if(currentRole==='coach'&&window._loadedAssignment){
@@ -6611,6 +6611,38 @@ function loadLiveCourts(id){
 }
 
 
+// Match a result record to a court. New records carry assignmentId so two same-day duals
+// no longer fuse. When both the record and the current context have an assignmentId they must
+// agree; legacy records with no assignmentId (existing live data plus the Sand Sharks fixture)
+// fall back to date+pair matching exactly as before, so nothing existing breaks.
+function resMatchesCourt(m,date,pair,aid){
+  if(!m||m.date!==date||!arrEq(m.pair||[],pair))return false;
+  if(aid&&m.assignmentId&&m.assignmentId!==aid)return false;
+  return true;
+}
+// Queens variant: pair can be on either side (team1/team2). Same assignmentId discriminator + fallback.
+function queensMatchesCourt(m,date,pair,aid){
+  if(!m||m.date!==date)return false;
+  if(!(arrEq(m.team1||[],pair)||arrEq(m.team2||[],pair)))return false;
+  if(aid&&m.assignmentId&&m.assignmentId!==aid)return false;
+  return true;
+}
+// live_scoring is now nested under assignmentId (live_scoring/{assignmentId}/{idx}) so same-day
+// duals cannot overwrite each other on shared court indexes. Readers use this resolver to get an
+// idx-keyed view. If a specific assignment is known (coach) return its slice; otherwise (player /
+// fans, no loaded assignment) flatten nested groups plus any legacy flat entries into one idx map.
+function lsView(aid){
+  const all=D.liveScoring||{};
+  aid=aid||(window._loadedAssignment||{}).id;
+  if(aid&&all[aid])return all[aid];
+  const out={};
+  Object.entries(all).forEach(([k,v])=>{
+    if(!v||typeof v!=='object')return;
+    if(v.date!==undefined){out[k]=v;} // legacy flat entry keyed by court idx
+    else{Object.entries(v).forEach(([idx,rec])=>{out[idx]=rec;});} // nested assignment group
+  });
+  return out;
+}
 function closeDual(){
   const a=window._loadedAssignment||Object.values(D.assignments||{}).find(x=>x.type==='gameday');
   const btn=document.getElementById('close-dual-btn');
@@ -6640,7 +6672,7 @@ function closeDual(){
   let leonCourts=0,oppCourts=0;
   const courts=(a.courts||[]).filter(c=>(c.court||0)<=5);
   courts.forEach(c=>{
-    const m=D.gamedays.find(gd=>gd.date===date&&arrEq(gd.pair||[],[c.p1,c.p2].filter(Boolean)));
+    const m=D.gamedays.find(gd=>resMatchesCourt(gd,date,[c.p1,c.p2].filter(Boolean),a.id));
     if(!m||(m.sets||[]).length===0)return;
     const sets=m.sets||[];
     const sw=sets.filter(s=>(s.scoreUs||0)>(s.scoreThem||0)).length;
@@ -6663,7 +6695,7 @@ function closeDual(){
     fbSet('schedule/'+schedMatch.id+'/scoreUs',leonCourts);
     fbSet('schedule/'+schedMatch.id+'/scoreThem',oppCourts);
   }
-  if(db)db.ref(DB_ROOT+'/live_scoring').remove();
+  if(db){if(a.id)db.ref(DB_ROOT+'/live_scoring/'+a.id).remove();else db.ref(DB_ROOT+'/live_scoring').remove();}
 
   const winner=dualWin?(SC.shortName||'Us'):opponent;
   const resultMsg=winner+' wins '+leonCourts+'-'+oppCourts;
@@ -6697,7 +6729,7 @@ function closeDual(){
 
 function applyLiveScoringToCounters(){
   const today=td();
-  Object.entries(D.liveScoring||{}).forEach(([idx,live])=>{
+  Object.entries(lsView()).forEach(([idx,live])=>{
     if(!live||live.date!==today)return;
     // Coach counters
     const cUs=document.getElementById('ls-us-'+idx);
@@ -6771,7 +6803,7 @@ function renderLiveScoring(dateOverride,assignOverride){
     }
 
     // Find existing match for this pair/date
-    const existingMatch=matchList.find(m=>m.date===date&&arrEq(m.pair||[],[c.p1,c.p2].filter(Boolean)));
+    const existingMatch=matchList.find(m=>resMatchesCourt(m,date,[c.p1,c.p2].filter(Boolean),assignment.id));
     const matchId=existingMatch?existingMatch.id:null;
     const sets=existingMatch?existingMatch.sets||[]:[];
     let sw=0,sl=0,ptDiff=0;
@@ -6919,10 +6951,11 @@ function pushLiveScore(idx){
   const matchList=aType==='scrimmage'?D.scrimmages:aType==='queens'?D.matches:D.gamedays;
   const existing=aType==='queens'
     ?D.matches.find(m=>m.date===date&&(arrEq(m.team1||[],[c.p1,c.p2].filter(Boolean))||arrEq(m.team2||[],[c.p1,c.p2].filter(Boolean))))
-    :matchList.find(m=>m.date===date&&arrEq(m.pair||[],[c.p1,c.p2].filter(Boolean)));
+    :matchList.find(m=>resMatchesCourt(m,date,[c.p1,c.p2].filter(Boolean),a.id));
   const setNum=existing?(existing.sets||[]).length+1:1;
   const scoredBy=currentPlayerId?((gP(currentPlayerId)||{}).firstName||'Player'):'Coach';
-  db.ref(DB_ROOT+'/live_scoring/'+idx).set({us,them,setNum,pairLabel,court:c.court,date,ts:Date.now(),scoredBy});
+  const _lsKey=(a.id?a.id+'/':'')+idx;
+  db.ref(DB_ROOT+'/live_scoring/'+_lsKey).set({us,them,setNum,pairLabel,court:c.court,date,ts:Date.now(),scoredBy,assignmentId:a.id||null});
 }
 function lsInpChange(id){
   const inp=document.getElementById(id+'-inp');
@@ -6964,13 +6997,14 @@ function saveLiveSet(idx,p1,p2,date,court,subCourt,existingId,opponent,fbNode){
     fbSet(node+'/'+existingId+'/sets',sets);
   }else{
     const id=gi(idPrefix);
-    fbSetResult(node,id,{id,date,court:parseInt(court),pair,opponent:opp,sets:[newSet]});
+    const _aid=(window._loadedAssignment||{}).id||null;
+    fbSetResult(node,id,{id,date,court:parseInt(court),pair,opponent:opp,sets:[newSet],...(_aid?{assignmentId:_aid}:{})});
   }
   toast((us>them?'\u2713 Win':'\u2717 Loss')+' — '+us+'-'+them+' saved');
   // Immediately zero scores so user sees 0-0 right away (no need to hit minus)
   {const usR=document.getElementById('ls-us-'+idx);const themR=document.getElementById('ls-them-'+idx);
   if(usR)usR.value='0';if(themR)themR.value='0';}
-  if(db)db.ref(DB_ROOT+'/live_scoring/'+idx).remove();
+  if(db){const _aid=(window._loadedAssignment||{}).id;db.ref(DB_ROOT+'/live_scoring/'+((_aid?_aid+'/':'')+idx)).remove();}
   setTimeout(()=>refreshSingleCourtCard(idx,date,node),600);
 }
 
@@ -7021,7 +7055,7 @@ function refreshSingleCourtCard(idx, date, fbNode){
   const partnerLabel=[p1,p2].filter(Boolean).map(p=>p.firstName+' '+p.lastName.charAt(0)+'.').join(' & ');
   const opp=assignment.opponent?assignment.opponent+' CT'+c.court:'Opponent CT'+c.court;
 
-  const existingMatch=matchList.find(m=>m.date===date&&arrEq(m.pair||[],[c.p1,c.p2].filter(Boolean)));
+  const existingMatch=matchList.find(m=>resMatchesCourt(m,date,[c.p1,c.p2].filter(Boolean),assignment.id));
   const matchId=existingMatch?existingMatch.id:null;
   const sets=existingMatch?existingMatch.sets||[]:[];
   let sw=0,sl=0,ptDiff=0;
@@ -7089,7 +7123,7 @@ function renderLiveScoringQueens(assignment, date, container){
     const p1=gP(c.p1),p2=gP(c.p2);
     const teamALabel=[p1,p2].filter(Boolean).map(p=>p.firstName+' '+p.lastName.charAt(0)+'.').join(' & ')||'TBD';
     // Existing Queens match for this pair on this date
-    const existing=D.matches.find(m=>m.date===date&&(arrEq(m.team1||[],[c.p1,c.p2].filter(Boolean))||arrEq(m.team2||[],[c.p1,c.p2].filter(Boolean))));
+    const existing=D.matches.find(m=>queensMatchesCourt(m,date,[c.p1,c.p2].filter(Boolean),assignment.id));
     const hasResult=!!existing;
     let resultHtml='';
     if(existing){
@@ -7165,7 +7199,7 @@ function refreshSingleQueensCard(idx, date){
   const teamALabel=[p1o,p2o].filter(Boolean).map(p=>p.firstName+' '+p.lastName.charAt(0)+'.').join(' & ')||'TBD';
 
   // Check for existing result
-  const existing=D.matches.find(m=>m.date===date&&(arrEq(m.team1||[],[c.p1,c.p2].filter(Boolean))||arrEq(m.team2||[],[c.p1,c.p2].filter(Boolean))));
+  const existing=D.matches.find(m=>queensMatchesCourt(m,date,[c.p1,c.p2].filter(Boolean),assignment.id));
   const hasResult=!!existing;
 
   let inner=`<div class="live-court-header">
@@ -7251,7 +7285,7 @@ function saveQueensLiveSet(idx,p1,p2,date,court){
   const id=gi('qm');
   fbSetResult('matches',id,{id,date,court:parseInt(court),team1:[p1,p2].filter(Boolean),team2:[op1,op2].filter(Boolean),score1:sa,score2:sb,stats});
   toast((sa>sb?'✓ Win':'✗ Loss')+' saved — '+sa+'–'+sb);
-  if(db)db.ref(DB_ROOT+'/live_scoring/'+idx).remove();
+  if(db){const _aid=(window._loadedAssignment||{}).id;db.ref(DB_ROOT+'/live_scoring/'+((_aid?_aid+'/':'')+idx)).remove();}
   setTimeout(()=>refreshSingleQueensCard(idx,date),600);
 }
 
@@ -8757,7 +8791,8 @@ function pgdSubmitSet(prefix,pairStr){
   // prefix format: 'own' for own court, 'spec-{idx}' for spectator courts
   // We need to look up the match for this pair/date
   const matchDate=pgdCurrentDate||td();
-  const existingMatch=D.gamedays.find(m=>m.date===matchDate&&arrEq(m.pair||[],pair));
+  const _pgdAssign=Object.values(D.assignments).find(a=>a.date===matchDate);
+  const existingMatch=D.gamedays.find(m=>resMatchesCourt(m,matchDate,pair,_pgdAssign&&_pgdAssign.id));
   if(existingMatch){
     const sets=[...(existingMatch.sets||[])];
     sets.push(newSet);
@@ -8770,7 +8805,7 @@ function pgdSubmitSet(prefix,pairStr){
     const courtNum=courtEntry?courtEntry.court:(gP(pair[0])?.court||1);
     const opp=(assignment?.opponent||'Opponent')+' CT'+courtNum;
     const id=gi('gd');
-    fbSetResult('gamedays',id,{id,date:matchDate,court:courtNum,pair,opponent:opp,sets:[newSet]});
+    fbSetResult('gamedays',id,{id,date:matchDate,court:courtNum,pair,opponent:opp,assignmentId:(_pgdAssign&&_pgdAssign.id)||null,sets:[newSet]});
     if(prefix==='own')pgdCurrentMatchId=id;
   }
 
@@ -8816,7 +8851,7 @@ function renderPlayerGameDay(){
     pgdCurrentPair=[nextCourt.p1,nextCourt.p2].filter(Boolean);
     pgdCurrentOpponent=nextAssign.opponent||'Opponent';
 
-    const existingMatch=D.gamedays.find(m=>m.date===nextAssign.date&&arrEq(m.pair||[],pgdCurrentPair));
+    const existingMatch=D.gamedays.find(m=>resMatchesCourt(m,nextAssign.date,pgdCurrentPair,nextAssign.id));
     pgdCurrentMatchId=existingMatch?existingMatch.id:null;
     const existingSets=existingMatch?existingMatch.sets||[]:[];
     let sw=0,sl=0,ptDiff=0;
@@ -9788,7 +9823,7 @@ function renderPlayerLiveScoring(){
     const courtLabel='Court '+c.court;
     const partnerLabel=[p1,p2].filter(Boolean).map(p=>p.firstName+' '+p.lastName.charAt(0)+'.').join(' & ');
     const opp=assignment.opponent?assignment.opponent+' CT'+c.court:'Opponent CT'+c.court;
-    const existingMatch=matchList.find(m=>m.date===today&&arrEq(m.pair||[],[c.p1,c.p2].filter(Boolean)));
+    const existingMatch=matchList.find(m=>resMatchesCourt(m,today,[c.p1,c.p2].filter(Boolean),assignment.id));
     const matchId=existingMatch?existingMatch.id:null;
     const sets=existingMatch?existingMatch.sets||[]:[];
     let sw=0,sl=0,ptDiff=0;
@@ -9868,7 +9903,7 @@ function ppLoadCourts(assignmentId){
     <button onclick="renderPlayerLiveScoring()" style="font-size:11px;padding:4px 8px;border:1px solid var(--gray-lighter);border-radius:5px;background:var(--white);cursor:pointer;">← Back</button>
   </div>`;
   courts.forEach((c,idx)=>{
-    const existingMatch=matchList.find(m=>m.date===a.date&&arrEq(m.pair||[],[c.p1,c.p2].filter(Boolean)));
+    const existingMatch=matchList.find(m=>resMatchesCourt(m,a.date,[c.p1,c.p2].filter(Boolean),a.id));
     const matchId=existingMatch?existingMatch.id:null;
     const sets=existingMatch?existingMatch.sets||[]:[];
     let sw=0,sl=0,ptDiff=0;
@@ -9943,7 +9978,9 @@ function ppSaveLiveSet(idx,p1,p2,date,court,existingId,opponent,fbNode,statsPref
     fbSet(node+'/'+existingId+'/sets',sets);
   }else{
     const id=gi('gd');
-    fbSetResult(node,id,{id,date,court:parseInt(court),pair,opponent:opp,sets:[newSet]});
+    const _pa=Object.values(D.assignments||{}).find(x=>x.date===date&&(x.courts||[]).some(cc=>arrEq([cc.p1,cc.p2].filter(Boolean),pair)));
+    const _aid=_pa?_pa.id:null;
+    fbSetResult(node,id,{id,date,court:parseInt(court),pair,opponent:opp,sets:[newSet],...(_aid?{assignmentId:_aid}:{})});
   }
   toast((us>them?'✓ Win':'✗ Loss')+' — '+us+'-'+them+' saved · Court '+court);
   pair.forEach(pid=>{delete pgdStats[pid];});
@@ -10664,7 +10701,7 @@ function renderFans(){
         var m=todayGD[c.court];
         var pids=[c.p1,c.p2].filter(Boolean);
         var pairLabel2=pids.map(function(pid){var p=(D.players||[]).find(function(x){return x.id===pid;});return p?(p.firstName+' '+p.lastName.charAt(0)+'.'+(p.jersey?' #'+p.jersey:'')):'';}).filter(Boolean).join(' & ');
-        var live=liveScoring[idx]||liveScoring[String(idx)];
+        var _lsSlice=lsView(todayAssign&&todayAssign.id);var live=_lsSlice[idx]||_lsSlice[String(idx)];
         var hasLive=!!(live&&live.date===today&&(live.us>0||live.them>0));
         if(m&&(m.sets||[]).length>0){
           var sets=m.sets||[];
