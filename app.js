@@ -377,9 +377,7 @@ const _DEMO = {
       goal_sd11_a:{goalType:'skill_defense', label:'Improve my defense', selectedAt:'2026-04-21', aiFeedback:null}
     }
   },
-  liveScoring: {
-    '0':{us:18, them:15, setNum:1, pairLabel:'Suzie S. & Debby D.', court:1, date:'2026-05-13', ts:1747000000000, scoredBy:'Coach'}
-  },
+  liveScoring: {},
   scrimmages: [
     {id:'sc01', date:'2026-04-11', opponent:'Intrasquad', court:1, pair:['sd01','sd04'], sets:[
       {scoreUs:21, scoreThem:17, stats:{sd01:{k:7,b:1,a:2,se:1,re:0,he:1,de:1}, sd04:{k:3,b:1,a:5,se:0,re:1,he:1,de:1}}},
@@ -2243,15 +2241,14 @@ function initFB(){
         sd03: { height: "6'0\"",  reach: "7'10\"", gradYear: 2028, position: "block", preferredSide: "R", dominantHand: "R" }
       }
     };
-    // Demo-only: shift the first assignment and the live-scoring entry to today's
-    // date (td(), the same YYYY-MM-DD the renderFans "today" gate compares against)
-    // so the date-gated live banner surfaces. Mutates the hydrated copies only;
-    // the _DEMO source literals stay static.
+    // Demo-only: shift all three same-day duals to today's date (td(), the same
+    // YYYY-MM-DD the Live Score Entry panel gates on) so all three appear as
+    // loadable TODAY rows. Mutates the hydrated copies only; the _DEMO source
+    // literals stay static.
     var _t = td();
     if(D.assignments && D.assignments.asg01) D.assignments.asg01.date = _t;
     if(D.assignments && D.assignments.asg02) D.assignments.asg02.date = _t;
     if(D.assignments && D.assignments.asg03) D.assignments.asg03.date = _t;
-    if(D.liveScoring && D.liveScoring['0']) D.liveScoring['0'].date = _t;
     setSS(true);
     refreshCurrent();
     if(!_autoLoginDone){_autoLoginDone=true;autoLogin();}
