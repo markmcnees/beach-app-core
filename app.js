@@ -3684,7 +3684,7 @@ function changePassword(){
   if(cur!==storedPw){toast('Current password is incorrect');return;}
   if(!newPw||newPw.length<4){toast('New password must be at least 4 characters');return;}
   if(newPw!==confirm){toast('Passwords do not match');return;}
-  db.ref(SC.dbRoots.passwords+'/'+currentPlayerId).set(newPw);
+  if(db)db.ref(SC.dbRoots.passwords+'/'+currentPlayerId).set(newPw);
   toast('Password updated!');
   document.getElementById('t-pw-current').value='';document.getElementById('t-pw-new').value='';document.getElementById('t-pw-confirm').value='';
 }
@@ -4482,7 +4482,9 @@ function coachSaveSkills(){
   const SKILL_KEYS=['serving','passing','setting','hitting','blocking','defense','courtSense','communication'];
   const skills={};
   SKILL_KEYS.forEach(k=>{skills[k]=parseInt(document.getElementById('cpm-skill-'+k)?.value)||0;});
-  db.ref(SC.dbRoots.profiles+'/skills/'+pid).set(skills);
+  // Demo mode (db null) persists in-memory to profilesData, mirroring the profiles listener.
+  if(db){db.ref(SC.dbRoots.profiles+'/skills/'+pid).set(skills);}
+  else{profilesData.skills=profilesData.skills||{};profilesData.skills[pid]=skills;}
   toast('Skills saved!');
 }
 
@@ -4510,7 +4512,8 @@ function coachAddDrill(){
   const timeVal=parseFloat(document.getElementById('cpm-drill-time')?.value);
   if(!date||isNaN(timeVal)||timeVal<=0){toast('Enter date and time');return;}
   const id='sd-'+pid+'-'+Date.now();
-  db.ref(SC.dbRoots.profiles+'/starDrills/'+id).set({id,playerId:pid,player:pid,date,time:timeVal});
+  if(db){db.ref(SC.dbRoots.profiles+'/starDrills/'+id).set({id,playerId:pid,player:pid,date,time:timeVal});}
+  else{profilesData.starDrills=profilesData.starDrills||{};profilesData.starDrills[id]={id,playerId:pid,player:pid,date,time:timeVal};}
   document.getElementById('cpm-drill-time').value='';
   toast('Drill time added!');
   setTimeout(()=>coachRenderDrillHistory(pid),600);
@@ -4536,7 +4539,8 @@ function coachAddVertical(){
   if(!date||(!bj&&!aj)){toast('Enter date and at least one measurement');return;}
   const id='jt-'+pid+'-'+Date.now();
   // Standing reach is now a durable identity field (profiles/players), not a per-test value.
-  db.ref(SC.dbRoots.profiles+'/jumpTests/'+id).set({id,playerId:pid,player:pid,date,blockJump:bj||null,approachJump:aj||null});
+  if(db){db.ref(SC.dbRoots.profiles+'/jumpTests/'+id).set({id,playerId:pid,player:pid,date,blockJump:bj||null,approachJump:aj||null});}
+  else{profilesData.jumpTests=profilesData.jumpTests||{};profilesData.jumpTests[id]={id,playerId:pid,player:pid,date,blockJump:bj||null,approachJump:aj||null};}
   ['cpm-vert-bj','cpm-vert-aj'].forEach(i=>{const el=document.getElementById(i);if(el)el.value='';});
   toast('Vertical added!');
   setTimeout(()=>coachRenderVertHistory(pid),600);
@@ -4579,7 +4583,8 @@ function coachAddNote(){
   const text=document.getElementById('cpm-note-text')?.value.trim();
   if(!date||!text){toast('Enter date and note');return;}
   const id='note-'+pid+'-'+Date.now();
-  db.ref(SC.dbRoots.profiles+'/notes/'+id).set({id,playerId:pid,player:pid,date,text,coachName:'Coach'});
+  if(db){db.ref(SC.dbRoots.profiles+'/notes/'+id).set({id,playerId:pid,player:pid,date,text,coachName:'Coach'});}
+  else{profilesData.notes=profilesData.notes||{};profilesData.notes[id]={id,playerId:pid,player:pid,date,text,coachName:'Coach'};}
   document.getElementById('cpm-note-text').value='';
   toast('Note saved!');
   setTimeout(()=>coachRenderNoteHistory(pid),600);
@@ -6358,7 +6363,7 @@ function saveEmailPrefs(){
     notifScore:!!(document.getElementById('pp-notif-score')?document.getElementById('pp-notif-score').checked:false),
     updatedAt:td()
   };
-  db.ref(SC.dbRoots.passwords+'/'+pid+'/emailPrefs').set(prefs);
+  if(db)db.ref(SC.dbRoots.passwords+'/'+pid+'/emailPrefs').set(prefs);
   toast('Email preferences saved!');
   const savedEl=document.getElementById('pp-email-saved');
   if(savedEl){savedEl.style.opacity='1';setTimeout(function(){savedEl.style.opacity='0';},2500);}
@@ -7499,7 +7504,7 @@ function saveCoachNote(type){
   if(!coachNotesDate){toast('Load a date first');return;}
   if(type==='game'){
     const text=document.getElementById('cnote-game-text').value;
-    db.ref(DB_ROOT+'/coach_notes/'+coachNotesDate+'/game').set(text||null);
+    if(db)db.ref(DB_ROOT+'/coach_notes/'+coachNotesDate+'/game').set(text||null);
     const saved=document.getElementById('cnote-game-saved');
     if(saved){saved.style.opacity='1';setTimeout(()=>saved.style.opacity='0',2000);}
     toast('Game notes saved!');
@@ -7509,13 +7514,13 @@ function saveCoachNote(type){
 function autoSavePlayerNote(pid){
   if(!coachNotesDate)return;
   const el=document.getElementById('cnpn-'+pid);if(!el)return;
-  db.ref(DB_ROOT+'/coach_notes/'+coachNotesDate+'/players/'+pid).set(el.value||null);
+  if(db)db.ref(DB_ROOT+'/coach_notes/'+coachNotesDate+'/players/'+pid).set(el.value||null);
 }
 
 function autoSavePairNote(key){
   if(!coachNotesDate)return;
   const el=document.getElementById('cnpair-'+key);if(!el)return;
-  db.ref(DB_ROOT+'/coach_notes/'+coachNotesDate+'/pairs/'+key).set(el.value||null);
+  if(db)db.ref(DB_ROOT+'/coach_notes/'+coachNotesDate+'/pairs/'+key).set(el.value||null);
 }
 
 // ============================================================
@@ -9090,7 +9095,9 @@ function pgdSaveNotes(){
   if(!currentPlayerId||!pgdCurrentDate){toast('No active game day');return;}
   const perf=document.getElementById('pgd-note-perf')?.value||'';
   const opp=document.getElementById('pgd-note-opp')?.value||'';
-  db.ref(DB_ROOT+'/player_notes/'+pgdCurrentDate+'/'+currentPlayerId).set({
+  // Guard the Firebase write only; the pgdNotes self-update below runs in all modes
+  // so player game-day notes persist in-memory in demo too.
+  if(db)db.ref(DB_ROOT+'/player_notes/'+pgdCurrentDate+'/'+currentPlayerId).set({
     performance:perf||null,opponent:opp||null,savedAt:td()
   });
   toast('Notes saved!');
@@ -11213,7 +11220,7 @@ window.addEventListener('message',function(e){
   if(!e.data||e.data.type!=='courtsenseScore')return;
   const {playerId,score,maxScore,date}=e.data;if(!playerId)return;
   const key=date.replace(/-/g,'')+'_'+Date.now();
-  db.ref(SC.dbRoots.profiles+'/quizScores/'+playerId+'/'+key).set({score,maxScore,date});
+  if(db)db.ref(SC.dbRoots.profiles+'/quizScores/'+playerId+'/'+key).set({score,maxScore,date});
   const wrap=document.getElementById('pp-quiz-frame-wrap');
   const iframe=document.getElementById('pp-quiz-iframe');
   const btn=document.getElementById('pp-start-quiz-btn');
