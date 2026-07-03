@@ -6580,44 +6580,84 @@ function renderPastLineups(filterDate, filterOpp, filterPlayer){
 }
 
 
-// Render player assignment in their schedule section
+// Render player assignment in their schedule section.
+// Player team-board: which same-day dual is selected in the switcher. Module-level so it
+// persists across the chip re-render (renderPlayerAssignment runs on every portal render).
+let ppSelectedDualId=null;
+function ppSelectDual(id){ppSelectedDualId=id;if(currentPlayerId)renderPlayerAssignment(currentPlayerId);}
 function renderPlayerAssignment(pid){
-  const today=td();
-  const upcoming=Object.values(D.assignments)
-    .filter(a=>a.date>=today)
-    .sort((a,b)=>(a.date||'').localeCompare(b.date||''));
-  // Find next assignment that includes this player
-  let nextAssign=null,nextCourt=null;
-  for(const a of upcoming){
-    for(const c of(a.courts||[])){
-      if(c.p1===pid||c.p2===pid){nextAssign=a;nextCourt=c;break;}
-    }
-    if(nextAssign)break;
-  }
   const container=document.getElementById('pp-assignment');
-  if(!nextAssign||!nextCourt){
-    container.innerHTML='';return;
+  if(!container)return;
+  const today=td();
+  // Selection: every today dual the player is involved in, by PLAYING (a court p1/p2) or
+  // SCORING (a.scorers primary or secondary). Fixes the scorer-only gap.
+  const playsIn=a=>(a.courts||[]).some(c=>c.p1===pid||c.p2===pid);
+  const scoresIn=a=>Object.values(a.scorers||{}).some(s=>s&&(s.primary===pid||s.secondary===pid));
+  const myDuals=Object.values(D.assignments||{})
+    .filter(a=>a.date===today&&(a.courts||[]).length>0&&(playsIn(a)||scoresIn(a)))
+    .sort((a,b)=>((a.time||'').localeCompare(b.time||''))||((a.opponent||'').localeCompare(b.opponent||'')));
+  if(!myDuals.length){container.innerHTML='';return;}
+  // Selected dual persists across chip taps; fall back to the first if the stored one is not today.
+  const sel=myDuals.find(a=>a.id===ppSelectedDualId)||myDuals[0];
+  ppSelectedDualId=sel.id;
+  const tLabels={gameday:'🏐 Dual',scrimmage:'🤝 Scrimmage',queens:'👑 Queens'};
+  const tColors={gameday:'var(--blue)',scrimmage:'var(--purple)',queens:'var(--red)'};
+  const typeLabel=tLabels[sel.type||'gameday'];
+  const typeColor=tColors[sel.type||'gameday'];
+  const nm=id2=>{const p=gP(id2);return p?p.firstName+' '+p.lastName.charAt(0)+'.':'TBD';};
+  const dash='<span style="color:var(--gray-light);">-</span>';
+  let h=`<div style="border:2px solid ${typeColor};border-radius:10px;padding:14px;background:var(--white);">`;
+  // Same-day dual switcher (only when the player is in more than one today).
+  if(myDuals.length>1){
+    h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">';
+    myDuals.forEach(d=>{
+      const lbl=d.opponent||((tLabels[d.type||'gameday']||'Dual')+(d.time?' '+d.time:''));
+      h+=`<button class="filter-btn blue${d.id===sel.id?' active':''}" style="font-size:11px;padding:4px 10px;" onclick="ppSelectDual('${d.id}')">${lbl}</button>`;
+    });
+    h+='</div>';
   }
-  const partner=nextCourt.p1===pid?gP(nextCourt.p2):gP(nextCourt.p1);
-  const typeLabel=nextAssign.type==='gameday'?'🏐 Dual':nextAssign.type==='scrimmage'?'🤝 Scrimmage':'👑 Queens';
-  const typeColor=nextAssign.type==='gameday'?'var(--blue)':nextAssign.type==='scrimmage'?'var(--purple)':'var(--red)';
-  let h=`<div style="border:2px solid ${typeColor};border-radius:10px;padding:14px;background:var(--white);">
-    <div style="font-family:'Bebas Neue';font-size:12px;letter-spacing:1.5px;color:${typeColor};margin-bottom:4px;">YOUR NEXT ASSIGNMENT</div>
-    <div style="font-family:'Bebas Neue';font-size:20px;margin-bottom:4px;">${fD(nextAssign.date)} — ${typeLabel}</div>
-    ${nextAssign.opponent?'<div style="font-size:13px;color:var(--gray);margin-bottom:8px;">vs '+nextAssign.opponent+'</div>':''}
-    <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--off-white);border-radius:8px;">
-      <span class="court-badge court-${nextCourt.court}" style="font-size:14px;">Pair ${nextCourt.court}</span>
-      <div><span style="font-weight:700;font-size:14px;">You & ${partner?partner.firstName+' '+partner.lastName:'TBD'}</span></div>
-    </div>`;
-  // Check for notes mentioning this player
-  if(nextAssign.notes){
+  h+=`<div style="font-family:'Bebas Neue';font-size:12px;letter-spacing:1.5px;color:${typeColor};margin-bottom:4px;">YOUR DUAL</div>
+    <div style="font-family:'Bebas Neue';font-size:20px;margin-bottom:4px;">${fD(sel.date)} · ${typeLabel}</div>
+    ${sel.opponent?'<div style="font-size:13px;color:var(--gray);margin-bottom:8px;">vs '+sel.opponent+'</div>':''}`;
+  // Personal role banner: playing and/or scoring, both lines when both apply.
+  const myCourt=(sel.courts||[]).find(c=>c.p1===pid||c.p2===pid);
+  const scoreCourts=Object.entries(sel.scorers||{}).filter(([ct,s])=>s&&s.primary===pid).sort((a,b)=>(+a[0])-(+b[0]));
+  const backupCourts=Object.entries(sel.scorers||{}).filter(([ct,s])=>s&&s.secondary===pid).sort((a,b)=>(+a[0])-(+b[0]));
+  h+='<div style="background:var(--blue-bg);border-radius:8px;padding:10px 12px;margin-bottom:10px;">'
+    +'<div style="font-family:\'Bebas Neue\';font-size:12px;letter-spacing:1px;color:var(--blue);margin-bottom:6px;">YOUR ROLE</div>';
+  const lines=[];
+  if(myCourt){
+    const partner=myCourt.p1===pid?myCourt.p2:myCourt.p1;
+    lines.push(`<div style="font-size:14px;font-weight:700;margin-bottom:3px;">🏐 You play Court ${myCourt.court} with ${nm(partner)}</div>`);
+  }
+  scoreCourts.forEach(([ct,s])=>{lines.push(`<div style="font-size:14px;font-weight:700;margin-bottom:3px;">✎ You score Court ${ct}${s.secondary?' (backup: '+nm(s.secondary)+')':''}</div>`);});
+  backupCourts.forEach(([ct,s])=>{lines.push(`<div style="font-size:14px;font-weight:700;margin-bottom:3px;">✎ You are backup scorer for Court ${ct}${s.primary?' (scorer: '+nm(s.primary)+')':''}</div>`);});
+  if(!lines.length)lines.push('<div style="font-size:13px;color:var(--gray);">You are on the roster for this dual.</div>');
+  h+=lines.join('')+'</div>';
+  // Full team board: every court, pair, scorer, backup. Highlight rows where this player appears.
+  h+='<div style="font-family:\'Bebas Neue\';font-size:12px;letter-spacing:1px;color:var(--charcoal);margin-bottom:6px;">TEAM BOARD</div>';
+  h+='<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">'
+    +'<thead><tr style="text-align:left;color:var(--gray);font-size:10px;letter-spacing:0.5px;">'
+    +'<th style="padding:4px 6px;">CT</th><th style="padding:4px 6px;">PLAYERS</th><th style="padding:4px 6px;">SCORER</th><th style="padding:4px 6px;">BACKUP</th></tr></thead><tbody>';
+  [...(sel.courts||[])].sort((a,b)=>(a.court||0)-(b.court||0)).forEach(c=>{
+    const sc=(sel.scorers||{})[c.court]||{};
+    const mine=(c.p1===pid||c.p2===pid||sc.primary===pid||sc.secondary===pid);
+    const pairName=[c.p1,c.p2].map(x=>x?nm(x):'TBD').join(' & ');
+    h+=`<tr style="border-top:1px solid var(--gray-lighter);${mine?'background:var(--blue-bg);font-weight:700;':''}">`
+      +`<td style="padding:5px 6px;"><span class="court-badge court-${c.court}">CT ${c.court}</span></td>`
+      +`<td style="padding:5px 6px;">${pairName}</td>`
+      +`<td style="padding:5px 6px;">${sc.primary?nm(sc.primary):dash}</td>`
+      +`<td style="padding:5px 6px;">${sc.secondary?nm(sc.secondary):dash}</td></tr>`;
+  });
+  h+='</tbody></table></div>';
+  // Existing behavior: show coach notes if they mention this player.
+  if(sel.notes){
     const p=gP(pid);
-    const firstName=p?p.firstName.toLowerCase():'';
-    const lastName=p?p.lastName.toLowerCase():'';
-    // Show notes if they mention player's name
-    const notesLower=nextAssign.notes.toLowerCase();
-    if(notesLower.includes(firstName)||notesLower.includes(lastName)){
-      h+=`<div style="font-size:12px;color:var(--gray);margin-top:8px;font-style:italic;padding:8px;background:var(--off-white);border-radius:6px;">📝 ${COACH_LABEL} notes: ${nextAssign.notes}</div>`;
+    const fn=p?p.firstName.toLowerCase():'';
+    const ln=p?p.lastName.toLowerCase():'';
+    const nl=sel.notes.toLowerCase();
+    if((fn&&nl.includes(fn))||(ln&&nl.includes(ln))){
+      h+=`<div style="font-size:12px;color:var(--gray);margin-top:8px;font-style:italic;padding:8px;background:var(--off-white);border-radius:6px;">📝 ${COACH_LABEL} notes: ${sel.notes}</div>`;
     }
   }
   h+='</div>';
