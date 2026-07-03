@@ -2360,8 +2360,86 @@ function seedDB(){if(!db || !SC.allowAutoSeed)return;
   DEF_M.forEach(m=>{u[DB_ROOT+'/matches/'+m.id]=JSON.parse(JSON.stringify(m));});
   db.ref().update(u);
 }
-function fbSet(path,val){if(db)db.ref(DB_ROOT+'/'+path).set(val);}
-function fbRemove(path){if(db)db.ref(DB_ROOT+'/'+path).remove();}
+// Demo-mode (db===null) in-memory persistence. Mirrors how the DB_ROOT listener
+// maps each node into the D store, so demo edits made through fbSet/fbRemove
+// survive for the session and downstream reads (resMatchesCourt, renderers) see
+// the same array-vs-object shapes as live mode. Live Firebase writes never reach
+// this path; it runs only when db is null. Direct db.ref writes bypass it (handled separately).
+const _DEMO_NODES={
+  players:{key:'players',arr:true},   matches:{key:'matches',arr:true},
+  planned:{key:'planned',arr:true},   gamedays:{key:'gamedays',arr:true},
+  scrimmages:{key:'scrimmages',arr:true}, schedule:{key:'schedule',arr:true},
+  duals:{key:'duals',arr:true},
+  standings:{key:'standings',arr:false}, goals:{key:'goals',arr:false},
+  assignments:{key:'assignments',arr:false}, opponents:{key:'opponents',arr:false},
+  chat:{key:'chat',arr:false}, tier_requests:{key:'tierRequests',arr:false}
+};
+// Set val at a nested key path inside obj, creating intermediate objects as needed.
+function _setDeep(obj,keys,val){
+  if(!keys.length)return;
+  let o=obj;
+  for(let i=0;i<keys.length-1;i++){const k=keys[i];if(!o[k]||typeof o[k]!=='object')o[k]={};o=o[k];}
+  o[keys[keys.length-1]]=val;
+}
+// Delete the leaf key at a nested key path inside obj.
+function _delDeep(obj,keys){
+  if(!keys.length)return;
+  let o=obj;
+  for(let i=0;i<keys.length-1;i++){const k=keys[i];if(!o[k]||typeof o[k]!=='object')return;o=o[k];}
+  delete o[keys[keys.length-1]];
+}
+function _demoWrite(path,val){
+  if(val===null){_demoRemove(path);return;}
+  const seg=String(path).split('/').filter(s=>s.length);
+  const node=_DEMO_NODES[seg[0]];
+  if(!node)return;
+  if(node.arr){
+    if(!Array.isArray(D[node.key]))D[node.key]=[];
+    const arr=D[node.key];
+    const id=seg[1];
+    if(id===undefined)return;
+    if(seg.length===2){
+      // Full-object upsert on node/id: replace the element whose .id matches, else push.
+      const obj=Object.assign({},val,{id:(val&&val.id!==undefined)?val.id:id});
+      const i=arr.findIndex(x=>x&&x.id===id);
+      if(i>=0)arr[i]=obj;else arr.push(obj);
+    }else{
+      // Deeper field set on node/id/field...: create the record first if missing.
+      let rec=arr.find(x=>x&&x.id===id);
+      if(!rec){rec={id:id};arr.push(rec);}
+      _setDeep(rec,seg.slice(2),val);
+    }
+  }else{
+    if(!D[node.key]||typeof D[node.key]!=='object')D[node.key]={};
+    _setDeep(D[node.key],seg.slice(1),val);
+  }
+  refreshCurrent();
+}
+function _demoRemove(path){
+  const seg=String(path).split('/').filter(s=>s.length);
+  const node=_DEMO_NODES[seg[0]];
+  if(!node)return;
+  if(node.arr){
+    if(!Array.isArray(D[node.key]))return;
+    const id=seg[1];
+    if(id===undefined)return;
+    if(seg.length===2){
+      // Remove the whole record.
+      const i=D[node.key].findIndex(x=>x&&x.id===id);
+      if(i>=0)D[node.key].splice(i,1);
+    }else{
+      // Delete a nested field on the record.
+      const rec=D[node.key].find(x=>x&&x.id===id);
+      if(rec)_delDeep(rec,seg.slice(2));
+    }
+  }else{
+    if(!D[node.key]||typeof D[node.key]!=='object')return;
+    _delDeep(D[node.key],seg.slice(1));
+  }
+  refreshCurrent();
+}
+function fbSet(path,val){if(db)db.ref(DB_ROOT+'/'+path).set(val);else _demoWrite(path,val);}
+function fbRemove(path){if(db)db.ref(DB_ROOT+'/'+path).remove();else _demoRemove(path);}
 // Result-create writer: stamps seasonId onto full-object result creates (matches/duals/gamedays/scrimmages/schedule).
 // Preserves an explicit seasonId if the object already carries one. fbSet stays generic for non-result writes.
 function fbSetResult(node,id,obj){fbSet(node+'/'+id,Object.assign({},obj,{seasonId:obj.seasonId||_currentSeasonId}));}
