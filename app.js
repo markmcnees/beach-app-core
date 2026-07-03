@@ -5866,14 +5866,21 @@ function buildAssignSlots(){
         <select class="form-select" id="assign-c${c}-p1" style="padding:6px;font-size:12px;text-align:center;"><option value="">Player 1</option></select>
         <select class="form-select" id="assign-c${c}-p2" style="padding:6px;font-size:12px;text-align:center;"><option value="">Player 2</option></select>
       </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+        <div><label style="font-size:10px;font-weight:700;color:var(--gray);">Scorer</label>
+          <select class="form-select" id="assign-c${c}-scorer1" style="padding:6px;font-size:12px;"><option value="">Scorer</option></select></div>
+        <div><label style="font-size:10px;font-weight:700;color:var(--gray);">Backup</label>
+          <select class="form-select" id="assign-c${c}-scorer2" style="padding:6px;font-size:12px;"><option value="">Backup</option></select></div>
+      </div>
     </div>`;
   }
   document.getElementById('assign-court-slots').innerHTML=h;
   // Populate selects
   const sorted=[...D.players].sort((a,b)=>a.court-b.court||a.lastName.localeCompare(b.lastName));
   for(let c=1;c<=n;c++){
-    ['p1','p2'].forEach(p=>{
+    ['p1','p2','scorer1','scorer2'].forEach(p=>{
       const sel=document.getElementById('assign-c'+c+'-'+p);
+      if(!sel)return;
       sorted.forEach(pl=>{const o=document.createElement('option');o.value=pl.id;o.textContent=pl.firstName+' '+pl.lastName.charAt(0)+'. (PG'+pl.court+')';sel.appendChild(o);});
     });
   }
@@ -5890,15 +5897,20 @@ function saveAssignment(){
   const opp=document.getElementById('assign-opp').value.trim();
   const numCourts=parseInt(document.getElementById('assign-courts').value)||3;
   const courts=[];
+  // Scorer assignments as a parallel map keyed by court number, same shape as the edit path.
+  const scorers={};
   for(let c=1;c<=numCourts;c++){
     const p1=document.getElementById('assign-c'+c+'-p1')?.value||'';
     const p2=document.getElementById('assign-c'+c+'-p2')?.value||'';
     if(p1||p2)courts.push({court:c,p1,p2});
+    const s1=document.getElementById('assign-c'+c+'-scorer1')?.value||'';
+    const s2=document.getElementById('assign-c'+c+'-scorer2')?.value||'';
+    if(s1)scorers[c]={primary:s1,secondary:s2||null};
   }
   if(!courts.length){toast('Assign at least one court');return;}
   const notes=document.getElementById('assign-notes')?.value.trim()||'';
   const id=gi('asgn');
-  fbSet('assignments/'+id,{id,date,type,opponent:opp||null,courts,notes:notes||null,createdAt:td()});
+  fbSet('assignments/'+id,{id,date,type,opponent:opp||null,courts,scorers,notes:notes||null,createdAt:td()});
   toast('Assignment saved!');
   // Prompt lineup release for duals with opponent
   if(type==='gameday'&&opp)setTimeout(()=>promptLineupRelease(date,opp),600);
