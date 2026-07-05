@@ -1438,6 +1438,7 @@ ${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar
     <button class="pp-tab-btn" onclick="switchPPTab('matches',this)">📋 My Matches</button>
     <button class="pp-tab-btn" onclick="switchPPTab('learn',this)">🎓 Learn</button>
     ${SC.chatEnabled?'<button class="pp-tab-btn" onclick="switchPPTab(\'chat\',this)">💬 Club Chat</button>':''}
+    ${SC.pickupEnabled?'<button class="pp-tab-btn" onclick="window.open(\'https://courtsense.app/pickup/\',\'_blank\')">🏖️ Pickup</button>':''}
   </div>
 
   <!-- ══ MY STATS PANEL ══ -->
