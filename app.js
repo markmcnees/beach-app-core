@@ -1434,9 +1434,9 @@ ${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar
   <div class="pp-tab-bar">
     <button class="pp-tab-btn active" onclick="switchPPTab('stats',this)">📊 My Stats</button>
     <button class="pp-tab-btn" onclick="switchPPTab('live',this)">🏐 Live Score Entry</button>
-    <button class="pp-tab-btn" onclick="switchPPTab('scouts',this)">🕵️ Scouts</button>
-    <button class="pp-tab-btn" onclick="switchPPTab('matches',this)">📋 My Matches</button>
-    <button class="pp-tab-btn" onclick="switchPPTab('learn',this)">🎓 Learn</button>
+    ${!SC.clubPortalLite?'<button class="pp-tab-btn" onclick="switchPPTab(\'scouts\',this)">🕵️ Scouts</button>':''}
+    ${!SC.clubPortalLite?'<button class="pp-tab-btn" onclick="switchPPTab(\'matches\',this)">📋 My Matches</button>':''}
+    ${!SC.clubPortalLite?'<button class="pp-tab-btn" onclick="switchPPTab(\'learn\',this)">🎓 Learn</button>':''}
     ${SC.chatEnabled?'<button class="pp-tab-btn" onclick="switchPPTab(\'chat\',this)">💬 Club Chat</button>':''}
     ${SC.pickupEnabled?'<button class="pp-tab-btn" onclick="window.open(\'https://courtsense.app/pickup/\',\'_blank\')">🏖️ Pickup</button>':''}
   </div>
@@ -1447,13 +1447,13 @@ ${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar
     <button class="btn btn-blue btn-small" style="width:100%;margin-bottom:12px;" onclick="showAthleteCard(currentPlayerId)">View Athlete Card</button>
 
     <!-- Season Summary -->
-    <div class="card"><div class="card-title"><span class="bar"></span> My Season Summary</div>
+    ${!SC.clubPortalLite?`<div class="card"><div class="card-title"><span class="bar"></span> My Season Summary</div>
       <div style="display:flex;gap:8px;margin-bottom:10px;" id="pp-stat-toggle">
         <button class="filter-btn active" id="pp-stat-official" onclick="ppSetStatView('official',this)" style="flex:1;text-align:center;">Official (CT 1-5)</button>
         <button class="filter-btn" id="pp-stat-exhibition" onclick="ppSetStatView('exhibition',this)" style="flex:1;text-align:center;color:#0e7a4d;border-color:#0e7a4d;">Exhibition (CT 6+)</button>
       </div>
       <div id="pp-summary"></div>
-    </div>
+    </div>`:''}
 
     <!-- Goals (moved here) -->
     <div class="card"><div class="card-title" style="color:var(--gold);"><span class="bar" style="background:var(--gold);"></span> My Goals &amp; Development Plan</div>
@@ -1536,15 +1536,15 @@ ${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar
     </div>
 
     <!-- Season Schedule -->
-    <div class="card"><div class="card-title"><span class="bar"></span> Season Schedule</div>
+    ${!SC.clubPortalLite?`<div class="card"><div class="card-title"><span class="bar"></span> Season Schedule</div>
       <div id="pp-assignment" style="margin-bottom:12px;"></div>
       <div id="pp-schedule"></div>
-    </div>
+    </div>`:''}
 
     <!-- Area Standings -->
-    <div class="card"><div class="card-title"><span class="bar"></span> Area Standings</div>
+    ${!SC.clubPortalLite?`<div class="card"><div class="card-title"><span class="bar"></span> Area Standings</div>
       <div id="pp-standings"></div>
-    </div>
+    </div>`:''}
 
     <!-- Change Password -->
     <div class="card"><div class="card-title"><span class="bar"></span> Change Password</div>
@@ -3779,7 +3779,7 @@ function renderPlayerPortal(){
   const _gdFiltered=ppStatView==='exhibition'?(D.gamedays||[]).filter(m=>(m.court||0)>5):(D.gamedays||[]).filter(m=>(m.court||0)<=5||!(m.court));
   const gs=extStats(pid,_gdFiltered);
   const ss=extStats(pid,D.scrimmages);
-  document.getElementById('pp-summary').innerHTML=`
+  const _psum=document.getElementById('pp-summary');if(_psum)_psum.innerHTML=`
     <div style="grid-column:1/-1;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:4px;">
       <div class="stat-box"><div class="stat-number green">${gs.matchesWon}-${gs.matchesLost}</div><div class="stat-label">Match W-L</div></div>
       <div class="stat-box"><div class="stat-number green">${gs.setsWon}-${gs.setsLost}</div><div class="stat-label">Set W-L</div></div>
@@ -4027,7 +4027,7 @@ function renderPlayerPortal(){
 
 function renderPlayerSchedule(){
   const games=[...D.schedule.filter(inSeason)].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
-  if(!games.length){document.getElementById('pp-schedule').innerHTML='<div style="color:var(--gray);font-size:13px;text-align:center;padding:12px;">No schedule yet.</div>';return;}
+  if(!games.length){const _pe=document.getElementById('pp-schedule');if(_pe)_pe.innerHTML='<div style="color:var(--gray);font-size:13px;text-align:center;padding:12px;">No schedule yet.</div>';return;}
   const today=td();
   let h='';
   games.forEach(g=>{
@@ -4044,7 +4044,7 @@ function renderPlayerSchedule(){
     else if(upcoming){h+='<span style="font-size:11px;color:var(--gray);">TBD</span>';}
     h+='</div></div>';
   });
-  document.getElementById('pp-schedule').innerHTML=h;
+  const _pe2=document.getElementById('pp-schedule');if(_pe2)_pe2.innerHTML=h;
   // Player standings view
   renderPlayerStandings();
 }
@@ -4069,7 +4069,7 @@ function renderPlayerStandings(){
     const pctB=(b[1].w+b[1].l)>0?b[1].w/(b[1].w+b[1].l):0;
     return pctB-pctA||b[1].w-a[1].w;
   });
-  if(!sorted.length){document.getElementById('pp-standings').innerHTML='<div style="color:var(--gray);font-size:13px;text-align:center;padding:12px;">No standings data yet.</div>';return;}
+  if(!sorted.length){const _pst=document.getElementById('pp-standings');if(_pst)_pst.innerHTML='<div style="color:var(--gray);font-size:13px;text-align:center;padding:12px;">No standings data yet.</div>';return;}
   let h='<table class="player-table"><thead><tr><th>#</th><th>Team</th><th>W</th><th>L</th><th>Pct</th></tr></thead><tbody>';
   sorted.forEach(([name,s],i)=>{
     const pct=(s.w+s.l)>0?((s.w/(s.w+s.l))*100).toFixed(0)+'%':'—';
@@ -4082,7 +4082,7 @@ function renderPlayerStandings(){
       <td style="font-family:'Bebas Neue';font-size:14px;">${pct}</td></tr>`;
   });
   h+='</tbody></table>';
-  document.getElementById('pp-standings').innerHTML=h;
+  const _pst2=document.getElementById('pp-standings');if(_pst2)_pst2.innerHTML=h;
 }
 
 function renderPlayerExtMatches(pid,matchList,containerId){
