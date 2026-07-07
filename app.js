@@ -1406,9 +1406,14 @@ ${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar
     <div style="font-family:'Bebas Neue';font-size:24px;letter-spacing:1px;color:#082A4F;margin-bottom:8px;">Practice Groups</div>
     <p style="font-size:13px;color:var(--gray);line-height:1.6;margin:0;">Practice Groups is coming to the coach app.</p>
   </div></div>`}
-  ${SC.tiersEnabled?'':`<div class="tab-content" id="tab-hsimport"><div class="card" style="text-align:center;padding:34px 20px;">
-    <div style="font-family:'Bebas Neue';font-size:24px;letter-spacing:1px;color:#082A4F;margin-bottom:8px;">Import and Export</div>
-    <p style="font-size:13px;color:var(--gray);line-height:1.6;margin:0;">Import and Export is coming to the coach app.</p>
+  ${SC.tiersEnabled?'':`<div class="tab-content" id="tab-hsimport"><div class="card">
+    <div class="card-title"><span class="bar"></span> Import and Export</div>
+    <p style="font-size:13px;color:var(--gray);line-height:1.6;margin-bottom:14px;">Export your full program to Excel or JSON any time, for a backup or to share with staff. Import is coming soon.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-small" style="background:#082A4F;color:#fff;border:none;" onclick="exportExcel()">📊 Export Excel</button>
+      <button class="btn btn-small" style="background:#082A4F;color:#fff;border:none;" onclick="document.getElementById('export-data').click()">Export JSON</button>
+      <button class="btn btn-small btn-secondary" onclick="toast('Import is coming soon')">Import</button>
+    </div>
   </div></div>`}
   ${SC.tiersEnabled?'':`<div class="tab-content" id="tab-hslogistics"><div class="card" style="text-align:center;padding:34px 20px;">
     <div style="font-family:'Bebas Neue';font-size:24px;letter-spacing:1px;color:#082A4F;margin-bottom:8px;">Logistics</div>
