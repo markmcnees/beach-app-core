@@ -1246,16 +1246,6 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       <button class="btn btn-blue btn-small" onclick="generateAIPairings()" id="ai-pair-btn" style="width:100%;">🤖 Generate Pairings</button>
       <div id="ai-pairings-result" style="margin-top:12px;"></div>
     </div>
-<div class="card"><div class="card-title"><span class="bar"></span> Data Management</div>
-      <div class="data-actions">
-        <button class="btn btn-primary btn-small" id="export-excel">📊 Export Excel</button>
-        <button class="btn btn-secondary btn-small" id="export-data">Export JSON</button>
-        <button class="btn btn-secondary btn-small" id="import-data-btn">Import JSON</button>
-        <input type="file" id="import-data" accept=".json" style="display:none;">
-        <button class="btn btn-danger btn-small" id="clear-matches">Clear All Matches</button>
-      </div>
-    </div>
-<div class="card" id="pin-change-card"><div class="card-title"><span class="bar"></span> 🔐 Change ${COACH_LABEL} PIN</div><p style="font-size:12px;color:var(--gray);margin-bottom:10px;">Update the PIN coaches use to access protected features.</p><div class="form-row" style="margin-bottom:8px;"><div class="form-group" style="margin-bottom:0;"><label class="form-label" style="font-size:11px;">Current PIN</label><input type="password" class="form-input" id="pin-current" placeholder="Current PIN" style="padding:8px;font-size:13px;"></div><div class="form-group" style="margin-bottom:0;"><label class="form-label" style="font-size:11px;">New PIN</label><input type="password" class="form-input" id="pin-new" placeholder="New PIN (4+ digits)" style="padding:8px;font-size:13px;"></div></div><button class="btn btn-primary btn-small" onclick="changeCoachPin()">Update PIN</button><div id="pin-change-status" style="font-size:12px;margin-top:8px;"></div></div>
     </div>
 
 <!-- ====== DUALS / LIVE SCORING ====== -->
@@ -1411,10 +1401,11 @@ ${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar
     <p style="font-size:13px;color:var(--gray);line-height:1.6;margin-bottom:14px;">Export your full program to Excel or JSON any time, for a backup or to share with staff. Import is coming soon.</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button class="btn btn-small" style="background:#082A4F;color:#fff;border:none;" onclick="exportExcel()">📊 Export Excel</button>
-      <button class="btn btn-small" style="background:#082A4F;color:#fff;border:none;" onclick="document.getElementById('export-data').click()">Export JSON</button>
+      <button class="btn btn-small" style="background:#082A4F;color:#fff;border:none;" onclick="exportJSON()">Export JSON</button>
       <button class="btn btn-small btn-secondary" onclick="toast('Import is coming soon')">Import</button>
     </div>
-  </div></div>`}
+  </div>
+  <div class="card" id="pin-change-card"><div class="card-title"><span class="bar"></span> 🔐 Change ${COACH_LABEL} PIN</div><p style="font-size:12px;color:var(--gray);margin-bottom:10px;">Update the PIN coaches use to access protected features.</p><div class="form-row" style="margin-bottom:8px;"><div class="form-group" style="margin-bottom:0;"><label class="form-label" style="font-size:11px;">Current PIN</label><input type="password" class="form-input" id="pin-current" placeholder="Current PIN" style="padding:8px;font-size:13px;"></div><div class="form-group" style="margin-bottom:0;"><label class="form-label" style="font-size:11px;">New PIN</label><input type="password" class="form-input" id="pin-new" placeholder="New PIN (4+ digits)" style="padding:8px;font-size:13px;"></div></div><button class="btn btn-small" style="background:#082A4F;color:#fff;border:none;" onclick="changeCoachPin()">Update PIN</button><div id="pin-change-status" style="font-size:12px;margin-top:8px;"></div></div></div>`}
   ${SC.tiersEnabled?'':`<div class="tab-content" id="tab-hslogistics"><div class="card" style="text-align:center;padding:34px 20px;">
     <div style="font-family:'Bebas Neue';font-size:24px;letter-spacing:1px;color:#082A4F;margin-bottom:8px;">Logistics</div>
     <p style="font-size:13px;color:var(--gray);line-height:1.6;margin:0;">Logistics is coming to the coach app.</p>
@@ -1868,7 +1859,7 @@ ${SC.demoMode ? `
       <li><span class="demo-guide-num">3</span><div class="demo-guide-content"><h3>Check partner chemistry</h3><p>Standings → tap a player → Partners. Shows W/L by partner across the season — which pairings are working, which aren't.</p></div></li>
       <li><span class="demo-guide-num">4</span><div class="demo-guide-content"><h3>View a played dual</h3><p>Schedule tab → tap a past dual. Court-by-court set scores, who played who.</p></div></li>
       <li><span class="demo-guide-num">5</span><div class="demo-guide-content"><h3>Open the planner</h3><p>Planner tab → enter ${COACH_LABEL} PIN 1234. Set lineups for upcoming matches. Try the auto-pair feature.</p></div></li>
-      <li><span class="demo-guide-num">6</span><div class="demo-guide-content"><h3>Try the Excel export</h3><p>Planner → Export. Roster, results, schedule all in one workbook.</p></div></li>
+      <li><span class="demo-guide-num">6</span><div class="demo-guide-content"><h3>Try the Excel export</h3><p>Manage, then Import/Export. Roster, results, schedule all in one workbook.</p></div></li>
       <li><span class="demo-guide-num">7</span><div class="demo-guide-content"><h3>Check the live scoring view</h3><p>From any dual, tap "Live Score." Mobile-friendly view for keeping score on the sand.</p></div></li>
     </ol>
   </div>
@@ -2226,8 +2217,12 @@ function filterPastLineups(){
 }
 
 function changeCoachPin(){
-  const newPin=document.getElementById('new-coach-pin')?.value?.trim();
+  const curEl=document.getElementById('pin-current');
+  const newEl=document.getElementById('pin-new');
   const statusEl=document.getElementById('pin-change-status');
+  const cur=curEl?curEl.value.trim():'';
+  const newPin=newEl?newEl.value.trim():'';
+  if(cur!==(window._coachPin||COACH_PIN)){if(statusEl)statusEl.textContent='Current PIN is incorrect';return;}
   if(!newPin||newPin.length<4){if(statusEl)statusEl.textContent='PIN must be at least 4 digits';return;}
   if(!db){if(statusEl)statusEl.textContent='Not connected';return;}
   db.ref(DB_ROOT+'/config/coachPin').set(newPin,err=>{
@@ -3613,42 +3608,11 @@ const _addP=document.getElementById('add-player'); if(_addP) _addP.addEventListe
   if(db)db.ref(SC.dbRoots.profiles+'/players/'+id).update({height:document.getElementById('new-height').value.trim()||null,reach:document.getElementById('new-reach').value.trim()||null,gradYear:parseInt(document.getElementById('new-gradyear').value)||null,position:document.getElementById('new-role').value||null,preferredSide:document.getElementById('new-side').value||null,dominantHand:document.getElementById('new-hand').value||null});
   document.getElementById('new-first').value='';document.getElementById('new-last').value='';document.getElementById('new-jersey').value='';document.getElementById('new-gradyear').value='';document.getElementById('new-height').value='';document.getElementById('new-reach').value='';document.getElementById('new-hand').value='';document.getElementById('new-side').value='';document.getElementById('new-role').value='';toast('Player added!');});
 
-// Data management
-document.getElementById('export-data').addEventListener('click',()=>{
+// Data export (JSON). Named so the Manage Import/Export card can call it directly. Excel export is exportExcel().
+function exportJSON(){
   const b=new Blob([JSON.stringify(D,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);
-  a.download=SC.exportPrefix+td()+'.json';a.click();URL.revokeObjectURL(a.href);toast('Exported!');});
-document.getElementById('import-data-btn').addEventListener('click',()=>document.getElementById('import-data').click());
-document.getElementById('import-data').addEventListener('change',e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();
-  r.onload=ev=>{try{const imp=JSON.parse(ev.target.result);
-    if(imp.players){
-      const data={players:{},matches:{},planned:{},gamedays:{},scrimmages:{},schedule:{}};
-      (Array.isArray(imp.players)?imp.players:Object.values(imp.players)).forEach(p=>{data.players[p.id]=p;});
-      if(imp.matches)(Array.isArray(imp.matches)?imp.matches:Object.values(imp.matches)).forEach(m=>{data.matches[m.id]=m;});
-      if(imp.planned)(Array.isArray(imp.planned)?imp.planned:Object.values(imp.planned)).forEach(p=>{data.planned[p.id]=p;});
-      if(imp.gamedays)(Array.isArray(imp.gamedays)?imp.gamedays:Object.values(imp.gamedays)).forEach(g=>{data.gamedays[g.id]=g;});
-      if(imp.scrimmages)(Array.isArray(imp.scrimmages)?imp.scrimmages:Object.values(imp.scrimmages)).forEach(s=>{data.scrimmages[s.id]=s;});
-      if(imp.schedule)(Array.isArray(imp.schedule)?imp.schedule:Object.values(imp.schedule)).forEach(s=>{data.schedule[s.id]=s;});
-      if(imp.goals)data.goals=imp.goals;
-      if(imp.assignments)data.assignments=imp.assignments;
-      db.ref(DB_ROOT).set(data);toast('Imported & synced!');
-    }else toast('Invalid file');}catch(err){toast('Error reading file');}};r.readAsText(file);e.target.value='';});
-let _clearMatchesArmed=false,_clearMatchesTimer=null;
-document.getElementById('clear-matches').addEventListener('click',()=>{
-  const btn=document.getElementById('clear-matches');
-  if(_clearMatchesArmed){
-    clearTimeout(_clearMatchesTimer);_clearMatchesArmed=false;
-    btn.textContent='📊 Export Excel';btn.style.background='';
-    db.ref(DB_ROOT+'/matches').set({});db.ref(DB_ROOT+'/planned').set({});
-    db.ref(DB_ROOT+'/gamedays').set({});db.ref(DB_ROOT+'/scrimmages').set({});
-    toast('All matches cleared');
-  }else{
-    _clearMatchesArmed=true;
-    btn.textContent='⚠️ Tap again to confirm delete';btn.style.background='var(--loss-red)';
-    _clearMatchesTimer=setTimeout(()=>{
-      _clearMatchesArmed=false;btn.textContent='Clear All Matches';btn.style.background='';
-    },4000);
-  }
-});
+  a.download=SC.exportPrefix+td()+'.json';a.click();URL.revokeObjectURL(a.href);toast('Exported!');
+}
 
 // Modal clicks
 document.getElementById('edit-modal').addEventListener('click',function(e){if(e.target===this)closeEdit();});
@@ -5223,7 +5187,6 @@ ANALYSIS: [2-3 sentences explaining overall strategy]`}`}]
 // ============================================================
 // EXCEL EXPORT
 // ============================================================
-document.getElementById('export-excel').addEventListener('click',exportExcel);
 function exportExcel(){
   if(typeof XLSX==='undefined'){toast('XLSX library not loaded');return;}
   const wb=XLSX.utils.book_new();
