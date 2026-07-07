@@ -1037,7 +1037,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       `:`
       <button class="tab" data-tab="recruiting">Recruiting</button>
       <button class="tab" data-tab="players">Stats</button>
-      <button class="tab" data-tab="hspgroups">Practice Groups</button>
+      <button class="tab" data-tab="practicegroups">Practice Groups</button>
       <button class="tab" data-tab="goals">Goals</button>
       `}
     </div>
@@ -8218,8 +8218,14 @@ function pgGenerateTier(tier,mode,courts){
 // Generate both tiers in the chosen mode, then repaint. Local computation, no AI worker.
 function generatePracticeGroups(mode){
   pgActiveMode=mode; // remember which mode is showing so its button stays lit
-  pgGenerateTier('gold',mode,pgGoldCourts);
-  pgGenerateTier('garnet',mode,pgGarnetCourts);
+  if(SC.tiersEnabled){
+    pgGenerateTier('gold',mode,pgGoldCourts);
+    pgGenerateTier('garnet',mode,pgGarnetCourts);
+  }else{
+    // HS: same engine, HS squads. The gold slot is Development, the garnet slot is Roster.
+    pgGenerateTier('development',mode,pgGoldCourts);
+    pgGenerateTier('roster',mode,pgGarnetCourts);
+  }
   toast(mode==='together'?'Groups generated (Best Together)':'Groups generated (Balanced)');
   renderPracticeGroups();
 }
@@ -8243,7 +8249,7 @@ function pgMovePlayerTier(pid,newTier){
   const after=gP(pid); if(!after)return;
   after.pg=1;
   fbSet('players/'+pid,{...after,pg:1});
-  const TIER_LABELS={gold:'Gold',garnet:'Garnet'};
+  const TIER_LABELS={gold:'Gold',garnet:'Garnet',development:'Development',roster:'Roster'};
   toast('Moved to '+(TIER_LABELS[newTier]||newTier)+', PG1');
   renderPracticeGroups(); // coachSetTier re-renders the roster but not this view, so repaint it here
 }
@@ -8253,8 +8259,11 @@ function renderPracticeGroups(){
   const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   // Build one tier column: groups 1..courts, plus any leftover (no pg yet, or pg above the current count) under Unassigned.
   const col=(tier)=>{
-    const label=tier==='gold'?'Gold':'Garnet';
-    const headBg=tier==='gold'?'#CEB888':'#782F40';
+    // Value-aware labels/colors so one helper serves club (gold/garnet) and HS (development/roster).
+    const TL={gold:'Gold',garnet:'Garnet',development:'Development',roster:'Roster'};
+    const TBG={gold:'#CEB888',garnet:'#782F40',development:'#217F7F',roster:'#082A4F'};
+    const label=TL[tier]||tier;
+    const headBg=TBG[tier]||'#782F40';
     const headFg=tier==='gold'?'#2d2d2d':'#ffffff';
     const players=D.players
       .filter(p=>(p.tier||'unassigned')===tier)
@@ -8271,7 +8280,7 @@ function renderPracticeGroups(){
           +Array.from({length:maxPg},(_,i)=>i+1).map(g=>`<option value="${g}" ${x.p.pg===g?'selected':''}>PG${g}</option>`).join('')
           +`</select>`:''}
         <select class="tier-select" title="Move team" onchange="pgMovePlayerTier('${x.p.id}',this.value)">
-          ${[['gold','Gold'],['garnet','Garnet']].map(([v,lbl])=>`<option value="${v}" ${(x.p.tier||'')===v?'selected':''}>${lbl}</option>`).join('')}
+          ${(SC.tiersEnabled?[['gold','Gold'],['garnet','Garnet']]:[['development','Development'],['roster','Roster']]).map(([v,lbl])=>`<option value="${v}" ${(x.p.tier||'')===v?'selected':''}>${lbl}</option>`).join('')}
         </select>
       </div>`:'';
       return `<div style="padding:5px 0;border-bottom:1px solid var(--gray-lighter);font-size:13px;">
@@ -8300,16 +8309,16 @@ function renderPracticeGroups(){
       </div>`;
     }
     return `<div style="flex:1;min-width:240px;">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:1px;color:${tier==='gold'?'#9a7d2e':'#782F40'};margin-bottom:8px;">${label}</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:1px;color:${tier==='gold'?'#9a7d2e':tier==='development'?'#217F7F':tier==='roster'?'#082A4F':'#782F40'};margin-bottom:8px;">${label}</div>
       ${groupsHtml}
     </div>`;
   };
   pane.innerHTML=`<div class="card"><div class="card-title"><span class="bar"></span> 🏐 Practice Groups</div>
     <p style="font-size:12px;color:var(--gray);margin-bottom:12px;line-height:1.5;">Set how many practice groups each team runs, then generate. Best Together clusters the strongest players, Balanced spreads skill evenly. Groups are numbered from 1 within each team. This is a planning view and does not change court or pair seeding.</p>
     <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px;">
-      <label style="font-size:13px;color:var(--charcoal);display:flex;align-items:center;gap:6px;">Gold groups
+      <label style="font-size:13px;color:var(--charcoal);display:flex;align-items:center;gap:6px;">${SC.tiersEnabled?'Gold groups':'Development groups'}
         <input type="number" min="1" max="8" value="${pgGoldCourts}" onchange="setPgGoldCourts(this.value)" style="width:56px;padding:4px 6px;border:1px solid var(--gray-lighter);border-radius:6px;font-family:'Bebas Neue',sans-serif;font-size:15px;text-align:center;color:var(--charcoal);"></label>
-      <label style="font-size:13px;color:var(--charcoal);display:flex;align-items:center;gap:6px;">Garnet groups
+      <label style="font-size:13px;color:var(--charcoal);display:flex;align-items:center;gap:6px;">${SC.tiersEnabled?'Garnet groups':'Roster groups'}
         <input type="number" min="1" max="8" value="${pgGarnetCourts}" onchange="setPgGarnetCourts(this.value)" style="width:56px;padding:4px 6px;border:1px solid var(--gray-lighter);border-radius:6px;font-family:'Bebas Neue',sans-serif;font-size:15px;text-align:center;color:var(--charcoal);"></label>
       <label style="font-size:13px;color:var(--charcoal);display:flex;align-items:center;gap:6px;">Min per group
         <input type="number" min="1" max="8" value="${pgMinGroupSize}" onchange="setPgMinGroupSize(this.value)" style="width:56px;padding:4px 6px;border:1px solid var(--gray-lighter);border-radius:6px;font-family:'Bebas Neue',sans-serif;font-size:15px;text-align:center;color:var(--charcoal);"></label>
@@ -8319,8 +8328,8 @@ function renderPracticeGroups(){
       <button class="filter-btn${pgActiveMode==='balanced'?' active':''}" style="flex:1;min-width:150px;text-align:center;" onclick="generatePracticeGroups('balanced')">Balanced</button>
     </div>
     <div style="display:flex;gap:16px;flex-wrap:wrap;">
-      ${col('gold')}
-      ${col('garnet')}
+      ${SC.tiersEnabled?col('gold'):col('development')}
+      ${SC.tiersEnabled?col('garnet'):col('roster')}
     </div>
   </div>`;
 }
