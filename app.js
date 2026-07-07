@@ -1035,7 +1035,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       <button class="tab" data-tab="dashboard" style="display:none;">Dashboard</button>
       <button class="tab" data-tab="scouts" style="display:none;">Scouts</button>
       `:`
-      <button class="tab" data-tab="hsrecruiting">Recruiting</button>
+      <button class="tab" data-tab="recruiting">Recruiting</button>
       <button class="tab" data-tab="players">Stats</button>
       <button class="tab" data-tab="hspgroups">Practice Groups</button>
       <button class="tab" data-tab="goals">Goals</button>
@@ -8497,6 +8497,33 @@ function rcAddToTeam(prospectId, tier){
   const TIER_LABELS={gold:'Gold',garnet:'Garnet'};
   toast(p.firstName+' '+p.lastName+' added to '+(TIER_LABELS[tier]||tier));
 }
+// HS recruiting add-to-roster: creates the player record with the MINIMUM fields only.
+// No tier (squad is set later via the coach player modal control), no tier-based court
+// auto-assign, no health or medical fields. This path never writes tier.
+function rcAddToRosterHS(prospectId){
+  const p=recruitProspects.find(x=>x.id===prospectId);
+  if(!p||p.status==='assigned')return;
+  const newId=gi('player');
+  const rec={
+    id:newId,
+    firstName:p.firstName,
+    lastName:p.lastName,
+    classYear:p.classYear||'FR',
+    court:1,
+    jersey:null,
+    active:true,
+    gender:p.gender||'F',
+    csRank:rcEffectiveRating(p),
+    photo:p.photo||null
+  };
+  if(!Array.isArray(D.players))D.players=[];
+  D.players.push(rec);
+  p.status='assigned'; p.playerId=newId;
+  renderRecruiting();
+  if(typeof renderRoster==='function')renderRoster();
+  if(typeof renderPlayers==='function')renderPlayers();
+  toast(p.firstName+' '+p.lastName+' added to roster');
+}
 // Undo a placement: remove the promoted roster record and return the prospect to the unplaced list.
 function rcUndoAssign(prospectId){
   const p=recruitProspects.find(x=>x.id===prospectId);
@@ -8622,11 +8649,11 @@ function renderRecruiting(){
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           ${nameBtn(p)}
           ${ratingBadge(p)}
-          ${tierBadge(p.tierRequest)}
+          ${SC.tiersEnabled?tierBadge(p.tierRequest):''}
         </div>
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-          <button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:#CEB888;color:#2d2d2d;border:none;" onclick="rcAddToTeam('${esc(p.id)}','gold')">Add to Gold</button>
-          <button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:#782F40;color:#ffffff;border:none;" onclick="rcAddToTeam('${esc(p.id)}','garnet')">Add to Garnet</button>
+          ${SC.tiersEnabled?`<button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:#CEB888;color:#2d2d2d;border:none;" onclick="rcAddToTeam('${esc(p.id)}','gold')">Add to Gold</button>
+          <button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:#782F40;color:#ffffff;border:none;" onclick="rcAddToTeam('${esc(p.id)}','garnet')">Add to Garnet</button>`:`<button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:#082A4F;color:#fff;border:none;" onclick="rcAddToRosterHS('${esc(p.id)}')">Add to Roster</button>`}
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px;">
@@ -8797,18 +8824,18 @@ function renderTeamAnalysis(){
       <div style="margin-bottom:12px;">${rows}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn btn-primary btn-small" style="flex:1;min-width:160px;" onclick="generatePracticePlan()">Generate Practice Plan</button>
-        ${SC.tiersEnabled?'<button class="btn btn-secondary btn-small" style="flex:1;min-width:160px;" onclick="toggleBuilder()">Build Practice Plan</button>':''}
+        <button class="btn btn-secondary btn-small" style="flex:1;min-width:160px;" onclick="toggleBuilder()">Build Practice Plan</button>
       </div>
       <div id="ta-plan-output" style="margin-top:14px;">${analysisPlanText}</div>
-      ${SC.tiersEnabled?'<div id="ta-builder" style="margin-top:14px;"></div>':''}`;
+      <div id="ta-builder" style="margin-top:14px;"></div>`;
   }
   pane.innerHTML=`<div class="card"><div class="card-title"><span class="bar"></span> 📋 Team Analysis</div>
     <p style="font-size:12px;color:var(--gray);margin-bottom:12px;line-height:1.5;">Pick a team to see its collective skill averages, then generate a practice session aimed at the weakest spots. Assessment scores of zero mean unassessed and are left out of the averages.</p>
     ${picker}
     ${body}
   </div>`;
-  // Repaint the in-memory drill-picker mockup from state so it survives tier switches and plan re-renders. Grass Club only.
-  if(SC.tiersEnabled)renderBuilder();
+  // Repaint the drill-picker from state so it survives tier switches and plan re-renders. Club and HS both.
+  renderBuilder();
 }
 
 // Demo + live, mirroring generateAIPlan. Ephemeral: result is held in
