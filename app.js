@@ -1713,6 +1713,20 @@ ${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar
         <button class="btn btn-red btn-small" style="width:100%;" onclick="coachSaveIdentity()">Save Identity</button>
         <button class="btn btn-secondary btn-small" style="width:100%;margin-top:8px;" onclick="showAthleteCard(document.getElementById('coach-player-overlay').dataset.pid)">View Athlete Card</button>
       </div>
+      ${SC.demoMode?`<div id="cpm-athinfo" style="border-top:1px solid var(--gray-lighter);padding-top:16px;">
+        <div style="font-family:'Bebas Neue';font-size:16px;letter-spacing:1px;color:var(--gray);margin-bottom:8px;">🎓 Athlete Info (demo)</div>
+        <p style="font-size:11px;color:var(--gray);margin-bottom:8px;">Preview only. Edits show on the athlete card for this session and reset on refresh.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+          <input type="text" id="cpm-ai-gpa" class="form-input" placeholder="GPA" style="flex:1;min-width:80px;padding:8px;font-size:13px;">
+          <input type="text" id="cpm-ai-sat" class="form-input" placeholder="SAT" style="flex:1;min-width:80px;padding:8px;font-size:13px;">
+          <input type="text" id="cpm-ai-act" class="form-input" placeholder="ACT" style="flex:1;min-width:80px;padding:8px;font-size:13px;">
+          <input type="text" id="cpm-ai-major" class="form-input" placeholder="Intended major" style="flex:1;min-width:150px;padding:8px;font-size:13px;">
+          <input type="text" id="cpm-ai-club" class="form-input" placeholder="Club team" style="flex:1;min-width:150px;padding:8px;font-size:13px;">
+          <input type="text" id="cpm-ai-years" class="form-input" placeholder="Years club experience" style="flex:1;min-width:160px;padding:8px;font-size:13px;">
+          <input type="text" id="cpm-ai-tourney" class="form-input" placeholder="National tournament results" style="flex:1;min-width:220px;padding:8px;font-size:13px;">
+        </div>
+        <button class="btn btn-small" style="width:100%;background:#082A4F;color:#fff;border:none;" onclick="coachSaveAthleteInfo()">Save Athlete Info (demo)</button>
+      </div>`:''}
       <div>
         <div style="font-family:'Bebas Neue';font-size:16px;letter-spacing:1px;color:var(--gray);margin-bottom:8px;">⭐ Skills (1–10)</div>
         <div id="cpm-skills"></div>
@@ -4563,6 +4577,13 @@ function coachOpenPlayer(pid){
   _setIdV('cpm-id-position',_idp.position);
   _setIdV('cpm-id-side',_idp.preferredSide);
   _setIdV('cpm-id-hand',_idp.dominantHand);
+  // Athlete info demo editor: prefill from the in-memory demo dataset (demo only; unseeded ids leave inputs empty).
+  if(SC.demoMode){
+    const _aiEdit=_demoAthleteInfo[pid]||{};
+    _setIdV('cpm-ai-gpa',_aiEdit.gpa); _setIdV('cpm-ai-sat',_aiEdit.sat); _setIdV('cpm-ai-act',_aiEdit.act);
+    _setIdV('cpm-ai-major',_aiEdit.major); _setIdV('cpm-ai-club',_aiEdit.club); _setIdV('cpm-ai-years',_aiEdit.years);
+    _setIdV('cpm-ai-tourney',_aiEdit.tourney);
+  }
   // Read-only glance line summarizing the durable identity record (shared helper, also used by the athlete card).
   const _idSum=document.getElementById('cpm-id-summary');
   if(_idSum)_idSum.textContent=athleteGlanceLine(pid);
@@ -10771,6 +10792,35 @@ function lfManualRefresh(){
 // ============================================================
 // ATHLETE CARD (shareable player profile, internal-only for now)
 // ============================================================
+// Demo-only athlete academics/club info, keyed by player id. In-memory only: edited via the coach
+// modal (coachSaveAthleteInfo) and shown on the athlete card. Never persisted, resets on refresh.
+// Seeded for the Sand Sharks demo roster; other configs start empty and fall back to the COMING SOON rows.
+let _demoAthleteInfo={
+  sd01:{gpa:'4.0',sat:'1290',act:'28',major:'Sports Medicine',club:'Gulf Coast Juniors 18s',years:'5',tourney:'AAU Nationals, top 12 finish 2025'},
+  sd02:{gpa:'3.8',sat:'1240',act:'27',major:'Marketing',club:'Emerald Coast VBC 18-1',years:'4',tourney:'USAV Nationals qualifier 2025'},
+  sd03:{gpa:'3.6',sat:'1180',act:'25',major:'Kinesiology',club:'Panhandle Beach Elite',years:'4',tourney:'AAU Nationals, pool play 2025'},
+  sd04:{gpa:'3.9',sat:'1260',act:'27',major:'Business',club:'30A Beach Club 18s',years:'3',tourney:'USAV Florida Region champions 2025'},
+  sd05:{gpa:'3.5',sat:'1150',act:'24',major:'Nursing',club:'Gulf Coast Juniors 17s',years:'3',tourney:'AAU Grand Prix, top 20 2025'},
+  sd06:{gpa:'3.7',sat:'1210',act:'26',major:'Communications',club:'Emerald Coast VBC 17-1',years:'4',tourney:'USAV Nationals qualifier 2024'},
+  sd07:{gpa:'3.4',sat:'1100',act:'23',major:'Education',club:'Panhandle Beach Elite',years:'2',tourney:'Florida Region top 8 2025'},
+  sd08:{gpa:'3.8',sat:'1230',act:'27',major:'Exercise Science',club:'30A Beach Club 17s',years:'3',tourney:'AAU Nationals, pool play 2024'},
+  sd09:{gpa:'4.1',sat:'1330',act:'30',major:'Engineering',club:'Gulf Coast Juniors 18s',years:'6',tourney:'AAU Nationals, top 8 finish 2025'},
+  sd10:{gpa:'3.9',sat:'1280',act:'28',major:'Psychology',club:'Emerald Coast VBC 18-1',years:'5',tourney:'USAV Nationals, day 3 finish 2025'},
+  sd11:{gpa:'3.6',sat:'1170',act:'25',major:'Health Sciences',club:'Panhandle Beach Elite',years:'4',tourney:'AAU Grand Prix, top 15 2025'},
+  sd12:{gpa:'3.3',sat:'1080',act:'22',major:'Undecided',club:'30A Beach Club 16s',years:'2',tourney:'Florida Region qualifier 2025'},
+  sd13:{gpa:'3.7',sat:'1200',act:'26',major:'Biology',club:'Gulf Coast Juniors 17s',years:'3',tourney:'AAU Nationals, pool play 2025'},
+  sd14:{gpa:'3.5',sat:'1140',act:'24',major:'Graphic Design',club:'Emerald Coast VBC 16-1',years:'2',tourney:'Florida Region top 10 2025'},
+  sd15:{gpa:'4.0',sat:'1300',act:'29',major:'Pre-Law',club:'Panhandle Beach Elite',years:'5',tourney:'AAU Nationals, top 10 finish 2024'},
+  sd16:{gpa:'3.8',sat:'1220',act:'27',major:'Athletic Training',club:'30A Beach Club 17s',years:'3',tourney:'USAV Nationals qualifier 2025'}
+};
+// Coach-side athlete-info editor (demo only). Reads the modal inputs, updates the in-memory dataset,
+// toasts, and does NOT write to Firebase. Reopening the athlete card reflects the edit for the session.
+function coachSaveAthleteInfo(){
+  const ov=document.getElementById('coach-player-overlay'); const pid=ov&&ov.dataset.pid; if(!pid)return;
+  const gv=id=>{const el=document.getElementById(id);return el?el.value.trim():'';};
+  _demoAthleteInfo[pid]={gpa:gv('cpm-ai-gpa'),sat:gv('cpm-ai-sat'),act:gv('cpm-ai-act'),major:gv('cpm-ai-major'),club:gv('cpm-ai-club'),years:gv('cpm-ai-years'),tourney:gv('cpm-ai-tourney')};
+  toast('Athlete info saved for this demo session');
+}
 function showAthleteCard(pid){
   var ol=document.getElementById('athlete-overlay');
   if(!ol)return;
@@ -10912,31 +10962,46 @@ function renderAthleteCard(pid){
   // College-profile preview sections: field LABELS AND STRUCTURE ONLY, clearly marked COMING SOON.
   // No fabricated data anywhere: every value cell is a neutral dash. Display-only, no Firebase writes, no new profile fields.
   var csBadge='<span style="'+BN+';font-size:10px;letter-spacing:1px;color:'+GOLD+';padding:2px 8px;border:1px solid '+GOLD+';border-radius:10px;margin-left:8px;">COMING SOON</span>';
-  function csRow(label){
+  function csRow(label,val){
+    var has=(val!=null&&val!=='');
     return '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.12);">'
       +'<span style="'+BODY+';font-size:13px;color:rgba(255,255,255,0.7);">'+esc(label)+'</span>'
-      +'<span style="'+BN+';font-size:17px;color:rgba(255,255,255,0.4);">-</span></div>';
+      +'<span style="'+BN+';font-size:17px;color:rgba(255,255,255,'+(has?'0.9':'0.4')+');">'+(has?esc(val):'-')+'</span></div>';
   }
-  function csSection(title, bodyHtml, helper){
-    return '<div style="opacity:0.55;margin-bottom:14px;">'
-      +'<div style="display:flex;align-items:center;margin:4px 0 8px;"><span style="'+BN+';font-size:13px;letter-spacing:2px;color:rgba(255,255,255,0.9);">'+title+'</span>'+csBadge+'</div>'
+  function csSection(title, bodyHtml, helper, live){
+    return '<div style="opacity:'+(live?'1':'0.55')+';margin-bottom:14px;">'
+      +'<div style="display:flex;align-items:center;margin:4px 0 8px;"><span style="'+BN+';font-size:13px;letter-spacing:2px;color:rgba(255,255,255,0.9);">'+title+'</span>'+(live?'':csBadge)+'</div>'
       +'<div style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:12px;padding:6px 14px;">'+bodyHtml+'</div>'
       +'<div style="'+BODY+';font-size:11px;color:rgba(255,255,255,0.65);margin-top:6px;">'+esc(helper)+'</div>'
       +'</div>';
   }
 
+  // Demo-only academics/club values; null (live schools, or an unseeded demo id) falls back to the COMING SOON rows.
+  var _ai=SC.demoMode?_demoAthleteInfo[pid]:null;
   var acad=document.getElementById('ac-academics');
   if(acad){
-    acad.innerHTML=csSection('ACADEMICS',
-      csRow('GPA')+csRow('SAT')+csRow('ACT')+csRow('Intended Major'),
-      'Academics are coming with the full athlete profile, shared once a parent approves it.');
+    if(_ai){
+      acad.innerHTML=csSection('ACADEMICS',
+        csRow('GPA',_ai.gpa)+csRow('SAT',_ai.sat)+csRow('ACT',_ai.act)+csRow('Intended Major',_ai.major),
+        'Demo preview. Real academics are shared once a parent approves the profile.', true);
+    }else{
+      acad.innerHTML=csSection('ACADEMICS',
+        csRow('GPA')+csRow('SAT')+csRow('ACT')+csRow('Intended Major'),
+        'Academics are coming with the full athlete profile, shared once a parent approves it.');
+    }
   }
 
   var club=document.getElementById('ac-club');
   if(club){
-    club.innerHTML=csSection('CLUB & TOURNAMENTS',
-      csRow('Club Team')+csRow('Years Club Experience')+csRow('National Tournament Results (USAV / AAU / AVP)'),
-      'Club history and tournament results are coming with the full athlete profile, shared once a parent approves it.');
+    if(_ai){
+      club.innerHTML=csSection('CLUB & TOURNAMENTS',
+        csRow('Club Team',_ai.club)+csRow('Years Club Experience',_ai.years)+csRow('National Tournament Results (USAV / AAU / AVP)',_ai.tourney),
+        'Demo preview. Club history is shared once a parent approves the profile.', true);
+    }else{
+      club.innerHTML=csSection('CLUB & TOURNAMENTS',
+        csRow('Club Team')+csRow('Years Club Experience')+csRow('National Tournament Results (USAV / AAU / AVP)'),
+        'Club history and tournament results are coming with the full athlete profile, shared once a parent approves it.');
+    }
   }
 
   var hi=document.getElementById('ac-highlights');
