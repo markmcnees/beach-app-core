@@ -662,6 +662,7 @@ body{font-family:'Barlow',sans-serif;background:var(--cream);color:var(--black);
 .class-SR{background:var(--black);color:var(--white);}.class-JR{background:var(--red);color:var(--white);}.class-SO{background:var(--gold);color:var(--black);}.class-FR{background:var(--gray-light);color:var(--charcoal);}
 .tier-badge,.badge-exec,.badge-faculty{display:inline-block;font-family:'Bebas Neue',sans-serif;font-size:11px;padding:2px 8px;border-radius:4px;letter-spacing:1px;}
 .tier-garnet{background:#782F40;color:#ffffff;}.tier-gold{background:#CEB888;color:#2d2d2d;}.tier-unassigned{background:var(--gray-light);color:var(--charcoal);}
+.tier-roster{background:#082A4F;color:#fff;}.tier-development{background:#217F7F;color:#fff;}
 .badge-exec{background:#5e2432;color:#ffffff;}.badge-faculty{background:#13243A;color:#ffffff;}
 .tier-select{font-family:'Barlow',sans-serif;font-size:12px;padding:2px 6px;border:1px solid var(--gray-light);border-radius:5px;color:var(--charcoal);margin-left:4px;}
 .player-table{width:100%;border-collapse:separate;border-spacing:0;font-size:13px;}
@@ -3309,12 +3310,12 @@ function coachSetTier(pid,newTier){
   fbRemove('tier_requests/'+pid);
   if(D.tierRequests)delete D.tierRequests[pid];
   const rq=document.getElementById('cpm-tier-req');if(rq)rq.remove();
-  const TIER_LABELS={unassigned:'Unassigned',gold:'Gold',garnet:'Garnet'};
+  const TIER_LABELS={unassigned:'Unassigned',gold:'Gold',garnet:'Garnet',roster:'Roster',development:'Development'};
   const b=document.getElementById('cpm-tier-badge');
   if(b){b.className='tier-badge tier-'+newTier;b.textContent=TIER_LABELS[newTier];}
   toast('Tier set: '+TIER_LABELS[newTier]);
-  // Refresh the roster behind the modal so a filtered view stays in sync (a player whose new tier no longer matches the active filter drops out immediately). Grass Club only.
-  if(SC.tiersEnabled && typeof renderRoster==='function') renderRoster();
+  // Refresh the roster behind the modal so a filtered view stays in sync (a player whose new tier no longer matches the active filter drops out immediately). Club and HS both.
+  if(typeof renderRoster==='function') renderRoster();
 }
 // Exec leadership setter (Grass Club only). Mirrors coachSetTier's whole-object spread write so no other field is disturbed.
 // leadership is 'exec' or 'faculty' or none. An empty selection clears it to null so absent means none. The chat layers read p.leadership later.
@@ -3341,7 +3342,7 @@ function playerBadge(p){
   if(p.leadership==='exec')    return '<span class="tier-badge badge-exec">Exec</span>';
   if(p.leadership==='faculty') return '<span class="tier-badge badge-faculty">Faculty Advisor</span>';
   const t=p.tier||'unassigned';
-  const L={unassigned:'Unassigned',gold:'Gold',garnet:'Garnet'};
+  const L={unassigned:'Unassigned',gold:'Gold',garnet:'Garnet',roster:'Roster',development:'Development'};
   return '<span class="tier-badge tier-'+t+'">'+L[t]+'</span>';
 }
 
@@ -4512,6 +4513,19 @@ function coachOpenPlayer(pid){
         `</select>`;
       document.getElementById('cpm-meta').innerHTML+=leaderHtml;
     }
+  }
+  else{
+    // HS tier control: Roster / Development, the Team-pillar analog of the club Gold / Garnet.
+    // Coach-only setter, same coachSetTier write. No player-side tier request or leadership roles here.
+    const HS_TIER_LABELS={unassigned:'Unassigned',roster:'Roster',development:'Development'};
+    const curTier=p.tier||'unassigned';
+    let tierHtml=` <span class="tier-badge tier-${curTier}" id="cpm-tier-badge">${HS_TIER_LABELS[curTier]||'Unassigned'}</span>`;
+    if(currentRole==='coach'){
+      tierHtml+=`<select class="tier-select" onchange="coachSetTier('${pid}',this.value)">`+
+        ['unassigned','roster','development'].map(t=>`<option value="${t}" ${t===curTier?'selected':''}>${HS_TIER_LABELS[t]}</option>`).join('')+
+        `</select>`;
+    }
+    document.getElementById('cpm-meta').innerHTML+=tierHtml;
   }
   // Skills sliders
   const SKILL_KEYS=['serving','passing','setting','hitting','blocking','defense','courtSense','communication'];
