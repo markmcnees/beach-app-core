@@ -3358,8 +3358,8 @@ function cancelEditName(pid,fn,ln){
 // Badge by precedence (Grass Club). Leadership wins over team tier: exec or faculty shows the leadership badge, otherwise the tier badge (gold/garnet/unassigned). Reused by the roster now and the chat layers later.
 function playerBadge(p){
   if(!p) return '';
-  if(p.leadership==='exec')    return '<span class="tier-badge badge-exec">Exec</span>';
-  if(p.leadership==='faculty') return '<span class="tier-badge badge-faculty">Faculty Advisor</span>';
+  if(SC.tiersEnabled && p.leadership==='exec')    return '<span class="tier-badge badge-exec">Exec</span>';
+  if(SC.tiersEnabled && p.leadership==='faculty') return '<span class="tier-badge badge-faculty">Faculty Advisor</span>';
   const t=p.tier||'unassigned';
   const L={unassigned:'Unassigned',gold:'Gold',garnet:'Garnet',roster:'Roster',development:'Development'};
   return '<span class="tier-badge tier-'+t+'">'+L[t]+'</span>';
