@@ -545,6 +545,8 @@ body{font-family:'Barlow',sans-serif;background:var(--cream);color:var(--black);
 .mode-bar-hs .mode-btn{font-size:12px;letter-spacing:0.5px;padding:9px 6px;}
 /* HS four-tab nav active state: navy Team-pillar pill. Scoped to mode-bar-hs so the club two-button nav is unaffected. */
 .mode-bar-hs .mode-btn.active{background:#082A4F;color:#fff;}
+/* HS Practice picker (Team/Development/Roster) active state, navy to match the nav. Scoped to the HS toggle id so the club Gold/Garnet picker is unaffected. */
+#ta-hs-toggle .filter-btn.active{background:#082A4F;color:#fff;}
 .sub-tabs{display:flex;padding:6px 12px 6px;gap:6px;}
 .sub-tabs .tab{flex:1;padding:9px 8px;font-size:13px;letter-spacing:1px;border-radius:8px;text-align:center;}
 .tab.active{background:rgba(255,255,255,0.2);color:var(--white);}.tab:hover{color:var(--white);}
@@ -1041,7 +1043,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
     ${SC.tiersEnabled?'':`<div class="sub-tabs" id="sub-tabs-hsmanage" style="display:none;">
       <button class="tab" data-tab="communicate">Communicate</button>
       <button class="tab" data-tab="hsimport">Import/Export</button>
-      <button class="tab" data-tab="hslogistics">Logistics</button>
+      <button class="tab" data-tab="logistics">Logistics</button>
     </div>`}
   </div>
 </div>
@@ -1439,10 +1441,14 @@ ${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar
   </div>`}
   ${SC.chatEnabled?'<div class="tab-content" id="tab-broadcast"></div>':''}
   ${SC.tiersEnabled?'<div class="tab-content" id="tab-teamanalysis"></div>':''}
-  ${SC.tiersEnabled?'<div class="tab-content" id="tab-practicegroups"></div>':''}
-  ${SC.tiersEnabled?'<div class="tab-content" id="tab-recruiting"></div>':''}
-  ${SC.tiersEnabled?'<div class="tab-content" id="tab-accounting"></div>':''}
-  ${SC.tiersEnabled?'<div class="tab-content" id="tab-travel"></div>':''}
+  <!-- Stage 2a: un-gated for HS too (was tiersEnabled-only). Panels exist for all configs; HS routing wired per surface in later commits. -->
+  <div class="tab-content" id="tab-practicegroups"></div>
+  <div class="tab-content" id="tab-recruiting"></div>
+  ${SC.tiersEnabled?`<div class="tab-content" id="tab-accounting"></div>
+  <div class="tab-content" id="tab-travel"></div>`:`<div class="tab-content" id="tab-logistics">
+    <div id="tab-accounting"></div>
+    <div id="tab-travel"></div>
+  </div>`}
 
 </div>
 <!-- PLAYER PORTAL (shown when logged in as player) -->
@@ -3398,6 +3404,7 @@ function refreshTab(id){
     case'recruiting':renderRecruiting();break;
     case'accounting':renderAccounting();break;
     case'travel':renderTravel();break;
+    case'logistics':renderAccounting();renderTravel();break;
   }
 }
 
@@ -3469,7 +3476,9 @@ function hsNav(dest, btn){
   document.querySelectorAll('#sub-tabs-gameday .tab, #sub-tabs-manage .tab, #sub-tabs-hsmanage .tab').forEach(x=>x.classList.remove('active'));
   if(dest==='practice'){
     document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('active'));
-    const tc=document.getElementById('tab-hspractice'); if(tc) tc.classList.add('active');
+    // Stage 2a: route the Practice tab to the real Team Analysis renderer (HS pane = tab-practice).
+    const tc=document.getElementById('tab-practice'); if(tc) tc.classList.add('active');
+    refreshTab('practice');
     return;
   }
   const rowId = dest==='players' ? 'sub-tabs-manage' : dest==='manage' ? 'sub-tabs-hsmanage' : 'sub-tabs-gameday';
@@ -7926,7 +7935,7 @@ function postExecBroadcast(){
 // then generate a practice session plan targeting them. Ephemeral: the
 // generated plan is held in memory and displayed, never written to Firebase.
 // ============================================================
-let analysisTier='gold';
+let analysisTier=SC.tiersEnabled?'gold':'all';
 let analysisPlanText='';
 function setAnalysisTier(t){ analysisTier=t; analysisPlanText=''; renderTeamAnalysis(); }
 
@@ -8746,12 +8755,15 @@ function renderTeamAnalysis(){
   if(!pane)return;
   const tierLabel=t=>t==='gold'?'Gold':'Garnet';
   // HS (no tiers) analyzes the whole roster with no Gold/Garnet picker and a neutral team label; the club path is unchanged.
-  const teamHead=SC.tiersEnabled?(tierLabel(analysisTier)+' team'):(SC.displayName||SC.schoolName||'Your team');
+  const teamHead=SC.tiersEnabled?(tierLabel(analysisTier)+' team'):(analysisTier==='development'?'Development':analysisTier==='roster'?'Roster':(SC.displayName||SC.schoolName||'Your team'));
   const picker=SC.tiersEnabled?(`<div style="display:flex;gap:8px;margin-bottom:12px;" id="ta-tier-toggle">`+
     [['gold','Gold'],['garnet','Garnet']].map(([v,lbl])=>
       `<button class="filter-btn${analysisTier===v?' active':''}" onclick="setAnalysisTier('${v}')" style="flex:1;text-align:center;">${lbl}</button>`).join('')+
-    `</div>`):'';
-  const a=analyzeTierSkills(SC.tiersEnabled?analysisTier:'all');
+    `</div>`):(`<div style="display:flex;gap:8px;margin-bottom:12px;" id="ta-hs-toggle">`+
+    [['all','Team'],['development','Development'],['roster','Roster']].map(([v,lbl])=>
+      `<button class="filter-btn${analysisTier===v?' active':''}" onclick="setAnalysisTier('${v}')" style="flex:1;text-align:center;">${lbl}</button>`).join('')+
+    `</div>`);
+  const a=analyzeTierSkills(analysisTier);
   let body;
   if(!tierDataSufficient(a)){
     body=`<p style="color:var(--gray);font-size:13px;padding:10px 0;line-height:1.5;">Not enough assessment data yet to analyze this team. Complete more skill assessments first.</p>`;
@@ -8788,10 +8800,10 @@ function renderTeamAnalysis(){
 // Demo + live, mirroring generateAIPlan. Ephemeral: result is held in
 // analysisPlanText and rendered into #ta-plan-output, never written to Firebase.
 async function generatePracticePlan(){
-  const a=analyzeTierSkills(SC.tiersEnabled?analysisTier:'all');
+  const a=analyzeTierSkills(analysisTier);
   if(!tierDataSufficient(a))return;
   // Club labels the plan by tier; HS uses the neutral school/team name so the AI prompt and canned plan read naturally.
-  const tierLabel=SC.tiersEnabled?(analysisTier==='gold'?'Gold':'Garnet'):(SC.displayName||SC.schoolName||'this');
+  const tierLabel=SC.tiersEnabled?(analysisTier==='gold'?'Gold':'Garnet'):(analysisTier==='development'?'Development':analysisTier==='roster'?'Roster':(SC.displayName||SC.schoolName||'this'));
   const ranked=[...a.assessedSkills].sort((x,y)=>x.avg-y.avg);
   const weak=ranked.slice(0,Math.min(3,ranked.length));
   const weakLabels=weak.map(s=>s.label);
