@@ -1037,7 +1037,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       `:`
       <button class="tab" data-tab="recruiting">Recruiting</button>
       <button class="tab" data-tab="players">Stats</button>
-      <button class="tab" data-tab="practicegroups">Practice Groups</button>
+      <button class="tab" data-tab="settings">Practice Groups</button>
       <button class="tab" data-tab="goals">Goals</button>
       `}
     </div>
@@ -3368,21 +3368,19 @@ function playerBadge(p){
 function renderRoster(){
   let sorted=[...D.players].sort((a,b)=>a.court-b.court||CO[a.classYear]-CO[b.classYear]||a.lastName.localeCompare(b.lastName));
   // Tier filter (Grass Club only). Applied before court grouping; default 'all' shows everyone.
-  if(SC.tiersEnabled && rosterTierFilter!=='all'){
+  if(rosterTierFilter!=='all'){
     sorted=sorted.filter(p=>(p.tier||'unassigned')===rosterTierFilter);
   }
   let html='',last=null;
-  // Tier filter toggle (Grass Club only). Mirrors the ppStatView filter-btn pattern.
-  if(SC.tiersEnabled){
-    html+=`<div style="display:flex;gap:8px;margin-bottom:10px;" id="roster-tier-toggle">`+
-      [['all','All'],['gold','Gold'],['garnet','Garnet'],['unassigned','Unassigned']].map(([v,lbl])=>
-        `<button class="filter-btn${rosterTierFilter===v?' active':''}" onclick="setRosterTierFilter('${v}',this)" style="flex:1;text-align:center;">${lbl}</button>`).join('')+
-      `</div>`;
-  }
+  // Tier filter pills: club shows Gold/Garnet, HS shows Roster/Development. Same rosterTierFilter state and setter.
+  html+=`<div style="display:flex;gap:8px;margin-bottom:10px;" id="roster-tier-toggle">`+
+    (SC.tiersEnabled?[['all','All'],['gold','Gold'],['garnet','Garnet'],['unassigned','Unassigned']]:[['all','All'],['roster','Roster'],['development','Development'],['unassigned','Unassigned']]).map(([v,lbl])=>
+      `<button class="filter-btn${rosterTierFilter===v?' active':''}" onclick="setRosterTierFilter('${v}',this)" style="flex:1;text-align:center;">${lbl}</button>`).join('')+
+    `</div>`;
   sorted.forEach(p=>{if(p.court!==last){
     html+=`<div style="font-family:'Bebas Neue';font-size:12px;letter-spacing:1.5px;color:var(--red);margin:12px 0 6px;padding-top:8px;${last!==null?'border-top:2px solid var(--gray-lighter);':''}">
       <span class="court-badge court-${p.court}">PG ${p.court}</span></div>`;last=p.court;}
-    html+=`<div class="roster-item" id="ritem-${p.id}"><span class="class-badge class-${p.classYear}">${p.classYear}</span>${SC.tiersEnabled?' '+playerBadge(p):''}
+    html+=`<div class="roster-item" id="ritem-${p.id}"><span class="class-badge class-${p.classYear}">${p.classYear}</span>${' '+playerBadge(p)}
       <span class="roster-name" id="rname-${p.id}">${p.firstName} ${p.lastName}${SC.tiersEnabled&&p.csRank?` <span class="cs-rank">${p.csRank}</span>`:''}</span>
       ${!SC.tiersEnabled?`<input type="number" min="0" max="99" placeholder="#" title="Jersey #" value="${p.jersey||''}" style="width:52px;padding:4px 6px;border:1px solid var(--gray-lighter);border-radius:6px;font-family:'Bebas Neue',sans-serif;font-size:15px;text-align:center;color:var(--charcoal);" onchange="updJersey('${p.id}',this.value)">`:''}
       <select class="court-select" onchange="updCt('${p.id}',this.value)">${COURTS.map(c=>`<option value="${c}" ${p.court===c?'selected':''}>PG ${c}</option>`).join('')}</select>
