@@ -543,6 +543,8 @@ body{font-family:'Barlow',sans-serif;background:var(--cream);color:var(--black);
 .mode-btn.active{background:rgba(255,255,255,0.18);color:#fff;}
 /* HS five-button nav only: shrink font, tracking, and side padding so all five labels fit a phone width without overflowing into the next tab. Club two-button nav is unaffected. */
 .mode-bar-hs .mode-btn{font-size:12px;letter-spacing:0.5px;padding:9px 6px;}
+/* HS four-tab nav active state: navy Team-pillar pill. Scoped to mode-bar-hs so the club two-button nav is unaffected. */
+.mode-bar-hs .mode-btn.active{background:#082A4F;color:#fff;}
 .sub-tabs{display:flex;padding:6px 12px 6px;gap:6px;}
 .sub-tabs .tab{flex:1;padding:9px 8px;font-size:13px;letter-spacing:1px;border-radius:8px;text-align:center;}
 .tab.active{background:rgba(255,255,255,0.2);color:var(--white);}.tab:hover{color:var(--white);}
@@ -1001,11 +1003,10 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       <button class="mode-btn active" id="mode-manage" onclick="switchMode('manage')">⚙️ Manage</button>
       <button class="mode-btn" id="mode-gameday" onclick="switchMode('gameday')">🏐 Logistics</button>
       `:`
-      <button class="mode-btn" onclick="hsGo('roster',this)">Roster</button>
-      <button class="mode-btn" onclick="hsGo('practice',this)">Practice</button>
-      <button class="mode-btn" onclick="hsGo('communicate',this)">Communicate</button>
-      <button class="mode-btn active" onclick="hsGo('gameday',this)">Game Day</button>
-      <button class="mode-btn" onclick="hsGo('stats',this)">Stats</button>
+      <button class="mode-btn" onclick="hsNav('players',this)">Players</button>
+      <button class="mode-btn" onclick="hsNav('practice',this)">Practice</button>
+      <button class="mode-btn active" onclick="hsNav('duals',this)">Duals</button>
+      <button class="mode-btn" onclick="hsNav('manage',this)">Manage</button>
       `}
     </div>
     <div class="sub-tabs" id="sub-tabs-gameday"${SC.tiersEnabled?' style="display:none;"':''}>
@@ -1014,9 +1015,10 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       <button class="tab" data-tab="accounting">Accounting</button>
       <button class="tab" data-tab="travel">Travel</button>
       `:`
-      <button class="tab active" data-tab="duals">Live Scoring</button>
+      <button class="tab active" data-tab="dashboard">Dashboard</button>
       <button class="tab" data-tab="gameday">Planner</button>
       <button class="tab" data-tab="dualhistory">Dual History</button>
+      <button class="tab" data-tab="duals">Live Scoring</button>
       `}
     </div>
     <div class="sub-tabs" id="sub-tabs-manage"${SC.tiersEnabled?'':' style="display:none;"'}>
@@ -1030,12 +1032,17 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       <button class="tab" data-tab="dashboard" style="display:none;">Dashboard</button>
       <button class="tab" data-tab="scouts" style="display:none;">Scouts</button>
       `:`
-      <button class="tab" data-tab="dashboard">Dashboard</button>
-      <button class="tab" data-tab="players">Players</button>
+      <button class="tab" data-tab="hsrecruiting">Recruiting</button>
+      <button class="tab" data-tab="players">Stats</button>
+      <button class="tab" data-tab="hspgroups">Practice Groups</button>
       <button class="tab" data-tab="goals">Goals</button>
-      <button class="tab" data-tab="scouts">Scouts</button>
       `}
     </div>
+    ${SC.tiersEnabled?'':`<div class="sub-tabs" id="sub-tabs-hsmanage" style="display:none;">
+      <button class="tab" data-tab="communicate">Communicate</button>
+      <button class="tab" data-tab="hsimport">Import/Export</button>
+      <button class="tab" data-tab="hslogistics">Logistics</button>
+    </div>`}
   </div>
 </div>
 <div class="content" id="coach-content">
@@ -1384,6 +1391,26 @@ ${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar
       <button class="btn btn-secondary" id="add-player">Add Player</button></div>`}
   </div>
   ${SC.tiersEnabled?'':'<div class="tab-content" id="tab-practice"></div>'}
+  ${SC.tiersEnabled?'':`<div class="tab-content" id="tab-hspractice"><div class="card" style="text-align:center;padding:34px 20px;">
+    <div style="font-family:'Bebas Neue';font-size:24px;letter-spacing:1px;color:#082A4F;margin-bottom:8px;">Practice</div>
+    <p style="font-size:13px;color:var(--gray);line-height:1.6;margin:0;">The practice planner is coming to the coach app. Team analysis, development plans, and the practice builder land here next.</p>
+  </div></div>`}
+  ${SC.tiersEnabled?'':`<div class="tab-content" id="tab-hsrecruiting"><div class="card" style="text-align:center;padding:34px 20px;">
+    <div style="font-family:'Bebas Neue';font-size:24px;letter-spacing:1px;color:#082A4F;margin-bottom:8px;">Recruiting</div>
+    <p style="font-size:13px;color:var(--gray);line-height:1.6;margin:0;">Recruiting is coming to the coach app.</p>
+  </div></div>`}
+  ${SC.tiersEnabled?'':`<div class="tab-content" id="tab-hspgroups"><div class="card" style="text-align:center;padding:34px 20px;">
+    <div style="font-family:'Bebas Neue';font-size:24px;letter-spacing:1px;color:#082A4F;margin-bottom:8px;">Practice Groups</div>
+    <p style="font-size:13px;color:var(--gray);line-height:1.6;margin:0;">Practice Groups is coming to the coach app.</p>
+  </div></div>`}
+  ${SC.tiersEnabled?'':`<div class="tab-content" id="tab-hsimport"><div class="card" style="text-align:center;padding:34px 20px;">
+    <div style="font-family:'Bebas Neue';font-size:24px;letter-spacing:1px;color:#082A4F;margin-bottom:8px;">Import and Export</div>
+    <p style="font-size:13px;color:var(--gray);line-height:1.6;margin:0;">Import and Export is coming to the coach app.</p>
+  </div></div>`}
+  ${SC.tiersEnabled?'':`<div class="tab-content" id="tab-hslogistics"><div class="card" style="text-align:center;padding:34px 20px;">
+    <div style="font-family:'Bebas Neue';font-size:24px;letter-spacing:1px;color:#082A4F;margin-bottom:8px;">Logistics</div>
+    <p style="font-size:13px;color:var(--gray);line-height:1.6;margin:0;">Logistics is coming to the coach app.</p>
+  </div></div>`}
   ${SC.tiersEnabled?'':`<div class="tab-content" id="tab-communicate">
     <div class="card">
       <div class="card-title"><span class="bar"></span> 💬 Communicate</div>
@@ -3428,6 +3455,28 @@ function hsGo(dest, btn){
   refreshTab(key);
 }
 
+// HS four-tab coach nav (Stage 1). Guarded on !SC.tiersEnabled so the club keeps switchMode untouched.
+// Top tabs: Players | Practice | Duals | Manage. Reuses the existing .tab click handler and refreshTab
+// for wired sub-tabs; placeholder sub-tabs point at inert tab-hs* panels that call no render fn.
+// Row mapping: Players -> sub-tabs-manage, Duals -> sub-tabs-gameday, Manage -> sub-tabs-hsmanage.
+// Practice is a single pane (tab-hspractice) with no sub-tab row.
+function hsNav(dest, btn){
+  if(SC.tiersEnabled) return;
+  document.querySelectorAll('#mode-bar .mode-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  const rows=['sub-tabs-gameday','sub-tabs-manage','sub-tabs-hsmanage'];
+  rows.forEach(id=>{const r=document.getElementById(id); if(r) r.style.display='none';});
+  document.querySelectorAll('#sub-tabs-gameday .tab, #sub-tabs-manage .tab, #sub-tabs-hsmanage .tab').forEach(x=>x.classList.remove('active'));
+  if(dest==='practice'){
+    document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('active'));
+    const tc=document.getElementById('tab-hspractice'); if(tc) tc.classList.add('active');
+    return;
+  }
+  const rowId = dest==='players' ? 'sub-tabs-manage' : dest==='manage' ? 'sub-tabs-hsmanage' : 'sub-tabs-gameday';
+  const row=document.getElementById(rowId);
+  if(row){ row.style.display='flex'; const t=row.querySelector('.tab'); if(t) t.click(); }
+}
+
 // ============================================================
 // EVENT LISTENERS
 // ============================================================
@@ -3642,6 +3691,12 @@ function loginAsCoach(){
   if(SC.chatEnabled){
     const bc=document.querySelector('#sub-tabs-manage .tab.active');
     if(bc)bc.click();
+  }
+  else if(!SC.tiersEnabled){
+    // HS four-tab nav lands on Duals with Dashboard active, but the statically-active pane is
+    // tab-duals. Click the active tab (Dashboard) so the pane and the tab agree on first paint.
+    const hd=document.querySelector('.tab.active');
+    if(hd)hd.click();
   }
 }
 function playerLogin(){
