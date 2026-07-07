@@ -8591,8 +8591,8 @@ function rcOpenProspect(prospectId){
         <span style="font-size:12px;color:var(--charcoal);">${esc(GENDER[p.gender]||p.gender||'')}</span>
       </div>
       <div><div style="font-size:11px;letter-spacing:1px;color:var(--gray);text-transform:uppercase;margin-bottom:4px;">Rating</div>${ratingHtml}</div>
-      <div><div style="font-size:11px;letter-spacing:1px;color:var(--gray);text-transform:uppercase;margin-bottom:4px;">Tier requested</div>${tierReqHtml}</div>
-      <div style="border-top:1px solid var(--gray-lighter);padding-top:12px;font-size:12px;color:var(--gray);line-height:1.5;">Match stats, skills, and rankings appear once this prospect is placed on a team. Add them to Gold or Garnet from the Recruiting list.</div>
+      ${SC.tiersEnabled?`<div><div style="font-size:11px;letter-spacing:1px;color:var(--gray);text-transform:uppercase;margin-bottom:4px;">Tier requested</div>${tierReqHtml}</div>`:''}
+      <div style="border-top:1px solid var(--gray-lighter);padding-top:12px;font-size:12px;color:var(--gray);line-height:1.5;">Match stats, skills, and rankings appear once this prospect is placed on a team. ${SC.tiersEnabled?'Add them to Gold or Garnet from the Recruiting list.':'Use the Decision control to add them to the roster.'}</div>
     </div>
   </div>`;
   document.body.appendChild(ov);
@@ -8653,7 +8653,10 @@ function renderRecruiting(){
         </div>
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
           ${SC.tiersEnabled?`<button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:#CEB888;color:#2d2d2d;border:none;" onclick="rcAddToTeam('${esc(p.id)}','gold')">Add to Gold</button>
-          <button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:#782F40;color:#ffffff;border:none;" onclick="rcAddToTeam('${esc(p.id)}','garnet')">Add to Garnet</button>`:`<button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:#082A4F;color:#fff;border:none;" onclick="rcAddToRosterHS('${esc(p.id)}')">Add to Roster</button>`}
+          <button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:#782F40;color:#ffffff;border:none;" onclick="rcAddToTeam('${esc(p.id)}','garnet')">Add to Garnet</button>`:`<span style="font-size:11px;font-weight:700;letter-spacing:0.5px;color:var(--gray);text-transform:uppercase;">Decision</span>
+          <button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:#082A4F;color:#fff;border:none;" onclick="toast('Decision controls coming soon')">Roster</button>
+          <button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:#217F7F;color:#fff;border:none;" onclick="toast('Decision controls coming soon')">Development</button>
+          <button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:var(--gray-light);color:var(--charcoal);border:none;" onclick="toast('Decision controls coming soon')">Decline</button>`}
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px;">
