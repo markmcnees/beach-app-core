@@ -2351,8 +2351,10 @@ function listenData(){if(!db)return;
       D.tierRequests=val.tier_requests||{};
       D.chat=val.chat||{};
     }else{
-      D.players=JSON.parse(JSON.stringify(DEF_P));
-      D.matches=JSON.parse(JSON.stringify(DEF_M));
+      // DEF_P/DEF_M are the Leon roster. Only fall back to them on the Leon node when auto-seed is on; every other empty node starts empty (no phantom Leon roster in RAM). Matches the seedDB guard.
+      const _seedLeon=(DB_ROOT==='leon_queens_matches' && SC.allowAutoSeed);
+      D.players=_seedLeon?JSON.parse(JSON.stringify(DEF_P)):[];
+      D.matches=_seedLeon?JSON.parse(JSON.stringify(DEF_M)):[];
       D.planned=[];D.gamedays=[];D.scrimmages=[];D.duals=[];D.chat={};
       seedDB();
     }
