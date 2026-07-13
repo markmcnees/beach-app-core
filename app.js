@@ -8,6 +8,9 @@ const LOGO_H = (SC && SC.logoHeight) ? SC.logoHeight : 64;
 // Logo img source: '' when the config uses the Firebase logo flag (so no broken load /
 // onerror flash; the listenData read fills the real src), else the config's logo value.
 const LOGO_SRC = (SC && SC.logo === 'firebase') ? '' : (SC ? SC.logo : '');
+// Worker base for server-side coach auth (PIN verify, sessions, PIN change). The PIN
+// is never held or compared on the client; these endpoints do it against a bcrypt hash.
+const AUTH_WORKER = 'https://courtsense-email-worker.markmcnees-479.workers.dev';
 
 // ============================================================
 // DEMO FIXTURE — only consumed when SC.demoMode === true
@@ -950,7 +953,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
   <div class="login-box">
     <div class="login-logo" style="flex-direction:column;align-items:center;gap:6px;"><img id="cs-logo-login" src="${LOGO_SRC}" style="height:${LOGO_H}px;width:auto;" alt="${SC.logoAlt}" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<span style=&quot;font-size:64px;line-height:1.2;&quot;>${SC.teamEmoji}</span>')">${!LOGO_SRC && SC.logo !== 'firebase' ? `<span style="font-size:${LOGO_H}px;">${SC.teamEmoji}</span>` : ''}<span>${SC.displayName}</span></div>
     <div class="login-sub">2026 Beach Volleyball Season</div>
-    ${SC.demoMode ? '<div class="demo-creds-inline">'+COACH_LABEL+' PIN: <strong>'+SC.coachPin+'</strong><span class="sep">·</span>Player password: <strong>'+SC.defaultPw+'</strong></div>' : ''}
+    ${SC.demoMode ? '<div class="demo-creds-inline">'+COACH_LABEL+' PIN: <strong>1234</strong><span class="sep">·</span>Player password: <strong>'+SC.defaultPw+'</strong></div>' : ''}
     <div class="login-toggle">
       <button class="login-toggle-btn active" onclick="switchLogin('coach')">${COACH_LABEL.toUpperCase()}</button>
       <button class="login-toggle-btn" onclick="switchLogin('player')">Player</button>
@@ -2222,21 +2225,32 @@ function filterPastLineups(){
   renderPastLineups(dateVal, oppVal, playerVal);
 }
 
-function changeCoachPin(){
+async function changeCoachPin(){
   const curEl=document.getElementById('pin-current');
   const newEl=document.getElementById('pin-new');
   const statusEl=document.getElementById('pin-change-status');
   const cur=curEl?curEl.value.trim():'';
   const newPin=newEl?newEl.value.trim():'';
-  if(cur!==(window._coachPin||COACH_PIN)){if(statusEl)statusEl.textContent='Current PIN is incorrect';return;}
   if(!newPin||newPin.length<4){if(statusEl)statusEl.textContent='PIN must be at least 4 digits';return;}
-  if(!db){if(statusEl)statusEl.textContent='Not connected';return;}
-  db.ref(DB_ROOT+'/config/coachPin').set(newPin,err=>{
-    if(err){if(statusEl)statusEl.textContent='Error saving PIN';return;}
-    window._coachPin=newPin;
-    if(statusEl)statusEl.textContent='PIN updated ✓';
-    setTimeout(()=>{if(statusEl)statusEl.textContent='';},2000);
-  });
+  let session=null; try{session=JSON.parse(sessionStorage.getItem('csCoachSession'));}catch(e){}
+  const token=session&&session.token;
+  if(!token){if(statusEl)statusEl.textContent='';toast('Session expired, log in again');logout();return;}
+  try{
+    const r=await fetch(AUTH_WORKER+'/auth/coach-set-pin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dbRoot:DB_ROOT,token:token,currentPin:cur,newPin:newPin})});
+    if(r.status===403){if(statusEl)statusEl.textContent='';toast('Session expired, log in again');logout();return;}
+    const j=await r.json().catch(()=>null);
+    if(j&&j.ok){
+      if(statusEl)statusEl.textContent='PIN updated ✓';
+      if(curEl)curEl.value='';if(newEl)newEl.value='';
+      setTimeout(()=>{if(statusEl)statusEl.textContent='';},2000);
+    }else if(j&&j.code==='bad_pin'){
+      if(statusEl)statusEl.textContent='Current PIN is incorrect';
+    }else{
+      if(statusEl)statusEl.textContent='Could not update PIN. Try again.';
+    }
+  }catch(e){
+    if(statusEl)statusEl.textContent='Could not reach the server. Try again.';
+  }
 }
 
 const COURTS=[1,2,3,4,5,6,7,8],CL={1:'PG 1',2:'PG 2',3:'PG 3',4:'PG 4',5:'PG 5',6:'Exhib',7:'Exhib',8:'Exhib'};
@@ -2285,6 +2299,16 @@ let _autoLoginDone=false;
 // FIREBASE
 // ============================================================
 function initFB(){
+  // Admin cross-school entry: ?csadmin=<token> stores the worker-issued session and enters
+  // coach mode directly, then strips the param. Skips the normal login/autoLogin path.
+  try{
+    const _adminTok=new URLSearchParams(location.search).get('csadmin');
+    if(_adminTok){
+      history.replaceState(null,'',location.pathname+location.hash);
+      adminEnterSchool(_adminTok);
+      _autoLoginDone=true;
+    }
+  }catch(e){}
   if(SC.demoMode){
     // DEMO MODE: hydrate D from _DEMO fixture, no Firebase touched.
     D.players     = JSON.parse(JSON.stringify(_DEMO.players));
@@ -2336,7 +2360,6 @@ function initFB(){
 }
 function setSS(on){const d=document.getElementById('sync-dot');d.className='sync-dot '+(on?'online':'offline');d.title=on?'Connected':'Offline';}
 function listenData(){if(!db)return;
-  db.ref(DB_ROOT+'/config/coachPin').once('value',function(snap){if(snap.val())window._coachPin=snap.val();});
   db.ref(DB_ROOT+'/config/currentSeasonId').once('value',function(snap){if(snap.val())_currentSeasonId=snap.val();});
   db.ref(SC.dbRoots.profiles+'/quizScores').on('value',snap=>{D.quizScores=snap.val()||{};if(currentRole==='player')renderPlayerPortal();});
   db.ref(DB_ROOT).on('value',snap=>{
@@ -3660,12 +3683,12 @@ document.getElementById('set-modal').addEventListener('click',function(e){if(e.t
 // ============================================================
 // LOGIN SYSTEM
 // ============================================================
-const COACH_PIN=SC.coachPin;
 const DEFAULT_PW=SC.defaultPw;
 let passwords={};
 let currentRole=null; // 'coach' or 'player'
 let currentPlayerId=null;
 let pinEntry='';
+let _pinChecking=false;
 
 function switchLogin(mode){
   document.querySelectorAll('.login-toggle-btn').forEach(b=>b.classList.remove('active'));
@@ -3687,16 +3710,36 @@ function populatePlayerLogin(){
   sorted.forEach(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=p.firstName+' '+p.lastName;sel.appendChild(o);});
   if(cur)sel.value=cur;
 }
-function pinPress(n){
+async function pinPress(n){
+  if(_pinChecking)return;                       // ignore digit presses while a request is in flight
   if(pinEntry.length>=4)return;
   pinEntry+=n;
   updatePinDots();
   if(pinEntry.length===4){
-    if(pinEntry===(window._coachPin||COACH_PIN)){
+    _pinChecking=true;
+    const errEl=document.getElementById('pin-error');
+    if(errEl)errEl.textContent='Checking...';
+    let j=null, netErr=false;
+    try{
+      const r=await fetch(AUTH_WORKER+'/auth/coach-verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dbRoot:DB_ROOT,pin:pinEntry})});
+      j=await r.json().catch(()=>null);
+    }catch(e){netErr=true;}
+    if(j&&j.ok){
+      sessionStorage.setItem('csCoachSession',JSON.stringify({token:j.token,dbRoot:DB_ROOT,expiresAt:j.expiresAt}));
+      if(errEl)errEl.textContent='';
+      _pinChecking=false;
       loginAsCoach();
+      return;
+    }
+    if(netErr){
+      if(errEl)errEl.textContent='Could not reach the server. Try again.';
+      pinEntry='';updatePinDots();_pinChecking=false;
+    }else if(j&&j.code==='not_set'){
+      if(errEl)errEl.textContent='No PIN set for this school. Contact support.';
+      pinEntry='';updatePinDots();_pinChecking=false;
     }else{
-      document.getElementById('pin-error').textContent='Incorrect PIN';
-      setTimeout(()=>{pinEntry='';updatePinDots();document.getElementById('pin-error').textContent='';},800);
+      if(errEl)errEl.textContent='Incorrect PIN';
+      setTimeout(()=>{pinEntry='';updatePinDots();const e2=document.getElementById('pin-error');if(e2)e2.textContent='';_pinChecking=false;},800);
     }
   }
 }
@@ -3705,7 +3748,6 @@ function updatePinDots(){document.querySelectorAll('.login-pin-dot').forEach((d,
 
 function loginAsCoach(){
   currentRole='coach';currentPlayerId=null;
-  sessionStorage.setItem('leonAuth',JSON.stringify({role:'coach'}));
   document.getElementById('login-overlay').classList.add('hidden');
   document.getElementById('app-wrapper').style.display='block';
   document.getElementById('coach-content').style.display='block';
@@ -3729,14 +3771,21 @@ function loginAsCoach(){
     if(hd)hd.click();
   }
 }
+
+// Admin cross-school entry: store a worker-issued coach session token (from
+// /auth/admin-coach-session) and enter coach mode. Driven by the ?csadmin=<token> boot
+// path in initFB. The token is a real, expiring, server-validated session, not a flag.
+function adminEnterSchool(token, expiresAt){
+  sessionStorage.setItem('csCoachSession',JSON.stringify({token:token,dbRoot:DB_ROOT,expiresAt:expiresAt||null}));
+  loginAsCoach();
+}
 function playerLogin(){
   const pid=document.getElementById('login-player-select').value;
   const pw=document.getElementById('login-pw').value;
   if(!pid){document.getElementById('pw-error').textContent='Select your name';return;}
   if(!pw){document.getElementById('pw-error').textContent='Enter your password';return;}
-  const DEV_PW='Lion1969';
   const storedPw=passwords[pid]||DEFAULT_PW;
-  if(pw!==storedPw&&pw!==DEV_PW){document.getElementById('pw-error').textContent='Incorrect password';return;}
+  if(pw!==storedPw){document.getElementById('pw-error').textContent='Incorrect password';return;}
   document.getElementById('pw-error').textContent='';
   currentRole='player';currentPlayerId=pid;
   sessionStorage.setItem('leonAuth',JSON.stringify({role:'player',pid}));
@@ -3753,6 +3802,7 @@ function playerLogin(){
 function logout(){
   currentRole=null;currentPlayerId=null;pinEntry='';
   sessionStorage.removeItem('leonAuth');
+  sessionStorage.removeItem('csCoachSession');
   updatePinDots();
   document.getElementById('login-overlay').classList.remove('hidden');
   document.getElementById('app-wrapper').style.display='none';
@@ -3763,12 +3813,23 @@ function logout(){
   document.getElementById('pw-error').textContent='';
   document.getElementById('login-pw').value='';
 }
-function autoLogin(){
+async function autoLogin(){
+  // Coach: validate the stored session token server-side before entering coach mode.
+  // Never trust a bare flag; a forged sessionStorage entry fails the worker check.
+  try{
+    const cs=JSON.parse(sessionStorage.getItem('csCoachSession'));
+    if(cs&&cs.token&&cs.dbRoot===DB_ROOT&&(!cs.expiresAt||cs.expiresAt>Date.now())){
+      const r=await fetch(AUTH_WORKER+'/auth/coach-session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dbRoot:DB_ROOT,token:cs.token})});
+      const j=await r.json().catch(()=>null);
+      if(j&&j.ok){loginAsCoach();return;}
+      sessionStorage.removeItem('csCoachSession');
+    }
+  }catch(e){sessionStorage.removeItem('csCoachSession');}
+  // Player: unchanged, restored from leonAuth.
   try{
     const auth=JSON.parse(sessionStorage.getItem('leonAuth'));
     if(!auth)return;
-    if(auth.role==='coach'){loginAsCoach();}
-    else if(auth.role==='player'&&auth.pid){currentPlayerId=auth.pid;currentRole='player';
+    if(auth.role==='player'&&auth.pid){currentPlayerId=auth.pid;currentRole='player';
       document.getElementById('login-overlay').classList.add('hidden');
       document.getElementById('app-wrapper').style.display='block';
       document.getElementById('coach-content').style.display='none';
@@ -9664,10 +9725,16 @@ function deleteDual(id){
   if(_delDualArmed[id]){clearTimeout(_delDualArmed[id]);delete _delDualArmed[id];fbRemove('duals/'+id);toast('Dual deleted');}
   else{_delDualArmed[id]=setTimeout(()=>{delete _delDualArmed[id];},3000);toast('Tap again to confirm delete');}
 }
-function reopenDual(id){
+async function reopenDual(id){
   const pin=prompt('Enter '+COACH_LABEL+' PIN to reopen this dual:');
   if(!pin)return;
-  if(pin!==(window._coachPin||COACH_PIN)){toast('Incorrect PIN');return;}
+  let ok=false;
+  try{
+    const r=await fetch(AUTH_WORKER+'/auth/coach-verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dbRoot:DB_ROOT,pin:pin})});
+    const j=await r.json().catch(()=>null);
+    ok=!!(j&&j.ok);
+  }catch(e){ok=false;}
+  if(!ok){toast('Incorrect PIN');return;}
   fbRemove('duals/'+id);
   toast('Dual reopened');
   renderDuals();
