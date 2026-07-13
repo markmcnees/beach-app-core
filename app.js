@@ -1888,12 +1888,15 @@ const FB_CONFIG=SC.fbConfig;
 const DB_ROOT=SC.dbRoots.matches;
 
 // ── SHARED LINEUP — school name → Firebase key map ─────────────────────────
-const SCHOOL_KEY_MAP={
+// Loaded from Firebase (school_key_map) at runtime by listenData and merged over the
+// entries below. Those entries are a static fallback so the existing schools keep
+// working if the Firebase read is slow, empty, or fails. New schools are added to the
+// Firebase node and need no code deploy.
+let SCHOOL_KEY_MAP={
   'Leon':'leon_queens_matches',
   'Leon Beach':'leon_queens_matches',
   'South Walton':'south_walton_matches',
-  'SW Beach':'south_walton_matches',
-  // Add new schools here as they join the platform
+  'SW Beach':'south_walton_matches'
 };
 const MY_SCHOOL_KEY=DB_ROOT; // e.g. 'leon_queens_matches'
 
@@ -2385,6 +2388,12 @@ function listenData(){if(!db)return;
     if(currentRole==='coach'){const t=document.querySelector('.tab.active');if(t&&t.dataset.tab==='goals')renderCoachGoals();}
   });
   db.ref('.info/connected').on('value',s=>{setSS(s.val()===true);});
+  db.ref('school_key_map').on('value', s => {
+    const m = s.val();
+    if(m && typeof m === 'object'){
+      SCHOOL_KEY_MAP = Object.assign({}, SCHOOL_KEY_MAP, m);
+    }
+  });
   db.ref(DB_ROOT+'/live_scoring').on('value',snap=>{
     D.liveScoring=snap.val()||{};
     var fo=document.getElementById('school-fans-overlay');
