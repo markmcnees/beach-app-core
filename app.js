@@ -5,6 +5,9 @@ const COACH_LABEL = (SC && SC.coachLabel) ? SC.coachLabel : 'Coach';
 const COACH_SIGNOFF = (SC && SC.coachSignoff) ? SC.coachSignoff : 'Coach Mark';
 // Login logo image height in px. Config-driven via SC.logoHeight, defaulting to 64 so every existing school renders exactly as today.
 const LOGO_H = (SC && SC.logoHeight) ? SC.logoHeight : 64;
+// Logo img source: '' when the config uses the Firebase logo flag (so no broken load /
+// onerror flash; the listenData read fills the real src), else the config's logo value.
+const LOGO_SRC = (SC && SC.logo === 'firebase') ? '' : (SC ? SC.logo : '');
 
 // ============================================================
 // DEMO FIXTURE — only consumed when SC.demoMode === true
@@ -945,7 +948,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
 <!-- LOGIN SCREEN -->
 <div class="login-overlay" id="login-overlay">
   <div class="login-box">
-    <div class="login-logo" style="flex-direction:column;align-items:center;gap:6px;"><img src="${SC.logo}" style="height:${LOGO_H}px;width:auto;" alt="${SC.logoAlt}" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<span style=&quot;font-size:64px;line-height:1.2;&quot;>${SC.teamEmoji}</span>')"><span>${SC.displayName}</span></div>
+    <div class="login-logo" style="flex-direction:column;align-items:center;gap:6px;"><img id="cs-logo-login" src="${LOGO_SRC}" style="height:${LOGO_H}px;width:auto;" alt="${SC.logoAlt}" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<span style=&quot;font-size:64px;line-height:1.2;&quot;>${SC.teamEmoji}</span>')">${!LOGO_SRC && SC.logo !== 'firebase' ? `<span style="font-size:${LOGO_H}px;">${SC.teamEmoji}</span>` : ''}<span>${SC.displayName}</span></div>
     <div class="login-sub">2026 Beach Volleyball Season</div>
     ${SC.demoMode ? '<div class="demo-creds-inline">'+COACH_LABEL+' PIN: <strong>'+SC.coachPin+'</strong><span class="sep">·</span>Player password: <strong>'+SC.defaultPw+'</strong></div>' : ''}
     <div class="login-toggle">
@@ -994,7 +997,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
 <div id="app-wrapper" style="display:none;">
 <div class="header">
   <div class="header-top">
-    <h1><span class="crown"><img src="${SC.logo}" style="height:28px;width:auto;vertical-align:middle;" alt="${SC.abbrev}" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<span style=&quot;font-size:28px;line-height:1.2;vertical-align:middle;&quot;>${SC.teamEmoji}</span>')"></span> ${SC.displayName} <span class="sync-dot" id="sync-dot"></span></h1>
+    <h1><span class="crown"><img id="cs-logo-header" src="${LOGO_SRC}" style="height:28px;width:auto;vertical-align:middle;" alt="${SC.abbrev}" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<span style=&quot;font-size:28px;line-height:1.2;vertical-align:middle;&quot;>${SC.teamEmoji}</span>')">${!LOGO_SRC && SC.logo !== 'firebase' ? `<span style="font-size:28px;">${SC.teamEmoji}</span>` : ''}</span> ${SC.displayName} <span class="sync-dot" id="sync-dot"></span></h1>
     <div class="header-user">
       <span class="header-username" id="header-username"></span>
       <button class="logout-btn" onclick="logout()">Logout</button>
@@ -1778,7 +1781,7 @@ ${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar
     <div id="ca-result" style="margin-top:10px;"></div><div id="school-fans-overlay" style="display:none;position:fixed;inset:0;background:linear-gradient(160deg,${SC.colors.primaryDeeper} 0%,${SC.colors.primary} 50%,${SC.colors.primaryDark} 100%);z-index:10000;overflow-y:auto;-webkit-overflow-scrolling:touch;">
   <div style="max-width:480px;margin:0 auto;padding:16px 14px 40px;">
     <div style="text-align:center;padding:24px 0 12px;">
-      <div style="margin-bottom:8px;"><img src="${SC.logo}" style="height:80px;width:auto;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.4));" alt="${SC.logoAlt}" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<span style=&quot;font-size:80px;line-height:1.2;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.4));&quot;>${SC.teamEmoji}</span>')"></div>
+      <div style="margin-bottom:8px;"><img id="cs-logo-fans" src="${LOGO_SRC}" style="height:80px;width:auto;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.4));" alt="${SC.logoAlt}" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<span style=&quot;font-size:80px;line-height:1.2;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.4));&quot;>${SC.teamEmoji}</span>')">${!LOGO_SRC && SC.logo !== 'firebase' ? `<span style="font-size:80px;">${SC.teamEmoji}</span>` : ''}</div>
       <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:3px;color:#fff;">${SC.schoolName}</div>
       <div style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:2px;color:rgba(255,255,255,0.65);margin-top:2px;">Beach Volleyball &middot; 2026 Season</div>
       <div id="lf-record" style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:#d4a843;margin-top:8px;"></div>
@@ -2394,6 +2397,31 @@ function listenData(){if(!db)return;
       SCHOOL_KEY_MAP = Object.assign({}, SCHOOL_KEY_MAP, m);
     }
   });
+  // Firebase-hosted logo: when the config flags logo:'firebase', read the actual PNG data
+  // URL from courtsense_school_logos/{slug} and swap it into the three logo imgs. slug is
+  // derived from DB_ROOT (provisioning set base = slug with dashes -> underscores). Setting
+  // src + clearing display undoes the onerror hide; the emoji fallback span (already added)
+  // is removed so only the real logo shows.
+  if(SC.logo === 'firebase'){
+    const _base = (SC.dbRoots && SC.dbRoots.matches) ? SC.dbRoots.matches.replace(/_matches$/,'') : '';
+    const _slug = _base.replace(/_/g,'-');
+    if(_slug){
+      db.ref('courtsense_school_logos/'+_slug).once('value', s => {
+        const url = s.val();
+        if(typeof url === 'string' && url.indexOf('data:image/png;base64,') === 0){
+          ['cs-logo-login','cs-logo-header','cs-logo-fans'].forEach(id => {
+            const el = document.getElementById(id);
+            if(el){
+              el.src = url;
+              el.style.display = '';
+              const nx = el.nextElementSibling;
+              if(nx && nx.tagName === 'SPAN') nx.remove();
+            }
+          });
+        }
+      });
+    }
+  }
   db.ref(DB_ROOT+'/live_scoring').on('value',snap=>{
     D.liveScoring=snap.val()||{};
     var fo=document.getElementById('school-fans-overlay');
