@@ -11750,6 +11750,9 @@ window.addEventListener('popstate',function(e){
 setTimeout(runMigration,2000);
 setTimeout(function(){
   if(!db)return;
+  // Leon-only seed data (schedule, standings, jersey backfill). Gate exactly like
+  // seedDB so it can never fire on another school's node with Leon's ids/values.
+  if(DB_ROOT!=='leon_queens_matches' || !SC.allowAutoSeed)return;
   db.ref(DB_ROOT+'/schedule').once('value',function(snap){
     var ex=snap.val()||{};var u={};
     [{id:'sch01',date:'2026-02-24',opponent:'Community Christian',location:'home',scoreUs:4,scoreThem:1},{id:'sch02',date:'2026-02-26',opponent:'Wakulla',location:'home',scoreUs:4,scoreThem:1},{id:'sch03',date:'2026-02-26',opponent:'Sneads',location:'home',scoreUs:5,scoreThem:0},{id:'sch04',date:'2026-03-03',opponent:'Florida State University HS',location:'home',scoreUs:2,scoreThem:3},{id:'sch05',date:'2026-03-05',opponent:'Mosley',location:'home',scoreUs:3,scoreThem:2},{id:'sch06',date:'2026-03-09',opponent:'Chiles',location:'home',scoreUs:0,scoreThem:5},{id:'sch07',date:'2026-03-11',opponent:'Lincoln',location:'away',scoreUs:5,scoreThem:0},{id:'sch08',date:'2026-03-12',opponent:'Destin',location:'away',scoreUs:5,scoreThem:0},{id:'sch09',date:'2026-03-12',opponent:'South Walton',location:'away',scoreUs:1,scoreThem:4}].forEach(function(g){if(!ex[g.id]){u[DB_ROOT+'/schedule/'+g.id]=g;}});
@@ -11757,8 +11760,13 @@ setTimeout(function(){
       var exSt=snap2.val()||{};
       if(Object.keys(exSt).length<5){var st={'Chiles':{w:7,l:0},'Lincoln':{w:4,l:3},'Florida State University HS':{w:4,l:2},'Wakulla':{w:3,l:3},'Mosley':{w:3,l:3},'Community Christian':{w:1,l:5},'Sneads':{w:1,l:4},'South Walton':{w:4,l:2},'Gulf Breeze':{w:4,l:1},'Destin':{w:2,l:3},'Maclay':{w:2,l:2},'Godby':{w:0,l:3}};Object.keys(st).forEach(function(t){u[DB_ROOT+'/standings/'+t]=st[t];});}
       db.ref(DB_ROOT+'/_jerseys_seeded').once('value',function(snap3){
-        if(!snap3.val()){var j={p01:9,p02:5,p03:10,p04:2,p05:7,p06:8,p07:13,p08:3,p09:17,p10:6,p11:4,p12:11,p13:15,p14:18,p15:12,p16:1};Object.keys(j).forEach(function(pid){u[DB_ROOT+'/players/'+pid+'/jersey']=j[pid];});u[DB_ROOT+'/_jerseys_seeded']=true;}
-        if(Object.keys(u).length){db.ref().update(u,function(err){console.log(err?'Seed err':('Seed OK '+Object.keys(u).length));});}else{console.log('Seed: nothing missing');}
+        db.ref(DB_ROOT+'/players').once('value',function(snapP){
+          var existing=snapP.val()||{};
+          // Only backfill a jersey onto a player that ALREADY exists; never create a
+          // record. Creating a jersey-only record is what stripped the roster before.
+          if(!snap3.val()){var j={p01:9,p02:5,p03:10,p04:2,p05:7,p06:8,p07:13,p08:3,p09:17,p10:6,p11:4,p12:11,p13:15,p14:18,p15:12,p16:1};Object.keys(j).forEach(function(pid){if(existing[pid])u[DB_ROOT+'/players/'+pid+'/jersey']=j[pid];});u[DB_ROOT+'/_jerseys_seeded']=true;}
+          if(Object.keys(u).length){db.ref().update(u,function(err){console.log(err?'Seed err':('Seed OK '+Object.keys(u).length));});}else{console.log('Seed: nothing missing');}
+        });
       });
     });
   });
