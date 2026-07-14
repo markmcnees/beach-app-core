@@ -92,7 +92,7 @@ while IFS= read -r -d '' file; do
     sed -i -E "s|src=\"/app\.js\?v=[0-9]+\.[0-9]+\.[0-9]+\"|src=\"/app.js?v=${NEW_TAG#v}\"|g" "$file"
     echo "  Cache-bust app.js -> ?v=${NEW_TAG#v} in: $file"
   fi
-done < <(find . -name "index.html" -print0)
+done < <(find . \( -name "index.html" -o -name "404.html" \) -print0)
 
 # Stage only app.js plus any HTML files the sed-replace block touched.
 # Never use git add -A here; courtsense often has untracked notes files
