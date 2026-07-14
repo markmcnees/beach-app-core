@@ -5547,13 +5547,22 @@ function importRoster(file){
     let wb;
     try{wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});}
     catch(err){toast('Could not read that spreadsheet');return;}
-    const sheet=wb.Sheets['Roster']||wb.Sheets[wb.SheetNames[0]];
-    if(!sheet){toast('That file has no sheets');return;}
-    const rows=XLSX.utils.sheet_to_json(sheet,{header:1,defval:''});
-    const parsed=_importParseRows(rows);
+    // Roster is required and must be named 'Roster'. Skills, Star Drill, and Verticals
+    // are each optional; a coach who only fills in Roster imports fine.
+    const rowsOf=name=>{const s=wb.Sheets[name];return s?XLSX.utils.sheet_to_json(s,{header:1,defval:''}):null;};
+    const rosterRows=rowsOf('Roster');
+    if(!rosterRows){toast('That file has no sheet named "Roster".');return;}
+    const parsed=_importParseRows(rosterRows);
     if(parsed.error){toast(parsed.error);return;}
-    if(!parsed.plan.length && !parsed.errors.length){toast('No player rows found');return;}
-    _importShowConfirm(parsed.plan, parsed.errors);
+    // Name map that includes this import's new/updated players, so Skills/Star Drill/
+    // Verticals rows can match a player the SAME file is adding (empty starting roster).
+    const byName=_importNameMap(parsed.plan);
+    const skillsRows=rowsOf('Skills'), drillRows=rowsOf('Star Drill'), vertRows=rowsOf('Verticals');
+    const skills=skillsRows?_importParseSkills(skillsRows, byName):{plan:[],errors:[]};
+    const drills=drillRows?_importParseDrills(drillRows, byName):{plan:[],errors:[]};
+    const verts=vertRows?_importParseVerts(vertRows, byName):{plan:[],errors:[]};
+    if(!parsed.plan.length && !parsed.errors.length && !skills.plan.length && !drills.plan.length && !verts.plan.length){toast('No player rows found');return;}
+    _importShowConfirm(parsed.plan, parsed.errors, skills, drills, verts);
   };
   reader.onerror=function(){toast('Could not read that file');};
   reader.readAsArrayBuffer(file);
@@ -5575,6 +5584,8 @@ function _importParseRows(rows){
     first:col(['first name']), last:col(['last name']), grad:col(['grad year']),
     jersey:col(['jersey #','jersey','jersey number']),
     truv:col(['truvolley rating','vl rating','truvolley']),
+    height:col(['height']), reach:col(['standing reach']),
+    position:col(['position']), side:col(['side']), hand:col(['hand']),
     p1n:col(['parent 1 name']), p1e:col(['parent 1 email']), p1p:col(['parent 1 phone']),
     p2n:col(['parent 2 name']), p2e:col(['parent 2 email']), p2p:col(['parent 2 phone'])
   };
@@ -5599,7 +5610,19 @@ function _importParseRows(rows){
     const parent1=_importParent(cell(r,C.p1n),cell(r,C.p1e),cell(r,C.p1p));
     const parent2=_importParent(cell(r,C.p2n),cell(r,C.p2e),cell(r,C.p2p));
     const existing=byName[nameKey(first)+' '+nameKey(last)]||null;
-    plan.push({row:rowNum, existing, data:{first,last,gradYear,jersey,truvolley,parent1,parent2}});
+    const height=cell(r,C.height), reach=cell(r,C.reach);
+    // Position/Side/Hand come from dropdown words; normalize to the app's stored values.
+    // An unrecognized value is skipped for that field (never written raw) and reported.
+    const posRaw=cell(r,C.position), sideRaw=cell(r,C.side), handRaw=cell(r,C.hand);
+    const _pos=_importEnum(posRaw,_IMPORT_POSITION_MAP), _side=_importEnum(sideRaw,_IMPORT_SIDE_MAP), _hand=_importEnum(handRaw,_IMPORT_HAND_MAP);
+    if(_pos.bad)errors.push({row:rowNum,why:'Position "'+posRaw+'" not recognized (use Blocker, Defender, or Split), field skipped'});
+    if(_side.bad)errors.push({row:rowNum,why:'Side "'+sideRaw+'" not recognized (use Left or Right), field skipped'});
+    if(_hand.bad)errors.push({row:rowNum,why:'Hand "'+handRaw+'" not recognized (use Left or Right), field skipped'});
+    const position=_pos.v||'', side=_side.v||'', hand=_hand.v||'';
+    // Pre-assign the id a NEW player will get, so Skills/Star Drill/Verticals rows in the
+    // same file can point at it before the roster commit runs. _importCommit reuses it.
+    const newId=existing?null:gi('p');
+    plan.push({row:rowNum, existing, newId, data:{first,last,gradYear,jersey,truvolley,height,reach,position,side,hand,parent1,parent2}});
   }
   return {plan, errors};
 }
@@ -5622,6 +5645,147 @@ function _importClassYear(gradYear){
   if(diff>=3)return 'FR';
   return '';
 }
+// ---- Shared helpers for the multi-sheet import ----------------------------------
+// Find the header row on a sheet (the one containing 'First Name') and return a
+// column-by-name resolver, mirroring how _importParseRows locates its header.
+function _importHeader(rows){
+  let hIdx=-1;
+  for(let i=0;i<rows.length;i++){
+    const norm=(rows[i]||[]).map(c=>String(c==null?'':c).trim().toLowerCase());
+    if(norm.indexOf('first name')!==-1){hIdx=i;break;}
+  }
+  if(hIdx===-1)return null;
+  const hdr=(rows[hIdx]||[]).map(c=>String(c==null?'':c).trim().toLowerCase());
+  const col=aliases=>{for(const a of aliases){const idx=hdr.indexOf(a);if(idx!==-1)return idx;}return -1;};
+  return {hIdx, col};
+}
+function _importCell(r,i){return (i>=0&&r[i]!=null)?String(r[i]).trim():'';}
+// Coach-facing dropdown words normalized to the codes/words the app stores. Case-insensitive.
+// Side/Hand store 'L'/'R'; Position stores 'block'/'defense'/'split'.
+const _IMPORT_SIDE_MAP={l:'L',left:'L',r:'R',right:'R'};
+const _IMPORT_HAND_MAP={l:'L',left:'L',r:'R',right:'R'};
+const _IMPORT_POSITION_MAP={block:'block',blocker:'block',defense:'defense',defender:'defense',split:'split'};
+// Normalize a cell against a value map. {v:''} = blank (write nothing), {v:code} = valid,
+// {bad:true} = unrecognized (the caller skips that field and reports it).
+function _importEnum(raw, map){
+  const s=String(raw==null?'':raw).trim().toLowerCase();
+  if(!s)return {v:''};
+  if(Object.prototype.hasOwnProperty.call(map,s))return {v:map[s]};
+  return {bad:true};
+}
+function _importYmd(d){return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');}
+// Normalize a spreadsheet date cell to YYYY-MM-DD. Handles an Excel serial number
+// (raw cell value), an ISO string, M/D/YYYY, or falls back to the coach's text.
+function _importDate(raw){
+  if(raw==null||raw==='')return '';
+  if(raw instanceof Date && !isNaN(raw))return _importYmd(raw);
+  if(typeof raw==='number' && isFinite(raw)){
+    const d=new Date(Math.round((raw-25569)*86400000)); // Excel epoch 1899-12-30, UTC
+    return isNaN(d)?'':_importYmd(d);
+  }
+  const s=String(raw).trim();
+  if(!s)return '';
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;
+  const m=/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
+  if(m)return m[3]+'-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0');
+  const d=new Date(s);
+  return isNaN(d)?s:_importYmd(d);
+}
+// Name -> {id} map for cross-sheet matching. Includes the current roster PLUS the
+// players this import is adding/updating (using the id pre-assigned in _importParseRows),
+// so a Skills/Drill/Vertical row can match a player the same file is creating.
+function _importNameMap(rosterPlan){
+  const nameKey=s=>String(s||'').trim().toLowerCase();
+  const map={};
+  (D.players||[]).forEach(p=>{map[nameKey(p.firstName)+' '+nameKey(p.lastName)]={id:p.id};});
+  (rosterPlan||[]).forEach(e=>{
+    const id=e.existing?e.existing.id:e.newId;
+    if(id)map[nameKey(e.data.first)+' '+nameKey(e.data.last)]={id};
+  });
+  return map;
+}
+
+// Skills sheet -> [{playerId, skills:{...}}]. Keys match saveSkills exactly. Each value
+// is kept only when it is 1-10; blanks (and out-of-range) are omitted so the commit's
+// .update() leaves the existing rating alone.
+function _importParseSkills(rows, byName){
+  const h=_importHeader(rows);
+  if(!h)return{plan:[],errors:[]};
+  const cFirst=h.col(['first name']), cLast=h.col(['last name']);
+  const SK=[['serving',['serving']],['passing',['passing']],['setting',['setting']],['hitting',['hitting']],
+    ['blocking',['blocking']],['defense',['defense']],['courtSense',['court sense']],['communication',['communication']]];
+  const cols=SK.map(([key,al])=>[key,h.col(al)]);
+  const nameKey=s=>s.trim().toLowerCase();
+  const plan=[], errors=[];
+  for(let i=h.hIdx+1;i<rows.length;i++){
+    const r=rows[i]||[];
+    const first=_importCell(r,cFirst), last=_importCell(r,cLast);
+    if(!first&&!last)continue;
+    const rowNum=i+1;
+    const p=byName[nameKey(first)+' '+nameKey(last)];
+    if(!p){errors.push({row:rowNum,why:'no player named '+(first+' '+last).trim()+' on the roster'});continue;}
+    const skills={};
+    cols.forEach(([key,idx])=>{const raw=_importCell(r,idx);if(raw==='')return;const n=parseInt(raw,10);if(!isNaN(n)&&n>=1&&n<=10)skills[key]=n;});
+    if(!Object.keys(skills).length)continue;
+    plan.push({playerId:p.id, skills});
+  }
+  return {plan, errors};
+}
+
+// Star Drill sheet -> [{playerId, date, time}]. Each row is a NEW attempt. Deduped on
+// player + date + time against the existing starDrills AND within this file.
+function _importParseDrills(rows, byName){
+  const h=_importHeader(rows);
+  if(!h)return{plan:[],errors:[]};
+  const cFirst=h.col(['first name']), cLast=h.col(['last name']), cDate=h.col(['date']), cTime=h.col(['time (seconds)','time']);
+  const nameKey=s=>s.trim().toLowerCase();
+  const seen=new Set();
+  Object.values(profilesData?.starDrills||{}).forEach(d=>{const pid=d.playerId||d.player;if(pid)seen.add(pid+'|'+d.date+'|'+d.time);});
+  const plan=[], errors=[];
+  for(let i=h.hIdx+1;i<rows.length;i++){
+    const r=rows[i]||[];
+    const first=_importCell(r,cFirst), last=_importCell(r,cLast), timeRaw=_importCell(r,cTime), dateRaw=(cDate>=0?r[cDate]:'');
+    if(!first&&!last&&!timeRaw&&(dateRaw==null||dateRaw===''))continue;
+    const rowNum=i+1;
+    const p=byName[nameKey(first)+' '+nameKey(last)];
+    if(!p){errors.push({row:rowNum,why:'no player named '+(first+' '+last).trim()+' on the roster'});continue;}
+    const date=_importDate(dateRaw), time=parseFloat(timeRaw);
+    if(!date||isNaN(time)||time<=0){errors.push({row:rowNum,why:'needs a date and a time'});continue;}
+    const key=p.id+'|'+date+'|'+time;
+    if(seen.has(key))continue;                        // dedupe: already recorded, skip silently
+    seen.add(key);
+    plan.push({playerId:p.id, date, time});
+  }
+  return {plan, errors};
+}
+
+// Verticals sheet -> [{playerId, date, blockJump, approachJump}]. Matches the jumpTests
+// write exactly. New entries only, deduped on player + date + block + approach.
+function _importParseVerts(rows, byName){
+  const h=_importHeader(rows);
+  if(!h)return{plan:[],errors:[]};
+  const cFirst=h.col(['first name']), cLast=h.col(['last name']), cDate=h.col(['date']), cBj=h.col(['block jump']), cAj=h.col(['approach jump']);
+  const nameKey=s=>s.trim().toLowerCase();
+  const seen=new Set();
+  Object.values(profilesData?.jumpTests||{}).forEach(v=>{const pid=v.playerId||v.player;if(pid)seen.add(pid+'|'+v.date+'|'+(v.blockJump||'')+'|'+(v.approachJump||''));});
+  const plan=[], errors=[];
+  for(let i=h.hIdx+1;i<rows.length;i++){
+    const r=rows[i]||[];
+    const first=_importCell(r,cFirst), last=_importCell(r,cLast), bj=_importCell(r,cBj), aj=_importCell(r,cAj), dateRaw=(cDate>=0?r[cDate]:'');
+    if(!first&&!last&&!bj&&!aj&&(dateRaw==null||dateRaw===''))continue;
+    const rowNum=i+1;
+    const p=byName[nameKey(first)+' '+nameKey(last)];
+    if(!p){errors.push({row:rowNum,why:'no player named '+(first+' '+last).trim()+' on the roster'});continue;}
+    const date=_importDate(dateRaw);
+    if(!date||(!bj&&!aj)){errors.push({row:rowNum,why:'needs a date and at least one jump'});continue;}
+    const key=p.id+'|'+date+'|'+bj+'|'+aj;
+    if(seen.has(key))continue;
+    seen.add(key);
+    plan.push({playerId:p.id, date, blockJump:bj||null, approachJump:aj||null});
+  }
+  return {plan, errors};
+}
+
 // Write the plan: matches node (fbSet, full record) + profiles node (merge update).
 function _importCommit(plan){
   let nNew=0,nUpd=0;
@@ -5635,7 +5799,7 @@ function _importCommit(plan){
       if(d.jersey!=null)rec.jersey=d.jersey;        // overwrite jersey only when the import supplies one
       nUpd++;
     }else{
-      id=gi('p');
+      id=e.newId||gi('p');                          // reuse the id pre-assigned at parse time
       // court defaults to 1 (a real value the coach reassigns), never null, which Firebase drops.
       rec={id, firstName:d.first, lastName:d.last, classYear:_importClassYear(d.gradYear)||'FR', court:1, jersey:(d.jersey!=null?d.jersey:null)};
       nNew++;
@@ -5653,12 +5817,64 @@ function _importCommit(plan){
     if(db){
       const prof={gradYear:d.gradYear};
       if(d.truvolley!=null)prof.truvolley=d.truvolley;
+      // Identity fields: write only what the coach entered so a blank never nulls an existing value.
+      if(d.height)prof.height=d.height;
+      if(d.reach)prof.reach=d.reach;
+      if(d.position)prof.position=d.position;
+      if(d.side)prof.preferredSide=d.side;   // app reads preferredSide, not side
+      if(d.hand)prof.dominantHand=d.hand;     // app reads dominantHand, not hand
       if(d.parent1)prof.parent1=d.parent1;
       if(d.parent2)prof.parent2=d.parent2;
       db.ref(SC.dbRoots.profiles+'/players/'+id).update(prof);
     }
   });
   return {nNew,nUpd};
+}
+// Skills commit: merge-update the player's skills leaf so a blank leaves the existing
+// rating alone. Live schools only (db); mirrors saveSkills' path and keys.
+function _importCommitSkills(plan){
+  if(!db)return 0;
+  let n=0;
+  plan.forEach(e=>{db.ref(SC.dbRoots.profiles+'/skills/'+e.playerId).update(e.skills);n++;});
+  return n;
+}
+// Star Drill commit: one NEW record per attempt, keyed by its own id with a playerId
+// pointer, exactly like coachAddDrill. The batch index keeps ids unique within one import.
+function _importCommitDrills(plan){
+  if(!db)return 0;
+  let n=0;
+  plan.forEach((e,idx)=>{
+    const id='sd-'+e.playerId+'-'+Date.now()+'-'+idx;
+    db.ref(SC.dbRoots.profiles+'/starDrills/'+id).set({id,playerId:e.playerId,player:e.playerId,date:e.date,time:e.time});
+    n++;
+  });
+  return n;
+}
+// Verticals commit: one NEW jumpTests record per test, mirroring coachAddVertical's shape.
+function _importCommitVerts(plan){
+  if(!db)return 0;
+  let n=0;
+  plan.forEach((e,idx)=>{
+    const id='jt-'+e.playerId+'-'+Date.now()+'-'+idx;
+    db.ref(SC.dbRoots.profiles+'/jumpTests/'+id).set({id,playerId:e.playerId,player:e.playerId,date:e.date,blockJump:e.blockJump,approachJump:e.approachJump});
+    n++;
+  });
+  return n;
+}
+// Group skipped rows by sheet so a coach can see exactly what to fix and where.
+function _importErrGroups(errs){
+  if(!errs.length)return '';
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const bySheet={};
+  errs.forEach(e=>{(bySheet[e.sheet]=bySheet[e.sheet]||[]).push(e);});
+  let h='<div style="margin-top:12px;font-size:12px;color:var(--gray);">';
+  Object.keys(bySheet).forEach(sheet=>{
+    const list=bySheet[sheet];
+    h+='<div style="font-weight:700;margin-bottom:4px;">'+esc(sheet)+': '+list.length+' issue'+(list.length===1?'':'s')+'</div>'+
+      '<ul style="margin:0 0 8px;padding-left:18px;max-height:120px;overflow-y:auto;">'+
+      list.map(e=>'<li>Row '+e.row+': '+esc(e.why)+'</li>').join('')+'</ul>';
+  });
+  return h+'</div>';
 }
 function _importErrList(errors){
   if(!errors.length)return '';
@@ -5679,25 +5895,48 @@ function _importModal(title, bodyHtml, footerHtml){
   document.body.appendChild(ov);
   return ov;
 }
-function _importShowConfirm(plan, errors){
+// Collect skipped rows from every sheet into one sheet-tagged list for the report.
+function _importAllErrors(errors, skills, drills, verts){
+  return [].concat(
+    (errors||[]).map(e=>({sheet:'Roster',row:e.row,why:e.why})),
+    (skills.errors||[]).map(e=>({sheet:'Skills',row:e.row,why:e.why})),
+    (drills.errors||[]).map(e=>({sheet:'Star Drill',row:e.row,why:e.why})),
+    (verts.errors||[]).map(e=>({sheet:'Verticals',row:e.row,why:e.why}))
+  );
+}
+function _importShowConfirm(plan, errors, skills, drills, verts){
   const nNew=plan.filter(e=>!e.existing).length, nUpd=plan.length-nNew;
-  const body='<div style="font-size:14px;line-height:1.5;">Found <b>'+plan.length+'</b> player'+(plan.length===1?'':'s')+'. '+
-    '<b>'+nNew+'</b> new, <b>'+nUpd+'</b> to update.'+(plan.length?' Import?':'')+'</div>'+_importErrList(errors);
-  const footer=plan.length
+  // Only mention a sheet that actually has rows.
+  const parts=[];
+  if(plan.length)parts.push('<b>'+plan.length+'</b> player'+(plan.length===1?'':'s')+' (<b>'+nNew+'</b> new, <b>'+nUpd+'</b> to update)');
+  if(skills.plan.length)parts.push('<b>'+skills.plan.length+'</b> skill row'+(skills.plan.length===1?'':'s'));
+  if(drills.plan.length)parts.push('<b>'+drills.plan.length+'</b> star drill time'+(drills.plan.length===1?'':'s'));
+  if(verts.plan.length)parts.push('<b>'+verts.plan.length+'</b> vertical test'+(verts.plan.length===1?'':'s'));
+  const anything=plan.length||skills.plan.length||drills.plan.length||verts.plan.length;
+  const allErrors=_importAllErrors(errors, skills, drills, verts);
+  const body='<div style="font-size:14px;line-height:1.5;">'+(parts.length?'Found '+parts.join(', ')+'.':'Nothing to import.')+(anything?' Import?':'')+'</div>'+_importErrGroups(allErrors);
+  const footer=anything
     ? '<button class="btn btn-small btn-secondary" id="_imp-cancel">Cancel</button><button class="btn btn-small" style="background:#082A4F;color:#fff;border:none;" id="_imp-go">Import</button>'
     : '<button class="btn btn-small btn-secondary" id="_imp-cancel">Close</button>';
-  const ov=_importModal('Import roster', body, footer);
+  const ov=_importModal('Import program', body, footer);
   const cancel=ov.querySelector('#_imp-cancel'); if(cancel)cancel.onclick=()=>ov.remove();
   const go=ov.querySelector('#_imp-go');
   if(go)go.onclick=()=>{
     const res=_importCommit(plan);
+    const nSk=_importCommitSkills(skills.plan);
+    const nDr=_importCommitDrills(drills.plan);
+    const nVt=_importCommitVerts(verts.plan);
     ov.remove();
-    _importShowResult(res.nNew, res.nUpd, errors);
+    _importShowResult(res.nNew, res.nUpd, nSk, nDr, nVt, allErrors);
     toast('Imported: '+res.nNew+' new, '+res.nUpd+' updated');
   };
 }
-function _importShowResult(nNew, nUpd, errors){
-  const body='<div style="font-size:14px;">Imported <b>'+nNew+'</b> new, <b>'+nUpd+'</b> updated.</div>'+_importErrList(errors);
+function _importShowResult(nNew, nUpd, nSk, nDr, nVt, allErrors){
+  const extra=[];
+  if(nSk)extra.push('<b>'+nSk+'</b> skill row'+(nSk===1?'':'s'));
+  if(nDr)extra.push('<b>'+nDr+'</b> star drill time'+(nDr===1?'':'s'));
+  if(nVt)extra.push('<b>'+nVt+'</b> vertical test'+(nVt===1?'':'s'));
+  const body='<div style="font-size:14px;">Imported <b>'+nNew+'</b> new, <b>'+nUpd+'</b> updated'+(extra.length?', '+extra.join(', '):'')+'.</div>'+_importErrGroups(allErrors);
   const ov=_importModal('Import complete', body, '<button class="btn btn-small btn-secondary" id="_imp-close">Close</button>');
   const close=ov.querySelector('#_imp-close'); if(close)close.onclick=()=>ov.remove();
 }
