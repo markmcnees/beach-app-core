@@ -1374,7 +1374,22 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
     <div class="tab-content" id="tab-settings">
 <div class="card"><div class="card-title"><span class="bar"></span> Player Roster</div>
       <p style="font-size:12px;color:var(--gray);margin-bottom:12px;">Assign pair levels. Changes sync in real time.</p><div id="roster-list"></div></div>
-${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar"></span> Add Player</div>
+  </div>
+  ${SC.tiersEnabled?'':'<div class="tab-content" id="tab-practice"></div>'}
+  ${SC.tiersEnabled?'':`<div class="tab-content" id="tab-hspractice"><div class="card" style="text-align:center;padding:34px 20px;">
+    <div style="font-family:'Bebas Neue';font-size:24px;letter-spacing:1px;color:#082A4F;margin-bottom:8px;">Practice</div>
+    <p style="font-size:13px;color:var(--gray);line-height:1.6;margin:0;">The practice planner is coming to the coach app. Team analysis, development plans, and the practice builder land here next.</p>
+  </div></div>`}
+  ${SC.tiersEnabled?'':`<div class="tab-content" id="tab-hsrecruiting"><div class="card" style="text-align:center;padding:34px 20px;">
+    <div style="font-family:'Bebas Neue';font-size:24px;letter-spacing:1px;color:#082A4F;margin-bottom:8px;">Recruiting</div>
+    <p style="font-size:13px;color:var(--gray);line-height:1.6;margin:0;">Recruiting is coming to the coach app.</p>
+  </div></div>`}
+  ${SC.tiersEnabled?'':`<div class="tab-content" id="tab-hspgroups"><div class="card" style="text-align:center;padding:34px 20px;">
+    <div style="font-family:'Bebas Neue';font-size:24px;letter-spacing:1px;color:#082A4F;margin-bottom:8px;">Practice Groups</div>
+    <p style="font-size:13px;color:var(--gray);line-height:1.6;margin:0;">Practice Groups is coming to the coach app.</p>
+  </div></div>`}
+  ${SC.tiersEnabled?'':`<div class="tab-content" id="tab-hsimport">
+    ${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar"></span> Add Player</div>
       <div class="form-row" style="margin-bottom:10px;"><input type="text" class="form-input" id="new-first" placeholder="First Name"><input type="text" class="form-input" id="new-last" placeholder="Last Name"></div>
       <div class="form-row" style="margin-bottom:10px;">
         <input type="number" class="form-input" id="new-jersey" placeholder="Jersey #" min="0" max="99" style="max-width:110px;">
@@ -1397,21 +1412,7 @@ ${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar
         <input type="email" class="form-input" id="new-p2-email" placeholder="Parent 2 Email" style="max-width:200px;">
         <input type="tel" class="form-input" id="new-p2-phone" placeholder="Parent 2 Phone" style="max-width:170px;"></div>
       <button class="btn btn-secondary" id="add-player">Add Player</button></div>`}
-  </div>
-  ${SC.tiersEnabled?'':'<div class="tab-content" id="tab-practice"></div>'}
-  ${SC.tiersEnabled?'':`<div class="tab-content" id="tab-hspractice"><div class="card" style="text-align:center;padding:34px 20px;">
-    <div style="font-family:'Bebas Neue';font-size:24px;letter-spacing:1px;color:#082A4F;margin-bottom:8px;">Practice</div>
-    <p style="font-size:13px;color:var(--gray);line-height:1.6;margin:0;">The practice planner is coming to the coach app. Team analysis, development plans, and the practice builder land here next.</p>
-  </div></div>`}
-  ${SC.tiersEnabled?'':`<div class="tab-content" id="tab-hsrecruiting"><div class="card" style="text-align:center;padding:34px 20px;">
-    <div style="font-family:'Bebas Neue';font-size:24px;letter-spacing:1px;color:#082A4F;margin-bottom:8px;">Recruiting</div>
-    <p style="font-size:13px;color:var(--gray);line-height:1.6;margin:0;">Recruiting is coming to the coach app.</p>
-  </div></div>`}
-  ${SC.tiersEnabled?'':`<div class="tab-content" id="tab-hspgroups"><div class="card" style="text-align:center;padding:34px 20px;">
-    <div style="font-family:'Bebas Neue';font-size:24px;letter-spacing:1px;color:#082A4F;margin-bottom:8px;">Practice Groups</div>
-    <p style="font-size:13px;color:var(--gray);line-height:1.6;margin:0;">Practice Groups is coming to the coach app.</p>
-  </div></div>`}
-  ${SC.tiersEnabled?'':`<div class="tab-content" id="tab-hsimport"><div class="card">
+    <div class="card">
     <div class="card-title"><span class="bar"></span> Import and Export</div>
     <p style="font-size:13px;color:var(--gray);line-height:1.6;margin-bottom:14px;">Export your full program to Excel or JSON any time, for a backup or to share with staff. Import a roster from the CourtSense Excel template to add or update players.</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
