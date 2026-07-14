@@ -5535,12 +5535,14 @@ function _importCommit(plan){
 }
 function _importErrList(errors){
   if(!errors.length)return '';
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   return '<div style="margin-top:12px;font-size:12px;color:var(--gray);">'+
     '<div style="font-weight:700;margin-bottom:4px;">Skipped '+errors.length+' row'+(errors.length===1?'':'s')+':</div>'+
     '<ul style="margin:0;padding-left:18px;max-height:120px;overflow-y:auto;">'+
     errors.map(e=>'<li>Row '+e.row+': '+esc(e.why)+'</li>').join('')+'</ul></div>';
 }
 function _importModal(title, bodyHtml, footerHtml){
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const ov=document.createElement('div');
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10001;display:flex;align-items:center;justify-content:center;padding:16px;';
   ov.innerHTML='<div style="background:var(--white);border-radius:12px;max-width:440px;width:100%;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,0.3);">'+
