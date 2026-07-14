@@ -1065,7 +1065,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
         <div class="stat-box"><div class="stat-number" style="color:var(--red);" id="dash-sets-rec">0-0</div><div class="stat-label">Sets W-L</div></div>
       </div>
     </div>
-<div class="card"><div class="card-title"><span class="bar"></span> Season Schedule <span style="font-size:11px;color:var(--gray);font-family:'Barlow';font-weight:600;letter-spacing:0;margin-left:8px;">via MaxPreps</span></div>
+<div class="card"><div class="card-title"><span class="bar"></span> Season Schedule</div>
       <div id="dash-schedule"></div>
       <div id="dash-schedule-add" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--gray-lighter);">
         <div style="font-family:'Bebas Neue';font-size:13px;letter-spacing:1px;color:var(--charcoal);margin-bottom:8px;">Add Game</div>
@@ -2810,17 +2810,17 @@ function renderStandings(){
   let h='<div style="overflow-x:auto;"><table class="player-table" style="min-width:280px;"><thead><tr><th style="width:30px;">#</th><th>Team</th><th>W</th><th>L</th><th>Pct</th><th></th></tr></thead><tbody>';
   sorted.forEach(([name,s],i)=>{
     const pct=(s.w+s.l)>0?((s.w/(s.w+s.l))*100).toFixed(0)+'%':'—';
-    const isLeon=name===SC.myStandingsKey;
-    h+=`<tr style="${isLeon?'background:var(--red-bg);font-weight:700;':''}">
+    const isMine=_isOwnStanding(name);
+    h+=`<tr style="${isMine?'background:var(--red-bg);font-weight:700;':''}">
       <td style="font-family:'Bebas Neue';font-size:14px;color:var(--gray);">${i+1}</td>
-      <td style="${isLeon?'color:var(--red);':''}font-weight:700;">${name}${isLeon?' '+(SC.teamEmoji||'🦁'):''}</td>
+      <td style="${isMine?'color:var(--red);':''}font-weight:700;">${name}${isMine?' '+(SC.teamEmoji||''):''}</td>
       <td style="font-family:'Bebas Neue';font-size:16px;color:var(--green);">${s.w}</td>
       <td style="font-family:'Bebas Neue';font-size:16px;color:var(--loss-red);">${s.l}</td>
       <td style="font-family:'Bebas Neue';font-size:14px;">${pct}</td>
-      <td>${s.auto&&!isLeon?'<span style="font-size:9px;color:var(--gray);">vs Leon</span>':''}</td></tr>`;
+      <td>${s.auto&&!isMine?'<span style="font-size:9px;color:var(--gray);">vs '+(SC.myStandingsKey||'us')+'</span>':''}</td></tr>`;
   });
   h+='</tbody></table></div>';
-  if(Object.keys(oppFromSchedule).length)h+='<div style="font-size:10px;color:var(--gray);margin-top:6px;font-style:italic;">Records marked "vs Leon" are auto-calculated from schedule. Update with full season records using the form below.</div>';
+  if(Object.keys(oppFromSchedule).length)h+='<div style="font-size:10px;color:var(--gray);margin-top:6px;font-style:italic;">Records marked "vs '+(SC.myStandingsKey||'us')+'" are auto-calculated from schedule. Update with full season records using the form below.</div>';
   document.getElementById('dash-standings').innerHTML=h;
   fetchMaxPrepsStandings(); // async — overlays with live MaxPreps data
 
@@ -2843,6 +2843,17 @@ function renderStandings(){
 // ============================================================
 // MAXPREPS LIVE STANDINGS FETCH
 // ============================================================
+// Own-team highlight test shared by all three standings tables. No school-specific
+// hardcoding: matches SC.myStandingsKey case-insensitively. Locally-computed tables
+// pass the exact key as the row name, so they use equality; the external MaxPreps
+// feed may format the name differently, so those callers pass fuzzy=true (substring
+// either direction) to tolerate "Leon" / "Leon High School" vs "Leon Queens".
+function _isOwnStanding(name, fuzzy){
+  const key=SC.myStandingsKey; if(!key) return false;
+  const nl=String(name).toLowerCase(), kl=String(key).toLowerCase();
+  return fuzzy ? (nl.includes(kl)||kl.includes(nl)) : (nl===kl);
+}
+
 const MAXPREPS_URL=SC.maxPrepsUrl;
 const PROXY_BASE=SC.aiProxyUrl+'/proxy';
 
@@ -2850,11 +2861,12 @@ async function fetchMaxPrepsStandings(){
   const el=document.getElementById('dash-standings');
   const st=document.getElementById('maxpreps-status');
   if(!el)return;
+  // Only fetch this school's own configured MaxPreps URL. With none set, leave the
+  // locally-computed standings table alone (never overlay another school's data).
+  if(!MAXPREPS_URL){if(st)st.textContent='';return;}
   if(st)st.textContent='🔄 loading…';
 
-  // Two URLs to try: their internal JSON API first, then the HTML page
   const ATTEMPTS=[
-    PROXY_BASE+'?url='+encodeURIComponent('https://api.maxpreps.com/gateways/sports-content-service/v1/sports/beach-volleyball/standings?state=fl&classification=5a&season=2025-2026'),
     PROXY_BASE+'?url='+encodeURIComponent(MAXPREPS_URL),
   ];
 
@@ -2948,10 +2960,10 @@ async function fetchMaxPrepsStandings(){
   let h='<div style="overflow-x:auto;"><table class="player-table" style="min-width:280px;"><thead><tr><th style="width:30px;">#</th><th>Team</th><th>W</th><th>L</th><th>Pct</th></tr></thead><tbody>';
   teams.forEach(({name,w,l},i)=>{
     const pct=(w+l)>0?((w/(w+l))*100).toFixed(0)+'%':'—';
-    const isLeon=/leon/i.test(name);
-    h+=`<tr style="${isLeon?'background:var(--red-bg);font-weight:700;':''}">
+    const isMine=_isOwnStanding(name, true);
+    h+=`<tr style="${isMine?'background:var(--red-bg);font-weight:700;':''}">
       <td style="font-family:'Bebas Neue';font-size:14px;color:var(--gray);">${i+1}</td>
-      <td style="${isLeon?'color:var(--red);':''}font-weight:700;">${name}${isLeon?' '+(SC.teamEmoji||'🦁'):''}</td>
+      <td style="${isMine?'color:var(--red);':''}font-weight:700;">${name}${isMine?' '+(SC.teamEmoji||''):''}</td>
       <td style="font-family:'Bebas Neue';font-size:16px;color:var(--green);">${w}</td>
       <td style="font-family:'Bebas Neue';font-size:16px;color:var(--loss-red);">${l}</td>
       <td style="font-family:'Bebas Neue';font-size:14px;">${pct}</td></tr>`;
@@ -4235,10 +4247,10 @@ function renderPlayerStandings(){
   let h='<table class="player-table"><thead><tr><th>#</th><th>Team</th><th>W</th><th>L</th><th>Pct</th></tr></thead><tbody>';
   sorted.forEach(([name,s],i)=>{
     const pct=(s.w+s.l)>0?((s.w/(s.w+s.l))*100).toFixed(0)+'%':'—';
-    const isLeon=name===SC.myStandingsKey;
-    h+=`<tr style="${isLeon?'background:var(--red-bg);font-weight:700;':''}">
+    const isMine=_isOwnStanding(name);
+    h+=`<tr style="${isMine?'background:var(--red-bg);font-weight:700;':''}">
       <td style="font-family:'Bebas Neue';font-size:14px;color:var(--gray);">${i+1}</td>
-      <td style="${isLeon?'color:var(--red);':''}font-weight:700;">${name}${isLeon?' '+(SC.teamEmoji||'🦁'):''}</td>
+      <td style="${isMine?'color:var(--red);':''}font-weight:700;">${name}${isMine?' '+(SC.teamEmoji||''):''}</td>
       <td style="font-family:'Bebas Neue';font-size:16px;color:var(--green);">${s.w}</td>
       <td style="font-family:'Bebas Neue';font-size:16px;color:var(--loss-red);">${s.l}</td>
       <td style="font-family:'Bebas Neue';font-size:14px;">${pct}</td></tr>`;
@@ -6716,12 +6728,15 @@ function openPlayerScoutSchool(key){
 // ============================================================
 // EMAIL NOTIFICATION HELPERS
 // ============================================================
-const COACH_EMAILS=['ecitron0730@gmail.com','markmcnees@gmail.com'];
-
+// Recipient list for player-triggered coach notifications, per-school via
+// SC.coachEmails. When a school has none configured, notifyCoaches is a no-op
+// (no mailto, no draft), so one school never drafts a note to another's staff.
 function notifyCoaches(subject,body){
+  const emails=(Array.isArray(SC.coachEmails)&&SC.coachEmails.length)?SC.coachEmails:null;
+  if(!emails)return;
   try{
     const a=document.createElement('a');
-    a.href='mailto:'+COACH_EMAILS.join(',')+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
+    a.href='mailto:'+emails.join(',')+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
     a.style.display='none';document.body.appendChild(a);a.click();document.body.removeChild(a);
   }catch(e){}
 }
@@ -8628,20 +8643,22 @@ function renderPracticeGroups(){
 // team, sessionId }. Effective rating = rating if present, else manualRating, else unrated (no 1500).
 // recruitSessions[].invited stores prospect ids (not names) so renames and dupes stay stable; a
 // prospect may be invited to more than one session.
-let recruitSessions=[
+// Demo-only seed data. A real (non-demo) school starts with zero sessions/prospects;
+// recruiting is not persisted yet, so it must not show another program's fake prospects.
+let recruitSessions = SC.demoMode ? [
   {name:'Fall Tryout - Session A', date:'Sept 6', time:'9:00 AM', invited:['prospect_seed1','prospect_seed2']},
   {name:'Fall Tryout - Session B', date:'Sept 7', time:'10:00 AM', invited:['prospect_seed3']}
-];
+] : [];
 // TruVolley values are 0-10 decimals; ratings below match csSeedFromTruVolley (7.2->1800, 5.5->1600,
 // 4.0->1600, 2.8->1450). Mia and Zoe have no TruVolley, so they are unrated until the Exec sets one.
-let recruitProspects=[
+let recruitProspects = SC.demoMode ? [
   {id:'prospect_seed1', firstName:'Ava',    lastName:'Nguyen', gender:'F', classYear:'SO', truVolley:7.2,  rating:1800, rd:150,  manualRating:null, tierRequest:'garnet', photo:null, status:'prospect', team:null, sessionId:null},
   {id:'prospect_seed2', firstName:'Mia',    lastName:'Torres', gender:'F', classYear:'FR', truVolley:null, rating:null, rd:null, manualRating:null, tierRequest:'gold',   photo:null, status:'prospect', team:null, sessionId:null},
   {id:'prospect_seed3', firstName:'Harper', lastName:'Lee',    gender:'F', classYear:'JR', truVolley:5.5,  rating:1600, rd:200,  manualRating:null, tierRequest:'garnet', photo:null, status:'prospect', team:null, sessionId:null},
   {id:'prospect_seed4', firstName:'Zoe',    lastName:'Carter', gender:'F', classYear:'FR', truVolley:null, rating:null, rd:null, manualRating:null, tierRequest:'gold',   photo:null, status:'prospect', team:null, sessionId:null},
   {id:'prospect_seed5', firstName:'Lily',   lastName:'Brooks', gender:'F', classYear:'SO', truVolley:4.0,  rating:1600, rd:200,  manualRating:null, tierRequest:null,     photo:null, status:'prospect', team:null, sessionId:null},
   {id:'prospect_seed6', firstName:'Sofia',  lastName:'Ramos',  gender:'F', classYear:'SR', truVolley:2.8,  rating:1450, rd:250,  manualRating:null, tierRequest:'garnet', photo:null, status:'prospect', team:null, sessionId:null}
-];
+] : [];
 // Real CS conversion, replicated EXACTLY from courtsense/community/profile/index.html truvolleySeed:
 // a 0-to-10 TruVolley decimal maps to a Glicko-2 seed. Blank/non-numeric returns null (unrated, no seed).
 function csSeedFromTruVolley(raw){
@@ -8956,7 +8973,7 @@ function renderRecruiting(){
         ${setRatingHtml}
       </div>
     </div>`;
-  }).join(''):'<div style="font-size:12px;color:var(--gray);padding:6px 0;">No prospects waiting to be placed.</div>';
+  }).join(''):(recruitProspects.length?'<div style="font-size:12px;color:var(--gray);padding:6px 0;">No prospects waiting to be placed.</div>':'<div style="font-size:12px;color:var(--gray);padding:6px 0;">No prospects yet. Add a tryout session above to get started.</div>');
   const assignedHtml=assigned.map(p=>{
     return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--gray-lighter);font-size:13px;flex-wrap:wrap;">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
