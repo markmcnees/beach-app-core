@@ -3047,7 +3047,7 @@ function renderPlayers(){
   const pNameCell=(p)=>{
     // Exec-side CS ranking pill, club only and only when the player has a rank. Never shown player-side.
     const rk=(SC.tiersEnabled&&p.csRank)?` <span class="cs-rank">${p.csRank}</span>`:'';
-    return currentRole==='coach'?`<button class="player-name" style="background:none;border:none;padding:0;cursor:pointer;text-decoration:underline dotted;color:var(--red);font-family:inherit;font-size:inherit;font-weight:700;text-align:left;-webkit-tap-highlight-color:transparent;" onclick="coachOpenPlayer('${p.id}')">${p.firstName} ${p.lastName.charAt(0)}.${rk}</button>`:`<span class="player-name">${p.firstName} ${p.lastName.charAt(0)}.${rk}</span>`;
+    return currentRole==='coach'?`<button class="player-name" style="background:none;border:none;padding:0;cursor:pointer;text-decoration:underline dotted;color:var(--red);font-family:inherit;font-size:inherit;font-weight:700;text-align:left;-webkit-tap-highlight-color:transparent;" onclick="coachOpenPlayer('${p.id}')">${p.firstName||''} ${(p.lastName||'').charAt(0)}.${rk}</button>`:`<span class="player-name">${p.firstName||''} ${(p.lastName||'').charAt(0)}.${rk}</span>`;
   };
   if(pType==='queens'){
     tbody.innerHTML=rows.map(r=>{const p=r.p,s=r.s;
@@ -3423,8 +3423,23 @@ function playerBadge(p){
   return '<span class="tier-badge tier-'+t+'">'+L[t]+'</span>';
 }
 
+// Defensive sort helpers so one incomplete record cannot crash a roster view.
+// A record missing court or lastName sorts last instead of throwing; healthy
+// records (all six fields) compare exactly as before.
+function _cmpCourt(a,b){
+  const ca=Number.isFinite(a.court)?a.court:Infinity;
+  const cb=Number.isFinite(b.court)?b.court:Infinity;
+  return ca-cb;
+}
+function _cmpLast(a,b){
+  const la=a.lastName, lb=b.lastName;
+  if(!la&&!lb)return 0;
+  if(!la)return 1;   // a has no last name -> sort a after b
+  if(!lb)return -1;  // b has no last name -> sort b after a
+  return la.localeCompare(lb);
+}
 function renderRoster(){
-  let sorted=[...D.players].sort((a,b)=>a.court-b.court||CO[a.classYear]-CO[b.classYear]||a.lastName.localeCompare(b.lastName));
+  let sorted=[...D.players].sort((a,b)=>_cmpCourt(a,b)||CO[a.classYear]-CO[b.classYear]||_cmpLast(a,b));
   // Tier filter (Grass Club only). Applied before court grouping; default 'all' shows everyone.
   if(rosterTierFilter!=='all'){
     sorted=sorted.filter(p=>(p.tier||'unassigned')===rosterTierFilter);
@@ -4966,7 +4981,7 @@ function renderCoachGoals(){
   const filter=document.getElementById('goals-player-filter');
   const curFilter=filter.value;
   filter.innerHTML='<option value="all">All Players</option>';
-  const sorted=[...D.players].sort((a,b)=>a.court-b.court||a.lastName.localeCompare(b.lastName));
+  const sorted=[...D.players].sort((a,b)=>_cmpCourt(a,b)||_cmpLast(a,b));
   sorted.forEach(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=p.firstName+' '+p.lastName;filter.appendChild(o);});
   filter.value=curFilter||'all';
 
@@ -5514,14 +5529,24 @@ function _importCommit(plan){
     if(e.existing){
       id=e.existing.id;
       rec=Object.assign({}, e.existing);          // keep court, csRank, and everything else untouched
-      rec.classYear=_importClassYear(d.gradYear);   // grad years in the import are the source of truth
+      rec.classYear=_importClassYear(d.gradYear)||'FR'; // grad years in the import are the source of truth
       if(d.jersey!=null)rec.jersey=d.jersey;        // overwrite jersey only when the import supplies one
       nUpd++;
     }else{
       id=gi('p');
-      rec={id, firstName:d.first, lastName:d.last, classYear:_importClassYear(d.gradYear), court:null, jersey:(d.jersey!=null?d.jersey:null)};
+      // court defaults to 1 (a real value the coach reassigns), never null, which Firebase drops.
+      rec={id, firstName:d.first, lastName:d.last, classYear:_importClassYear(d.gradYear)||'FR', court:1, jersey:(d.jersey!=null?d.jersey:null)};
       nNew++;
     }
+    // Enforce the same six-field contract addPlayer writes: id/firstName/lastName/
+    // classYear/court must be real values; jersey may be null. This also repairs an
+    // existing record that was previously stored without a court.
+    rec.id=id;
+    rec.firstName=rec.firstName||d.first||'';
+    rec.lastName=rec.lastName||d.last||'';
+    rec.classYear=rec.classYear||'FR';
+    if(!Number.isFinite(rec.court))rec.court=1;
+    if(rec.jersey===undefined)rec.jersey=null;
     fbSet('players/'+id, rec);
     if(db){
       const prof={gradYear:d.gradYear};
