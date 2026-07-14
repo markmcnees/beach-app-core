@@ -1378,6 +1378,7 @@ ${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar
       <div class="form-row" style="margin-bottom:10px;"><input type="text" class="form-input" id="new-first" placeholder="First Name"><input type="text" class="form-input" id="new-last" placeholder="Last Name"></div>
       <div class="form-row" style="margin-bottom:10px;">
         <input type="number" class="form-input" id="new-jersey" placeholder="Jersey #" min="0" max="99" style="max-width:110px;">
+        <input type="number" class="form-input" id="new-truvolley" placeholder="TruVolley Rating" step="0.01" min="0" style="max-width:150px;">
         <select class="form-select" id="new-class"><option value="FR">Freshman</option><option value="SO">Sophomore</option><option value="JR">Junior</option><option value="SR">Senior</option></select>
         <select class="form-select" id="new-court"><option value="1">Court 1</option><option value="2">Court 2</option><option value="3">Court 3</option><option value="4">Court 4</option><option value="5">Court 5</option><option value="6">Court 6 — Exhib</option><option value="7">Court 7 — Exhib</option><option value="8">Court 8 — Exhib</option></select></div>
       <div class="form-row" style="margin-bottom:10px;flex-wrap:wrap;gap:8px;">
@@ -1387,6 +1388,14 @@ ${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar
         <select class="form-select" id="new-hand"><option value="">Hand</option><option value="R">Right</option><option value="L">Left</option></select>
         <select class="form-select" id="new-side"><option value="">Side</option><option value="L">Left</option><option value="R">Right</option></select>
         <select class="form-select" id="new-role"><option value="">Role</option><option value="block">Block</option><option value="defense">Defense</option><option value="split">Split</option></select></div>
+      <div class="form-row" style="margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+        <input type="text" class="form-input" id="new-p1-name" placeholder="Parent 1 Name" style="max-width:170px;">
+        <input type="email" class="form-input" id="new-p1-email" placeholder="Parent 1 Email" style="max-width:200px;">
+        <input type="tel" class="form-input" id="new-p1-phone" placeholder="Parent 1 Phone" style="max-width:170px;"></div>
+      <div class="form-row" style="margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+        <input type="text" class="form-input" id="new-p2-name" placeholder="Parent 2 Name" style="max-width:170px;">
+        <input type="email" class="form-input" id="new-p2-email" placeholder="Parent 2 Email" style="max-width:200px;">
+        <input type="tel" class="form-input" id="new-p2-phone" placeholder="Parent 2 Phone" style="max-width:170px;"></div>
       <button class="btn btn-secondary" id="add-player">Add Player</button></div>`}
   </div>
   ${SC.tiersEnabled?'':'<div class="tab-content" id="tab-practice"></div>'}
@@ -1708,6 +1717,18 @@ ${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar
           <select id="cpm-id-position" class="form-select" style="flex:1;min-width:110px;padding:8px;font-size:13px;"><option value="">Position</option><option value="block">Block</option><option value="defense">Defense</option><option value="split">Split</option></select>
           <select id="cpm-id-side" class="form-select" style="flex:1;min-width:100px;padding:8px;font-size:13px;"><option value="">Side</option><option value="L">Left</option><option value="R">Right</option></select>
           <select id="cpm-id-hand" class="form-select" style="flex:1;min-width:100px;padding:8px;font-size:13px;"><option value="">Hand</option><option value="R">Right</option><option value="L">Left</option></select>
+          <input type="number" id="cpm-id-truvolley" class="form-input" placeholder="TruVolley Rating" step="0.01" min="0" style="flex:1;min-width:130px;padding:8px;font-size:13px;">
+        </div>
+        <div style="font-family:'Bebas Neue';font-size:13px;letter-spacing:1px;color:var(--gray);margin:4px 0 8px;">Parent Contacts</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+          <input type="text" id="cpm-p1-name" class="form-input" placeholder="Parent 1 Name" style="flex:1;min-width:120px;padding:8px;font-size:13px;">
+          <input type="email" id="cpm-p1-email" class="form-input" placeholder="Parent 1 Email" style="flex:1;min-width:150px;padding:8px;font-size:13px;">
+          <input type="tel" id="cpm-p1-phone" class="form-input" placeholder="Parent 1 Phone" style="flex:1;min-width:120px;padding:8px;font-size:13px;">
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+          <input type="text" id="cpm-p2-name" class="form-input" placeholder="Parent 2 Name" style="flex:1;min-width:120px;padding:8px;font-size:13px;">
+          <input type="email" id="cpm-p2-email" class="form-input" placeholder="Parent 2 Email" style="flex:1;min-width:150px;padding:8px;font-size:13px;">
+          <input type="tel" id="cpm-p2-phone" class="form-input" placeholder="Parent 2 Phone" style="flex:1;min-width:120px;padding:8px;font-size:13px;">
         </div>
         <button class="btn btn-red btn-small" style="width:100%;" onclick="coachSaveIdentity()">Save Identity</button>
         <button class="btn btn-secondary btn-small" style="width:100%;margin-top:8px;" onclick="showAthleteCard(document.getElementById('coach-player-overlay').dataset.pid)">View Athlete Card</button>
@@ -3737,8 +3758,18 @@ const _addP=document.getElementById('add-player'); if(_addP) _addP.addEventListe
   const id=gi('p');fbSet('players/'+id,{id,firstName:f,lastName:l,classYear:document.getElementById('new-class').value,court:parseInt(document.getElementById('new-court').value),jersey:jersey?parseInt(jersey):null});
   // Recruiting identity fields live on the profiles node (existing model: pp.height/position/preferredSide/dominantHand),
   // written with merge semantics so skills/notes/jumpTests under this player are never clobbered. gradYear/reach are new keys.
-  if(db)db.ref(SC.dbRoots.profiles+'/players/'+id).update({height:document.getElementById('new-height').value.trim()||null,reach:document.getElementById('new-reach').value.trim()||null,gradYear:parseInt(document.getElementById('new-gradyear').value)||null,position:document.getElementById('new-role').value||null,preferredSide:document.getElementById('new-side').value||null,dominantHand:document.getElementById('new-hand').value||null});
-  document.getElementById('new-first').value='';document.getElementById('new-last').value='';document.getElementById('new-jersey').value='';document.getElementById('new-gradyear').value='';document.getElementById('new-height').value='';document.getElementById('new-reach').value='';document.getElementById('new-hand').value='';document.getElementById('new-side').value='';document.getElementById('new-role').value='';toast('Player added!');});
+  const _pv=elId=>document.getElementById(elId)?.value.trim()||'';
+  const _mkParent=(n,e,ph)=>{if(!n&&!e&&!ph)return null;const o={};if(n)o.name=n;if(e)o.email=e;if(ph)o.phone=ph;return o;};
+  const prof={height:document.getElementById('new-height').value.trim()||null,reach:document.getElementById('new-reach').value.trim()||null,gradYear:parseInt(document.getElementById('new-gradyear').value)||null,position:document.getElementById('new-role').value||null,preferredSide:document.getElementById('new-side').value||null,dominantHand:document.getElementById('new-hand').value||null};
+  const _tv=parseFloat(document.getElementById('new-truvolley').value);
+  if(!isNaN(_tv))prof.truvolley=_tv;                                  // only write TruVolley when entered
+  const _p1=_mkParent(_pv('new-p1-name'),_pv('new-p1-email'),_pv('new-p1-phone'));
+  const _p2=_mkParent(_pv('new-p2-name'),_pv('new-p2-email'),_pv('new-p2-phone'));
+  if(_p1)prof.parent1=_p1;                                           // only write a parent with at least one field
+  if(_p2)prof.parent2=_p2;
+  if(db)db.ref(SC.dbRoots.profiles+'/players/'+id).update(prof);
+  ['new-first','new-last','new-jersey','new-truvolley','new-gradyear','new-height','new-reach','new-hand','new-side','new-role','new-p1-name','new-p1-email','new-p1-phone','new-p2-name','new-p2-email','new-p2-phone'].forEach(eid=>{const el=document.getElementById(eid);if(el)el.value='';});
+  toast('Player added!');});
 
 // Data export (JSON). Named so the Manage Import/Export card can call it directly. Excel export is exportExcel().
 function exportJSON(){
@@ -4710,6 +4741,10 @@ function coachOpenPlayer(pid){
   _setIdV('cpm-id-position',_idp.position);
   _setIdV('cpm-id-side',_idp.preferredSide);
   _setIdV('cpm-id-hand',_idp.dominantHand);
+  _setIdV('cpm-id-truvolley',_idp.truvolley);
+  const _pp1=_idp.parent1||{},_pp2=_idp.parent2||{};
+  _setIdV('cpm-p1-name',_pp1.name); _setIdV('cpm-p1-email',_pp1.email); _setIdV('cpm-p1-phone',_pp1.phone);
+  _setIdV('cpm-p2-name',_pp2.name); _setIdV('cpm-p2-email',_pp2.email); _setIdV('cpm-p2-phone',_pp2.phone);
   // Athlete info demo editor: prefill from the in-memory demo dataset (demo only; unseeded ids leave inputs empty).
   if(SC.demoMode){
     const _aiEdit=_demoAthleteInfo[pid]||{};
@@ -4751,14 +4786,21 @@ function coachSaveIdentity(){
   const overlay=document.getElementById('coach-player-overlay');
   const pid=overlay?.dataset.pid;if(!pid)return;
   const gv=elId=>document.getElementById(elId)?.value.trim()||null;
+  const _mkParent=(n,e,ph)=>{if(!n&&!e&&!ph)return null;const o={};if(n)o.name=n;if(e)o.email=e;if(ph)o.phone=ph;return o;};
+  const _tvRaw=document.getElementById('cpm-id-truvolley')?.value.trim();
+  const _tv=_tvRaw?parseFloat(_tvRaw):NaN;
   // Merge-write to profiles/players so skills/notes/jumpTests under this player are never clobbered.
+  // truvolley/parent1/parent2 write null when cleared (update() removes the key).
   if(db)db.ref(SC.dbRoots.profiles+'/players/'+pid).update({
     height:gv('cpm-id-height'),
     reach:gv('cpm-id-reach'),
     gradYear:parseInt(document.getElementById('cpm-id-gradyear')?.value)||null,
     position:document.getElementById('cpm-id-position')?.value||null,
     preferredSide:document.getElementById('cpm-id-side')?.value||null,
-    dominantHand:document.getElementById('cpm-id-hand')?.value||null
+    dominantHand:document.getElementById('cpm-id-hand')?.value||null,
+    truvolley:isNaN(_tv)?null:_tv,
+    parent1:_mkParent(gv('cpm-p1-name'),gv('cpm-p1-email'),gv('cpm-p1-phone')),
+    parent2:_mkParent(gv('cpm-p2-name'),gv('cpm-p2-email'),gv('cpm-p2-phone'))
   });
   toast('Identity saved');
   setTimeout(()=>renderPlayerProfileData(pid),600);
