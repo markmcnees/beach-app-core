@@ -1404,11 +1404,12 @@ ${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar
   </div></div>`}
   ${SC.tiersEnabled?'':`<div class="tab-content" id="tab-hsimport"><div class="card">
     <div class="card-title"><span class="bar"></span> Import and Export</div>
-    <p style="font-size:13px;color:var(--gray);line-height:1.6;margin-bottom:14px;">Export your full program to Excel or JSON any time, for a backup or to share with staff. Import is coming soon.</p>
+    <p style="font-size:13px;color:var(--gray);line-height:1.6;margin-bottom:14px;">Export your full program to Excel or JSON any time, for a backup or to share with staff. Import a roster from the CourtSense Excel template to add or update players.</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button class="btn btn-small" style="background:#082A4F;color:#fff;border:none;" onclick="exportExcel()">📊 Export Excel</button>
       <button class="btn btn-small" style="background:#082A4F;color:#fff;border:none;" onclick="exportJSON()">Export JSON</button>
-      <button class="btn btn-small btn-secondary" onclick="toast('Import is coming soon')">Import</button>
+      <button class="btn btn-small btn-secondary" onclick="triggerRosterImport()">Import</button>
+      <input type="file" id="roster-import-input" accept=".xlsx,.xls" style="display:none;" onchange="handleRosterImportFile(this)">
     </div>
   </div>
   <div class="card" id="pin-change-card"><div class="card-title"><span class="bar"></span> 🔐 Change ${COACH_LABEL} PIN</div><p style="font-size:12px;color:var(--gray);margin-bottom:10px;">Update the PIN coaches use to access protected features.</p><div class="form-row" style="margin-bottom:8px;"><div class="form-group" style="margin-bottom:0;"><label class="form-label" style="font-size:11px;">Current PIN</label><input type="password" class="form-input" id="pin-current" placeholder="Current PIN" style="padding:8px;font-size:13px;"></div><div class="form-group" style="margin-bottom:0;"><label class="form-label" style="font-size:11px;">New PIN</label><input type="password" class="form-input" id="pin-new" placeholder="New PIN (4+ digits)" style="padding:8px;font-size:13px;"></div></div><button class="btn btn-small" style="background:#082A4F;color:#fff;border:none;" onclick="changeCoachPin()">Update PIN</button><div id="pin-change-status" style="font-size:12px;margin-top:8px;"></div></div></div>`}
@@ -5404,6 +5405,172 @@ function exportExcel(){
 
   XLSX.writeFile(wb,'LeonBeach_'+td()+'.xlsx');
   toast('Excel exported!');
+}
+
+// ============================================================
+// Excel roster import. A coach uploads the CourtSense roster template; players
+// are matched to the existing roster by name and either updated or created,
+// mirroring addPlayer's two-node write (matches node + profiles node). Columns
+// are matched by header NAME (case-insensitive), so reordered/added columns
+// still import. Nothing is written until the coach confirms.
+// ============================================================
+function triggerRosterImport(){
+  if(typeof XLSX==='undefined'){toast('Spreadsheet library not loaded');return;}
+  const inp=document.getElementById('roster-import-input');
+  if(inp){inp.value='';inp.click();}
+}
+function handleRosterImportFile(inp){
+  const f=inp&&inp.files&&inp.files[0];
+  if(f)importRoster(f);
+}
+function importRoster(file){
+  if(typeof XLSX==='undefined'){toast('Spreadsheet library not loaded');return;}
+  const reader=new FileReader();
+  reader.onload=function(ev){
+    let wb;
+    try{wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});}
+    catch(err){toast('Could not read that spreadsheet');return;}
+    const sheet=wb.Sheets['Roster']||wb.Sheets[wb.SheetNames[0]];
+    if(!sheet){toast('That file has no sheets');return;}
+    const rows=XLSX.utils.sheet_to_json(sheet,{header:1,defval:''});
+    const parsed=_importParseRows(rows);
+    if(parsed.error){toast(parsed.error);return;}
+    if(!parsed.plan.length && !parsed.errors.length){toast('No player rows found');return;}
+    _importShowConfirm(parsed.plan, parsed.errors);
+  };
+  reader.onerror=function(){toast('Could not read that file');};
+  reader.readAsArrayBuffer(file);
+}
+
+// Parse raw rows: find the header row (the one containing 'First Name'), map
+// columns by header name, validate, and match each row to an existing player.
+function _importParseRows(rows){
+  const errors=[];
+  let hIdx=-1;
+  for(let i=0;i<rows.length;i++){
+    const norm=(rows[i]||[]).map(c=>String(c==null?'':c).trim().toLowerCase());
+    if(norm.indexOf('first name')!==-1){hIdx=i;break;}
+  }
+  if(hIdx===-1)return{error:'Could not find a header row with First Name.'};
+  const hdr=(rows[hIdx]||[]).map(c=>String(c==null?'':c).trim().toLowerCase());
+  const col=aliases=>{for(const a of aliases){const idx=hdr.indexOf(a);if(idx!==-1)return idx;}return -1;};
+  const C={
+    first:col(['first name']), last:col(['last name']), grad:col(['grad year']),
+    jersey:col(['jersey #','jersey','jersey number']),
+    truv:col(['truvolley rating','vl rating','truvolley']),
+    p1n:col(['parent 1 name']), p1e:col(['parent 1 email']), p1p:col(['parent 1 phone']),
+    p2n:col(['parent 2 name']), p2e:col(['parent 2 email']), p2p:col(['parent 2 phone'])
+  };
+  const cell=(r,i)=>(i>=0&&r[i]!=null)?String(r[i]).trim():'';
+  const nameKey=s=>s.trim().toLowerCase();
+  const byName={};
+  (D.players||[]).forEach(p=>{byName[nameKey(p.firstName||'')+' '+nameKey(p.lastName||'')]=p;});
+  const plan=[];
+  for(let i=hIdx+1;i<rows.length;i++){
+    const r=rows[i]||[];
+    const first=cell(r,C.first), last=cell(r,C.last), gradRaw=cell(r,C.grad);
+    if(!first&&!last&&!gradRaw)continue;                                   // blank row
+    if(first.toLowerCase()==='suzie'&&last.toLowerCase()==='spiker')continue; // example row
+    const rowNum=i+1;                                                      // 1-based spreadsheet row
+    if(!first||!last){errors.push({row:rowNum,why:'missing first or last name'});continue;}
+    const gradYear=parseInt(gradRaw,10);
+    if(isNaN(gradYear)||!/^\d{4}$/.test(String(gradYear))){errors.push({row:rowNum,why:'missing or invalid Grad Year'});continue;}
+    const jerseyRaw=cell(r,C.jersey), jerseyNum=parseInt(jerseyRaw,10);
+    const jersey=(jerseyRaw!==''&&!isNaN(jerseyNum))?jerseyNum:null;
+    const truvRaw=cell(r,C.truv), truvNum=parseFloat(truvRaw);
+    const truvolley=(truvRaw!==''&&!isNaN(truvNum))?truvNum:null;
+    const parent1=_importParent(cell(r,C.p1n),cell(r,C.p1e),cell(r,C.p1p));
+    const parent2=_importParent(cell(r,C.p2n),cell(r,C.p2e),cell(r,C.p2p));
+    const existing=byName[nameKey(first)+' '+nameKey(last)]||null;
+    plan.push({row:rowNum, existing, data:{first,last,gradYear,jersey,truvolley,parent1,parent2}});
+  }
+  return {plan, errors};
+}
+function _importParent(name,email,phone){
+  if(!name&&!email&&!phone)return null;
+  const o={};
+  if(name)o.name=name;
+  if(email)o.email=email;
+  if(phone)o.phone=phone;
+  return o;
+}
+// classYear from Grad Year vs the active season year: this year or earlier = SR,
+// +1 = JR, +2 = SO, +3 or later = FR.
+function _importClassYear(gradYear){
+  const seasonYear=parseInt(_activeSeason(),10)||(new Date()).getFullYear();
+  const diff=gradYear-seasonYear;
+  if(diff<=0)return 'SR';
+  if(diff===1)return 'JR';
+  if(diff===2)return 'SO';
+  if(diff>=3)return 'FR';
+  return '';
+}
+// Write the plan: matches node (fbSet, full record) + profiles node (merge update).
+function _importCommit(plan){
+  let nNew=0,nUpd=0;
+  plan.forEach(e=>{
+    const d=e.data;
+    let id, rec;
+    if(e.existing){
+      id=e.existing.id;
+      rec=Object.assign({}, e.existing);          // keep court, csRank, and everything else untouched
+      rec.classYear=_importClassYear(d.gradYear);   // grad years in the import are the source of truth
+      if(d.jersey!=null)rec.jersey=d.jersey;        // overwrite jersey only when the import supplies one
+      nUpd++;
+    }else{
+      id=gi('p');
+      rec={id, firstName:d.first, lastName:d.last, classYear:_importClassYear(d.gradYear), court:null, jersey:(d.jersey!=null?d.jersey:null)};
+      nNew++;
+    }
+    fbSet('players/'+id, rec);
+    if(db){
+      const prof={gradYear:d.gradYear};
+      if(d.truvolley!=null)prof.truvolley=d.truvolley;
+      if(d.parent1)prof.parent1=d.parent1;
+      if(d.parent2)prof.parent2=d.parent2;
+      db.ref(SC.dbRoots.profiles+'/players/'+id).update(prof);
+    }
+  });
+  return {nNew,nUpd};
+}
+function _importErrList(errors){
+  if(!errors.length)return '';
+  return '<div style="margin-top:12px;font-size:12px;color:var(--gray);">'+
+    '<div style="font-weight:700;margin-bottom:4px;">Skipped '+errors.length+' row'+(errors.length===1?'':'s')+':</div>'+
+    '<ul style="margin:0;padding-left:18px;max-height:120px;overflow-y:auto;">'+
+    errors.map(e=>'<li>Row '+e.row+': '+esc(e.why)+'</li>').join('')+'</ul></div>';
+}
+function _importModal(title, bodyHtml, footerHtml){
+  const ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10001;display:flex;align-items:center;justify-content:center;padding:16px;';
+  ov.innerHTML='<div style="background:var(--white);border-radius:12px;max-width:440px;width:100%;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,0.3);">'+
+    '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:20px;letter-spacing:1px;margin-bottom:10px;">'+esc(title)+'</div>'+
+    '<div>'+bodyHtml+'</div>'+
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">'+footerHtml+'</div></div>';
+  document.body.appendChild(ov);
+  return ov;
+}
+function _importShowConfirm(plan, errors){
+  const nNew=plan.filter(e=>!e.existing).length, nUpd=plan.length-nNew;
+  const body='<div style="font-size:14px;line-height:1.5;">Found <b>'+plan.length+'</b> player'+(plan.length===1?'':'s')+'. '+
+    '<b>'+nNew+'</b> new, <b>'+nUpd+'</b> to update.'+(plan.length?' Import?':'')+'</div>'+_importErrList(errors);
+  const footer=plan.length
+    ? '<button class="btn btn-small btn-secondary" id="_imp-cancel">Cancel</button><button class="btn btn-small" style="background:#082A4F;color:#fff;border:none;" id="_imp-go">Import</button>'
+    : '<button class="btn btn-small btn-secondary" id="_imp-cancel">Close</button>';
+  const ov=_importModal('Import roster', body, footer);
+  const cancel=ov.querySelector('#_imp-cancel'); if(cancel)cancel.onclick=()=>ov.remove();
+  const go=ov.querySelector('#_imp-go');
+  if(go)go.onclick=()=>{
+    const res=_importCommit(plan);
+    ov.remove();
+    _importShowResult(res.nNew, res.nUpd, errors);
+    toast('Imported: '+res.nNew+' new, '+res.nUpd+' updated');
+  };
+}
+function _importShowResult(nNew, nUpd, errors){
+  const body='<div style="font-size:14px;">Imported <b>'+nNew+'</b> new, <b>'+nUpd+'</b> updated.</div>'+_importErrList(errors);
+  const ov=_importModal('Import complete', body, '<button class="btn btn-small btn-secondary" id="_imp-close">Close</button>');
+  const close=ov.querySelector('#_imp-close'); if(close)close.onclick=()=>ov.remove();
 }
 
 // ============================================================
