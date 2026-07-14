@@ -3,6 +3,9 @@ const SC=window.SCHOOL_CONFIG;
 const COACH_LABEL = (SC && SC.coachLabel) ? SC.coachLabel : 'Coach';
 // User-facing sign-off for AI generated plans. Config-driven via SC.coachSignoff, defaulting to Coach Mark so every existing school is unchanged.
 const COACH_SIGNOFF = (SC && SC.coachSignoff) ? SC.coachSignoff : 'Coach Mark';
+// School's own name for AI prompts/labels that must not hardcode one school.
+// shortName preferred (e.g. 'Leon', 'Grass Club'), then displayName, then schoolName.
+const SCHOOL_NAME = (SC && (SC.shortName || SC.displayName || SC.schoolName)) || 'the team';
 // Login logo image height in px. Config-driven via SC.logoHeight, defaulting to 64 so every existing school renders exactly as today.
 const LOGO_H = (SC && SC.logoHeight) ? SC.logoHeight : 64;
 // Logo img source: '' when the config uses the Firebase logo flag (so no broken load /
@@ -5255,7 +5258,7 @@ async function generateAIPairings(){
   const contextDesc={
     gameday:'This is for a GAME DAY match against an external opponent. Prioritize the strongest possible pairings on each court. Court 1 gets the best pair, Court 2 next best, etc.',
     scrimmage:'This is for a SCRIMMAGE (non-season match). Mix up the pairings a bit to develop players and try new combinations, while still being competitive.',
-    queens:`This is QUEENS PRACTICE — internal Leon vs Leon. Generate ${numRounds} round${numRounds>1?'s':''} of matchups. ALL 16 players must be assigned every round, 4 per court (2 vs 2). In each round every player appears exactly once. ${numRounds>1?'Across rounds, vary the pairings so players get new partners and opponents each round — avoid repeating the same pair twice if possible.':''} Make each matchup competitive and balanced.`
+    queens:`This is QUEENS PRACTICE, internal ${SCHOOL_NAME} vs ${SCHOOL_NAME}. Generate ${numRounds} round${numRounds>1?'s':''} of matchups. ALL 16 players must be assigned every round, 4 per court (2 vs 2). In each round every player appears exactly once. ${numRounds>1?'Across rounds, vary the pairings so players get new partners and opponents each round, avoid repeating the same pair twice if possible.':''} Make each matchup competitive and balanced.`
   };
 
   const isQueens=context==='queens';
@@ -5469,7 +5472,7 @@ function exportExcel(){
   _xG.forEach(m=>{
     const pair=(m.pair||[]).map(id=>{const p=gP(id);return p?p.firstName+' '+p.lastName:id;}).join(' & ');
     (m.sets||[]).forEach((s,i)=>{
-      const row={Date:m.date,Court:m.court,Pair:pair,Opponent:m.opponent||'',Set:i+1,Leon:s.scoreUs,Opp:s.scoreThem,
+      const row={Date:m.date,Court:m.court,Pair:pair,Opponent:m.opponent||'',Set:i+1,[SCHOOL_NAME]:s.scoreUs,Opp:s.scoreThem,
         Result:(s.scoreUs||0)>(s.scoreThem||0)?'W':'L'};
       (m.pair||[]).forEach(pid=>{const p=gP(pid);const st=s.stats?.[pid]||{};
         const name=p?p.firstName:'';row[name+' K']=st.k||0;row[name+' B']=st.b||0;row[name+' A']=st.a||0;row[name+' D']=st.d||0;row[name+' E']=st.e||0;});
@@ -5489,7 +5492,7 @@ function exportExcel(){
   _xS.forEach(m=>{
     const pair=(m.pair||[]).map(id=>{const p=gP(id);return p?p.firstName+' '+p.lastName:id;}).join(' & ');
     (m.sets||[]).forEach((s,i)=>{
-      scData.push({Date:m.date,Court:m.court,Pair:pair,Opponent:m.opponent||'',Set:i+1,Leon:s.scoreUs,Opp:s.scoreThem,Result:(s.scoreUs||0)>(s.scoreThem||0)?'W':'L'});
+      scData.push({Date:m.date,Court:m.court,Pair:pair,Opponent:m.opponent||'',Set:i+1,[SCHOOL_NAME]:s.scoreUs,Opp:s.scoreThem,Result:(s.scoreUs||0)>(s.scoreThem||0)?'W':'L'});
     });
   });
   if(scData.length)XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(scData),'Scrimmages');
@@ -5512,11 +5515,12 @@ function exportExcel(){
 
   // Sheet 9: Schedule
   const schedData=[...D.schedule].sort((a,b)=>(a.date||'').localeCompare(b.date||'')).map(g=>({
-    Date:g.date,Opponent:g.opponent||'',Location:g.location||'','Leon Score':g.scoreUs??'','Opp Score':g.scoreThem??'',
+    Date:g.date,Opponent:g.opponent||'',Location:g.location||'',[SCHOOL_NAME+' Score']:g.scoreUs??'','Opp Score':g.scoreThem??'',
     Result:g.scoreUs!=null&&g.scoreThem!=null?(g.scoreUs>g.scoreThem?'W':'L'):'',Time:g.time||''}));
   XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(schedData),'Schedule');
 
-  XLSX.writeFile(wb,'LeonBeach_'+td()+'.xlsx');
+  const _xfPrefix=(SC&&SC.exportPrefix)||(SCHOOL_NAME.replace(/[^a-zA-Z0-9]+/g,'_').replace(/^_+|_+$/g,'')||'export')+'_';
+  XLSX.writeFile(wb,_xfPrefix+td()+'.xlsx');
   toast('Excel exported!');
 }
 
@@ -6173,17 +6177,17 @@ const _scanFileEl=document.getElementById('scan-file');if(_scanFileEl)_scanFileE
 
     let typeInstructions='';
     if(matchType==='queens'){
-      typeInstructions=`These are Queens matches (Leon vs Leon practice). Each match has:
+      typeInstructions=`These are Queens matches (${SCHOOL_NAME} vs ${SCHOOL_NAME} practice). Each match has:
 - Court number (1-8; courts 6-8 are exhibition and may have split pairs noted)
-- Team A: two Leon players
-- Team B: two Leon players
+- Team A: two ${SCHOOL_NAME} players
+- Team B: two ${SCHOOL_NAME} players
 - Score for each team
 - For split/exhibition courts, separate pairs may play Set 1 vs Set 2
 Return JSON array: [{"court":1,"team1":["p01","p02"],"team2":["p03","p04"],"score1":21,"score2":15},{"court":6,"team1":["p05","p06"],"team2":["p07","p08"],"score1":21,"score2":18,"isSplit":true,"splitSet2":{"team1":["p09","p10"],"team2":["p11","p12"]}}]`;
     }else{
-      typeInstructions=`These are ${matchType==='gameday'?'Game Day':'Scrimmage'} matches (Leon vs external opponent). Each match has:
+      typeInstructions=`These are ${matchType==='gameday'?'Game Day':'Scrimmage'} matches (${SCHOOL_NAME} vs external opponent). Each match has:
 - Court number
-- Leon pair: two Leon players
+- ${SCHOOL_NAME} pair: two ${SCHOOL_NAME} players
 - Opponent name (team + court)
 - Set scores (could be 2-3 sets)
 Return JSON array: [{"court":1,"pair":["p01","p02"],"opponent":"Chiles CT1","sets":[{"scoreUs":21,"scoreThem":15},{"scoreUs":21,"scoreThem":18}]}]`;
@@ -10181,8 +10185,8 @@ Liz/Madi = Lizzie Roader (p09) + Madalynn Edenfield (p12)
 Salem/Jaz = Salem Ehrhardt (p15) + Jazmin Burdick (p11)
 Eden/Madalynn = Eden Codd (p05) + Madalynn Edenfield (p12)
 
-SCORE FORMAT: W21-18 W21-11 means Leon won set1 21-18, won set2 21-11
-L19-21 means Leon lost a set 19-21
+SCORE FORMAT: W21-18 W21-11 means ${SCHOOL_NAME} won set1 21-18, won set2 21-11
+L19-21 means ${SCHOOL_NAME} lost a set 19-21
 
 Return ONLY a JSON array, one element per dual:
 [{"opponent":"Destin","leonCourts":5,"oppCourts":0,"courts":[{"court":2,"pair":["p16","p08"],"sets":[{"scoreUs":21,"scoreThem":18},{"scoreUs":21,"scoreThem":11}],"isExhibition":false}]}]
@@ -10226,7 +10230,7 @@ function showDualReviewUI(duals,date,container){
           <select class="form-select" id="dr-${di}-loc" style="padding:8px;font-size:13px;"><option value="home">Home</option><option value="away">Away</option><option value="neutral">Neutral</option></select></div>
       </div>
       <div class="form-row" style="margin-bottom:10px;">
-        <div class="form-group" style="margin-bottom:0;"><label class="form-label" style="font-size:11px;">Leon Courts Won</label>
+        <div class="form-group" style="margin-bottom:0;"><label class="form-label" style="font-size:11px;">${SCHOOL_NAME} Courts Won</label>
           <input type="number" class="form-input" id="dr-${di}-leon" value="${d.leonCourts||0}" min="0" max="7" style="padding:8px;font-size:13px;"></div>
         <div class="form-group" style="margin-bottom:0;"><label class="form-label" style="font-size:11px;">Opp Courts Won</label>
           <input type="number" class="form-input" id="dr-${di}-oppc" value="${d.oppCourts||0}" min="0" max="7" style="padding:8px;font-size:13px;"></div>
@@ -11771,10 +11775,10 @@ initDualScanner();
               {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
               {type:'text',text:`You are reading a handwritten high school beach volleyball SCRIMMAGE scoresheet for SC.schoolName.
 PLAYER ROSTER: ${playerList}
-Extract all court matchups and set scores. Each court has Leon pair vs opponent pair.
+Extract all court matchups and set scores. Each court has ${SCHOOL_NAME} pair vs opponent pair.
 Return ONLY valid JSON: {"opponent":"team name or empty","courts":[{"court":1,"pair":["p01","p02"],"opponentPair":"Name & Name","sets":[{"scoreUs":21,"scoreThem":15}]}]}
 - Match player names to IDs from roster. pair = array of 2 player IDs.
-- scoreUs = Leon score, scoreThem = opponent score.
+- scoreUs = ${SCHOOL_NAME} score, scoreThem = opponent score.
 - Respond with ONLY the JSON, no other text.`}
             ]}]
           })
@@ -11863,11 +11867,11 @@ function scScanSave(count,date){
             model:'claude-sonnet-4-20250514',max_tokens:2500,
             messages:[{role:'user',content:[
               {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
-              {type:'text',text:`You are reading a handwritten QUEENS (Leon vs Leon internal) beach volleyball scoresheet.
+              {type:'text',text:`You are reading a handwritten QUEENS (${SCHOOL_NAME} vs ${SCHOOL_NAME} internal) beach volleyball scoresheet.
 PLAYER ROSTER: ${playerList}
-Each court has Team A (2 players) vs Team B (2 players) — all Leon players.
+Each court has Team A (2 players) vs Team B (2 players), all ${SCHOOL_NAME} players.
 Return ONLY valid JSON: {"courts":[{"court":1,"team1":["p01","p02"],"team2":["p03","p04"],"score1":21,"score2":15}]}
-- Match names to IDs from roster. All players are Leon players.
+- Match names to IDs from roster. All players are ${SCHOOL_NAME} players.
 - score1 = Team A score (first pair), score2 = Team B score.
 - If multiple sets, include the final set score.
 - Respond with ONLY the JSON, no other text.`}
