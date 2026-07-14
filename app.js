@@ -3475,7 +3475,41 @@ function renderRoster(){
 }
 function updCt(id,v){const p=gP(id);if(p){p.court=parseInt(v);fbSet('players/'+id,p);}}
 function updJersey(id,v){const p=gP(id);if(p){p.jersey=v?parseInt(v):null;fbSet('players/'+id,p);}}
-function remPlayer(id){const p=gP(id);if(!p)return;fbRemove('players/'+id);toast('Player removed');}
+function remPlayer(id){
+  const p=gP(id);if(!p)return;
+  const nm=((p.firstName||'')+' '+(p.lastName||'')).trim()||'this player';
+  if(!window.confirm('Remove '+nm+' from the roster? Their match history stays, but their profile, skills, goals, and notes are deleted. This cannot be undone.'))return;
+  // Demo mode (no db): drop the roster record in memory and stop.
+  if(!db){fbRemove('players/'+id);toast('Player removed');return;}
+  const M=DB_ROOT, P=SC.dbRoots.profiles;
+  // Direct deletes keyed by player id, matches node + profiles node.
+  const u={};
+  u[M+'/players/'+id]=null;
+  u[M+'/goals/'+id]=null;
+  u[M+'/tier_requests/'+id]=null;
+  u[P+'/players/'+id]=null;
+  u[P+'/skills/'+id]=null;
+  u[P+'/quizScores/'+id]=null;
+  // starDrills/jumpTests are keyed by their own id with playerId pointing at the player;
+  // player_notes/coach_notes are keyed by date then player id. Read each, add only this
+  // player's entries to the same atomic update (never a whole date). History nodes
+  // (matches, gamedays, scrimmages, duals, planned, assignments, liveScoring) are left alone.
+  Promise.all([
+    db.ref(P+'/starDrills').once('value'),
+    db.ref(P+'/jumpTests').once('value'),
+    db.ref(M+'/player_notes').once('value'),
+    db.ref(M+'/coach_notes').once('value'),
+    db.ref(P+'/verticals').once('value')
+  ]).then(function(snaps){
+    const sd=snaps[0].val()||{}, jt=snaps[1].val()||{}, pn=snaps[2].val()||{}, cn=snaps[3].val()||{}, vt=snaps[4].val()||{};
+    Object.keys(sd).forEach(function(k){ if(sd[k]&&sd[k].playerId===id) u[P+'/starDrills/'+k]=null; });
+    Object.keys(jt).forEach(function(k){ if(jt[k]&&jt[k].playerId===id) u[P+'/jumpTests/'+k]=null; });
+    Object.keys(vt).forEach(function(k){ if(vt[k]&&vt[k].playerId===id) u[P+'/verticals/'+k]=null; }); // legacy jump-data node
+    Object.keys(pn).forEach(function(date){ if(pn[date]&&pn[date][id]!==undefined) u[M+'/player_notes/'+date+'/'+id]=null; });
+    Object.keys(cn).forEach(function(date){ if(cn[date]&&cn[date].players&&cn[date].players[id]!==undefined) u[M+'/coach_notes/'+date+'/players/'+id]=null; });
+    db.ref().update(u,function(err){ if(err){toast('Could not remove player, try again');return;} toast('Player removed'); });
+  }).catch(function(){ toast('Could not remove player, try again'); });
+}
 
 // ============================================================
 // REFRESH / NAVIGATION
