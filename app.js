@@ -1420,22 +1420,20 @@ ${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar
   ${SC.tiersEnabled?'':`<div class="tab-content" id="tab-communicate">
     <div class="card">
       <div class="card-title"><span class="bar"></span> 💬 Communicate</div>
-      <p style="font-size:13px;color:var(--charcoal);line-height:1.7;margin-bottom:14px;">Here is how your team stays in the loop. Everything below is built to keep players and families informed without adding noise.</p>
-      <div style="font-family:'Bebas Neue';font-size:14px;letter-spacing:1px;color:var(--charcoal);margin-bottom:8px;">Available now</div>
-      <div style="border:1px solid var(--gray-lighter);border-radius:10px;padding:12px 14px;margin-bottom:10px;">
-        <div style="font-size:13px;font-weight:700;color:var(--charcoal);margin-bottom:4px;">Coach Notes</div>
-        <p style="font-size:12px;color:var(--gray);line-height:1.6;margin:0;">Private coach-to-player notes, kept by date. You write them in the Planner today, and each player is notified when a new note is posted for them.</p>
+      <p style="font-size:13px;color:var(--charcoal);line-height:1.7;margin-bottom:14px;">Send an announcement to your team. Players and parents get an email, and players also see it in the app.</p>
+      <div style="display:flex;gap:8px;margin-bottom:10px;" id="hs-bc-audience">
+        <button class="filter-btn active" onclick="setHsBcAudience('all',this)" style="flex:1;text-align:center;">Everyone</button>
+        <button class="filter-btn" onclick="setHsBcAudience('players',this)" style="flex:1;text-align:center;">Players only</button>
+        <button class="filter-btn" onclick="setHsBcAudience('parents',this)" style="flex:1;text-align:center;">Parents only</button>
       </div>
-      <div style="border:1px solid var(--gray-lighter);border-radius:10px;padding:12px 14px;margin-bottom:16px;">
-        <div style="font-size:13px;font-weight:700;color:var(--charcoal);margin-bottom:4px;">Player notifications</div>
-        <p style="font-size:12px;color:var(--gray);line-height:1.6;margin:0 0 6px;">Players get an email when something that matters to them happens, and they choose which ones to receive in their own notification preferences.</p>
-        <ul style="font-size:12px;color:var(--gray);line-height:1.6;margin:0;padding-left:18px;">
-          <li>Court assignments and lineup updates</li>
-          <li>Training plan approved by coach</li>
-          <li>New coach notes for them</li>
-          <li>Game results posted</li>
-        </ul>
-      </div>
+      <input type="text" class="form-input" id="hs-bc-subject" placeholder="Subject" style="margin-bottom:8px;">
+      <textarea class="form-input" id="hs-bc-body" rows="4" placeholder="Your announcement..." style="margin-bottom:8px;resize:vertical;"></textarea>
+      <button class="btn btn-small" style="background:#082A4F;color:#fff;border:none;" onclick="sendHsBroadcast()">Send</button>
+      <div id="hs-bc-status" style="font-size:13px;margin-top:8px;"></div>
+      <div style="font-family:'Bebas Neue';font-size:13px;letter-spacing:1px;color:var(--charcoal);margin:16px 0 6px;">Recent announcements</div>
+      <div id="hs-bc-list"></div>
+    </div>
+    <div class="card">
       <div style="font-family:'Bebas Neue';font-size:14px;letter-spacing:1px;color:var(--gray);margin-bottom:8px;">Coming with parent accounts</div>
       <div style="opacity:0.7;border:1px dashed var(--gray-lighter);border-radius:10px;padding:12px 14px;background:var(--off-white,#faf8f9);">
         <div style="font-size:13px;font-weight:700;color:var(--charcoal);margin-bottom:4px;">Two-way team chat with parent visibility</div>
@@ -1466,6 +1464,9 @@ ${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar
 
   <!-- Notification banner -->
   <div id="pp-notif-banner"></div>
+
+  <!-- Team announcements (coach broadcasts, read-only) -->
+  <div id="pp-broadcasts"></div>
 
   <!-- Tab bar: My Stats | Live Score Entry | My Matches -->
   <div class="pp-tab-bar">
@@ -2113,6 +2114,7 @@ function saveWithMovementReason(){
     movementViolations:(window._pendingViolations||[]).map(v=>({name:v.name,from:v.from,to:v.to})),
     notes:null,createdAt:new Date().toISOString()};
   fbSet('assignments/'+id,assignData);
+  notifyLineup(assignData);
   toast('Assignment saved — movement reason logged ✓');
   window._pendingAssignment=null;
   window._pendingViolations=null;
@@ -2289,7 +2291,7 @@ const DEF_M=[
   {id:'m09',date:'2026-02-06',court:2,team1:['p15','p04'],team2:['p05','p06'],score1:21,score2:15}
 ];
 
-let D={players:[],matches:[],planned:[],gamedays:[],scrimmages:[],schedule:[],standings:{},goals:{},assignments:{},duals:[],opponents:{},liveScoring:{},quizScores:{},tierRequests:{}};
+let D={players:[],matches:[],planned:[],gamedays:[],scrimmages:[],schedule:[],standings:{},goals:{},assignments:{},duals:[],opponents:{},liveScoring:{},quizScores:{},tierRequests:{},broadcasts:{}};
 // Active competitive season. Config leaf at DB_ROOT/config/currentSeasonId; defaults to the current year, overwritten by the init read below if a stored value exists. Result creates are stamped with this via fbSetResult.
 let _currentSeasonId=(new Date()).getFullYear().toString();
 let profilesData={}; // from leon_queens node for AI context
@@ -2407,6 +2409,11 @@ function listenData(){if(!db)return;
     D.opponents=s.val()||{};
     if(currentRole==='coach'){const t=document.querySelector('.tab.active');if(t&&t.dataset.tab==='scouts')renderScouts();}
     if(currentRole==='player')renderPlayerScouts();
+  });
+  db.ref(DB_ROOT+'/broadcasts').on('value',s=>{
+    D.broadcasts=s.val()||{};
+    if(currentRole==='player')renderPlayerBroadcasts();
+    if(currentRole==='coach'){const t=document.querySelector('.tab.active');if(t&&t.dataset.tab==='communicate')renderHsBroadcastList();}
   });
   db.ref(SC.dbRoots.profiles).on('value',s=>{
     profilesData=s.val()||{};
@@ -3535,6 +3542,7 @@ function refreshTab(id){
     case'scouts':renderScouts();break;
     case'settings':renderRoster();break;
     case'broadcast':renderExecBroadcast();break;
+    case'communicate':renderHsCommunicate();break;
     case'teamanalysis':renderTeamAnalysis();break;
     case'practice':renderTeamAnalysis();break;
     case'practicegroups':renderPracticeGroups();break;
@@ -3954,6 +3962,7 @@ function renderPlayerPortal(){
   const p=gP(currentPlayerId);
   if(!p)return;
   const pid=currentPlayerId;
+  renderPlayerBroadcasts();
 
   document.getElementById('pp-name').textContent=p.firstName+' '+p.lastName;
   document.getElementById('pp-meta').innerHTML=`${p.jersey!=null?'<span style="font-family:\'Bebas Neue\',sans-serif;font-size:16px;color:var(--red);margin-right:6px;">#'+p.jersey+'</span>':''}<span class="class-badge class-${p.classYear}">${p.classYear}</span>`;
@@ -5871,6 +5880,7 @@ function confirmCAAssignment(){
   const id=gi('asgn');
   const assignData={id,date,type,opponent:opp||null,courts:slots,notes:null,createdAt:new Date().toISOString()};
   fbSet('assignments/'+id,assignData);
+  notifyLineup(assignData);
   toast(`Assignment saved! ${slots.length} court(s) for ${date}`);
   if(type==='gameday'&&opp)setTimeout(()=>promptLineupRelease(date,opp),600);
   document.getElementById('ca-result').innerHTML='';
@@ -6775,20 +6785,32 @@ function notifyCoaches(subject,body){
   }catch(e){}
 }
 
+// Real server-side email notification to a player. Only a logged-in coach for THIS
+// school can trigger it: we pass the coach session token and the worker resolves the
+// player's on-file email and checks their per-type preference server-side. Fire and
+// forget; never blocks the UI.
 function notifyPlayer(pid,notifType,subject,body){
   try{
-    if(!db)return;
-    db.ref(SC.dbRoots.passwords+'/'+pid+'/emailPrefs').once('value',function(snap){
-      const prefs=snap.val()||{};
-      if(!prefs.email)return;
-      const map={assign:'notifAssign',plan:'notifPlan',cnote:'notifCnote',score:'notifScore'};
-      const key=map[notifType];
-      if(key&&!prefs[key])return;
-      const a=document.createElement('a');
-      a.href='mailto:'+prefs.email+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
-      a.style.display='none';document.body.appendChild(a);a.click();document.body.removeChild(a);
+    let session=null; try{session=JSON.parse(sessionStorage.getItem('csCoachSession'));}catch(e){}
+    if(!session||!session.token||session.dbRoot!==DB_ROOT)return; // a player cannot send these
+    fetch(AUTH_WORKER+'/hs/notify-player',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({dbRoot:DB_ROOT,token:session.token,playerId:pid,notifType:notifType,subject:subject,body:body})
+    }).catch(function(e){console.warn('notifyPlayer failed',e);});
+  }catch(e){console.warn('notifyPlayer failed',e);}
+}
+// Notify every player in a saved dual (gameday) lineup that their court assignment is up.
+function notifyLineup(assignData){
+  if(!assignData||assignData.type!=='gameday')return;
+  const opp=assignData.opponent||'your dual';
+  const date=assignData.date||td();
+  (assignData.courts||[]).forEach(c=>{
+    [c.p1,c.p2].filter(Boolean).forEach(pid=>{
+      const p=gP(pid);
+      notifyPlayer(pid,'assign','Your court assignment is posted',
+        'Hi '+(p?p.firstName:'there')+',\n\nYour court assignment for '+opp+' on '+date+' is posted. You are on Court '+c.court+'.\n\nLog in to the app to see the full lineup.');
     });
-  }catch(e){}
+  });
 }
 
 function loadEmailPrefs(pid){
@@ -7299,6 +7321,15 @@ function closeDual(){
   const resultMsg=winner+' wins '+leonCourts+'-'+oppCourts;
   if(btn){btn.textContent='\u2713 Saved!';btn.style.background='var(--green)';}
   showResult('\u2713 '+resultMsg+' saved!',false);
+
+  // Notify every player who played that the dual result is posted.
+  const _played=new Set();
+  courts.forEach(c=>{[c.p1,c.p2].filter(Boolean).forEach(pid=>_played.add(pid));});
+  _played.forEach(pid=>{
+    const p=gP(pid);
+    notifyPlayer(pid,'score','Dual results are posted',
+      'Hi '+(p?p.firstName:'there')+',\n\nThe dual vs '+opponent+' on '+date+' is final: '+resultMsg+'.\n\nLog in to the app for the court-by-court breakdown.');
+  });
 
   _dualCloseInProgress=true;
   setTimeout(()=>{
@@ -8016,7 +8047,10 @@ function saveCoachNote(type){
 function autoSavePlayerNote(pid){
   if(!coachNotesDate)return;
   const el=document.getElementById('cnpn-'+pid);if(!el)return;
-  if(db)db.ref(DB_ROOT+'/coach_notes/'+coachNotesDate+'/players/'+pid).set(el.value||null);
+  const val=el.value||null;
+  if(db)db.ref(DB_ROOT+'/coach_notes/'+coachNotesDate+'/players/'+pid).set(val);
+  if(val){const p=gP(pid);notifyPlayer(pid,'cnote','New note from your coach',
+    'Hi '+(p?p.firstName:'there')+',\n\nYour coach added a note for '+coachNotesDate+':\n\n'+val+'\n\nLog in to the app to read it.');}
 }
 
 function autoSavePairNote(key){
@@ -8271,6 +8305,78 @@ function postExecBroadcast(){
   ta.value='';
   toast('Broadcast posted to '+broadcastChannel);
   renderExecBroadcast();
+}
+
+// ── HS Communicate: coach broadcast to players/parents. Sends real email via the
+// worker (/hs/broadcast, coach-session gated) AND posts to the in-app broadcasts
+// node so players see it without email. Separate from the club Exec Broadcast above.
+let hsBcAudience='all';
+// A broadcast that posted to the app but whose email send failed. Kept so a retry
+// re-sends the email instead of posting a duplicate. Cleared on email success, or
+// when the subject/body text changes (which makes it a new announcement).
+let hsBcPending=null; // { id, subject, body }
+function setHsBcAudience(a,btn){
+  hsBcAudience=a;
+  document.querySelectorAll('#hs-bc-audience .filter-btn').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+}
+function renderHsCommunicate(){ renderHsBroadcastList(); }
+function renderHsBroadcastList(){
+  const el=document.getElementById('hs-bc-list'); if(!el)return;
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const AUD={all:'Everyone',players:'Players',parents:'Parents'};
+  const rows=Object.values(D.broadcasts||{}).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).slice(0,10);
+  if(!rows.length){el.innerHTML='<div style="font-size:12px;color:var(--gray);padding:6px 0;">No announcements yet.</div>';return;}
+  el.innerHTML=rows.map(m=>{
+    const when=m.createdAt?new Date(m.createdAt).toLocaleDateString([],{month:'short',day:'numeric'}):'';
+    return '<div style="padding:8px 0;border-bottom:1px solid var(--gray-lighter);">'+
+      '<div style="display:flex;justify-content:space-between;gap:8px;"><span style="font-weight:700;font-size:13px;color:var(--charcoal);">'+esc(m.subject||'(no subject)')+'</span><span style="font-size:11px;color:var(--gray);">'+(AUD[m.audience]||esc(m.audience||''))+' · '+when+'</span></div>'+
+      '<div style="font-size:12.5px;color:var(--gray);white-space:pre-wrap;margin-top:2px;">'+esc(m.body||'')+'</div></div>';
+  }).join('');
+}
+function sendHsBroadcast(){
+  const subEl=document.getElementById('hs-bc-subject'), bodyEl=document.getElementById('hs-bc-body');
+  const subject=(subEl?subEl.value:'').trim(), body=(bodyEl?bodyEl.value:'').trim();
+  const status=document.getElementById('hs-bc-status');
+  const setStatus=(msg,ok)=>{if(status){status.textContent=msg;status.style.color=ok?'var(--green)':'var(--loss-red)';}};
+  if(!subject||!body){setStatus('Enter a subject and a message.',false);return;}
+  let session=null; try{session=JSON.parse(sessionStorage.getItem('csCoachSession'));}catch(e){}
+  if(!session||!session.token||session.dbRoot!==DB_ROOT){setStatus('Coach session expired. Log in again.',false);return;}
+  const coachName=SC.coachLabel||'Coach';
+  // Post to the app first so players always see it, but only ONCE. If a previous
+  // attempt already posted this exact text and only the email failed, reuse that
+  // post and just retry the email. Changing subject, body, or audience makes it new.
+  if(hsBcPending && (hsBcPending.subject!==subject || hsBcPending.body!==body || hsBcPending.audience!==hsBcAudience)) hsBcPending=null;
+  if(!hsBcPending){
+    const bcId=gi('bc');
+    fbSet('broadcasts/'+bcId,{audience:hsBcAudience,subject:subject,body:body,coachName:coachName,createdAt:Date.now()});
+    hsBcPending={id:bcId,subject:subject,body:body,audience:hsBcAudience};
+  }
+  setStatus('Sending...',true);
+  fetch(AUTH_WORKER+'/hs/broadcast',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({dbRoot:DB_ROOT,token:session.token,audience:hsBcAudience,subject:subject,body:body,coachName:coachName})
+  }).then(r=>r.json().then(j=>({status:r.status,j:j}))).then(o=>{
+    if(o.j&&o.j.ok){
+      const n=o.j.recipients||0;
+      setStatus('Sent to '+n+' '+(n===1?'person':'people')+'.',true);
+      hsBcPending=null;
+      if(subEl)subEl.value=''; if(bodyEl)bodyEl.value='';
+    }else{
+      setStatus('Posted in the app, but the email could not be sent. Try again to send the email.',false);
+    }
+  }).catch(()=>setStatus('Posted in the app, but the email could not be sent. Try again to send the email.',false));
+}
+// Player-facing: read-only team announcements (audience all or players).
+function renderPlayerBroadcasts(){
+  const el=document.getElementById('pp-broadcasts'); if(!el)return;
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const rows=Object.values(D.broadcasts||{}).filter(m=>m&&(m.audience==='all'||m.audience==='players')).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).slice(0,10);
+  if(!rows.length){el.innerHTML='';return;}
+  el.innerHTML='<div class="card" style="padding:12px 14px;margin-top:10px;"><div style="font-family:\'Bebas Neue\';font-size:13px;letter-spacing:1px;color:var(--charcoal);margin-bottom:8px;">📣 Team Announcements</div>'+rows.map(m=>{
+    const when=m.createdAt?new Date(m.createdAt).toLocaleDateString([],{month:'short',day:'numeric'}):'';
+    return '<div style="padding:8px 0;border-bottom:1px solid var(--gray-lighter);"><div style="display:flex;justify-content:space-between;gap:8px;"><span style="font-weight:700;font-size:13px;color:var(--charcoal);">'+esc(m.subject||'')+'</span><span style="font-size:11px;color:var(--gray);">'+esc(m.coachName||'Coach')+' · '+when+'</span></div><div style="font-size:12.5px;color:var(--gray);white-space:pre-wrap;margin-top:2px;">'+esc(m.body||'')+'</div></div>';
+  }).join('')+'</div>';
 }
 
 // ============================================================
