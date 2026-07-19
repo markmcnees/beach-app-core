@@ -3463,14 +3463,17 @@ function cancelEditName(pid,fn,ln){
   if(nameEl)nameEl.innerHTML=fn+' '+ln;
 }
 
-// Badge by precedence (Grass Club). Leadership wins over team tier: exec or faculty shows the leadership badge, otherwise the tier badge (gold/garnet/unassigned). Reused by the roster now and the chat layers later.
+// Badge for the roster (Grass Club), reused by the chat layers later. The tier badge is
+// the base; a leadership role (exec or faculty) renders its badge alongside the tier badge,
+// role first, rather than replacing it. No leadership means the tier badge only.
 function playerBadge(p){
   if(!p) return '';
-  if(SC.tiersEnabled && p.leadership==='exec')    return '<span class="tier-badge badge-exec">Exec</span>';
-  if(SC.tiersEnabled && p.leadership==='faculty') return '<span class="tier-badge badge-faculty">Faculty Advisor</span>';
   const t=p.tier||'unassigned';
   const L={unassigned:'Unassigned',gold:'Gold',garnet:'Garnet',roster:'Roster',development:'Development'};
-  return '<span class="tier-badge tier-'+t+'">'+L[t]+'</span>';
+  const tierSpan='<span class="tier-badge tier-'+t+'">'+L[t]+'</span>';
+  if(SC.tiersEnabled && p.leadership==='exec')    return '<span class="tier-badge badge-exec">Exec</span> '+tierSpan;
+  if(SC.tiersEnabled && p.leadership==='faculty') return '<span class="tier-badge badge-faculty">Faculty Advisor</span> '+tierSpan;
+  return tierSpan;
 }
 
 // Defensive sort helpers so one incomplete record cannot crash a roster view.
