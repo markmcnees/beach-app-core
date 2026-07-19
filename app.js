@@ -2629,6 +2629,12 @@ function pFull(id){const p=gP(id);return p?p.firstName+' '+p.lastName:'?';}
 function fD(s){if(!s)return'';return new Date(s+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});}
 function td(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function gi(p){return p+Date.now().toString(36)+Math.random().toString(36).slice(2,5);}
+// Display-only court badge. Shows an en dash for an unplaced (null/undefined/blank/NaN)
+// court and never emits a court-null class. prefix is an optional label like 'PG'.
+function courtBadge(c,prefix){
+  const has=c!=null&&c!==''&&!(typeof c==='number'&&isNaN(c));
+  return '<span class="court-badge'+(has?' court-'+c:'')+'">'+(has?((prefix?prefix+' ':'')+c):'–')+'</span>';
+}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
 function arrEq(a,b){if(!a||!b||a.length!==b.length)return false;const sa=[...a].sort(),sb=[...b].sort();return sa.every((v,i)=>v===sb[i]);}
 function pmClass(v){return v>0?'pm-positive':v<0?'pm-negative':'pm-zero';}
@@ -3096,20 +3102,20 @@ function renderPlayers(){
   if(pType==='queens'){
     tbody.innerHTML=rows.map(r=>{const p=r.p,s=r.s;
       return`<tr><td>${pNameCell(p)}</td>
-        <td><span class="court-badge court-${p.court}">${p.court}</span></td>
+        <td>${courtBadge(p.court)}</td>
         <td>${s.wins}</td><td>${s.losses}</td><td>${s.gp>0?Math.round(s.pct)+'%':'—'}</td>
         <td class="plus-minus ${pmClass(s.diff)}">${s.gp>0?pmStr(s.diff):'—'}</td></tr>`;}).join('');
   }else if(pType==='gameday'||pType==='scrimmage'||pType==='exhibition'){
     tbody.innerHTML=rows.map(r=>{const p=r.p,s=r.s;
       return`<tr><td>${pNameCell(p)}</td>
-        <td><span class="court-badge court-${p.court}">${p.court}</span></td>
+        <td>${courtBadge(p.court)}</td>
         <td>${s.sets}</td>
         <td class="plus-minus ${pmClass(s.diff)}">${s.sets>0?pmStr(s.diff):'—'}</td>
         <td>${s.k}</td><td>${s.b}</td><td>${s.a}</td><td>${s.se}</td><td>${s.re}</td><td>${s.he}</td><td>${s.de}</td></tr>`;}).join('');
   }else{
     tbody.innerHTML=rows.map(r=>{const p=r.p,c=r.c;
       return`<tr><td>${pNameCell(p)}</td>
-        ${SC.tiersEnabled?'':`<td><span class="court-badge court-${p.court}">${p.court}</span></td>`}
+        ${SC.tiersEnabled?'':`<td>${courtBadge(p.court)}</td>`}
         <td class="wl-record">${c.qWins}-${c.qLosses}</td>
         <td class="plus-minus ${pmClass(c.qDiff)}">${c.qGP>0?pmStr(c.qDiff):'—'}</td>
         <td>${c.gdSets||'—'}</td>
@@ -3496,7 +3502,7 @@ function renderRoster(){
     `</div>`;
   sorted.forEach(p=>{if(p.court!==last){
     html+=`<div style="font-family:'Bebas Neue';font-size:12px;letter-spacing:1.5px;color:var(--red);margin:12px 0 6px;padding-top:8px;${last!==null?'border-top:2px solid var(--gray-lighter);':''}">
-      <span class="court-badge court-${p.court}">PG ${p.court}</span></div>`;last=p.court;}
+      ${courtBadge(p.court,'PG')}</div>`;last=p.court;}
     html+=`<div class="roster-item" id="ritem-${p.id}"><span class="class-badge class-${p.classYear}">${p.classYear}</span>${' '+playerBadge(p)}
       <span class="roster-name" id="rname-${p.id}">${p.firstName} ${p.lastName}${SC.tiersEnabled&&p.csRank?` <span class="cs-rank">${p.csRank}</span>`:''}</span>
       ${!SC.tiersEnabled?`<input type="number" min="0" max="99" placeholder="#" title="Jersey #" value="${p.jersey||''}" style="width:52px;padding:4px 6px;border:1px solid var(--gray-lighter);border-radius:6px;font-family:'Bebas Neue',sans-serif;font-size:15px;text-align:center;color:var(--charcoal);" onchange="updJersey('${p.id}',this.value)">`:''}
