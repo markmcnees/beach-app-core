@@ -984,11 +984,19 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       <div class="login-error" id="pin-error"></div>
     </div>
     <div class="login-section" id="login-player">
+      ${SC.emailLogin?`
+      <div style="font-family:'Bebas Neue';font-size:14px;letter-spacing:1.5px;color:var(--charcoal);margin-bottom:8px;">Log In With Your Email</div>
+      <input type="email" style="width:100%;padding:12px 14px;border:2px solid var(--gray-lighter);border-radius:8px;font-family:'Barlow',sans-serif;font-size:15px;" id="login-email" placeholder="you@fsu.edu" autocomplete="email" autocapitalize="none" spellcheck="false">
+      <input type="password" style="width:100%;padding:12px 14px;border:2px solid var(--gray-lighter);border-radius:8px;font-family:'Barlow',sans-serif;font-size:15px;margin-top:8px;" id="login-pw" placeholder="Password" autocomplete="current-password">
+      <div class="login-error" id="pw-error"></div>
+      <button class="login-btn" id="player-login-btn" onclick="playerLoginEmail()">View My Stats</button>
+      `:`
       <div style="font-family:'Bebas Neue';font-size:14px;letter-spacing:1.5px;color:var(--charcoal);margin-bottom:8px;">Select Your Name</div>
       <div class="login-player-select"><select id="login-player-select"><option value="">— Choose Player —</option></select></div>
       <input type="password" style="width:100%;padding:12px 14px;border:2px solid var(--gray-lighter);border-radius:8px;font-family:'Barlow',sans-serif;font-size:15px;margin-top:8px;" id="login-pw" placeholder="Enter Password">
       <div class="login-error" id="pw-error"></div>
       <button class="login-btn" id="player-login-btn" onclick="playerLogin()">View My Stats</button>
+      `}
     </div>
     <div class="login-fans" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--gray-lighter);text-align:center;">
       <button onclick="showLeonFans()" style="display:inline-flex;align-items:center;gap:6px;font-family:'Bebas Neue';font-size:14px;letter-spacing:1.5px;color:var(--white);border:none;cursor:pointer;padding:9px 20px;border-radius:8px;background:var(--red);transition:background 0.2s;" onmouseover="this.style.background='var(--red-dark)';" onmouseout="this.style.background='var(--red)';">
@@ -3818,6 +3826,7 @@ function switchLogin(mode){
 }
 function populatePlayerLogin(){
   const sel=document.getElementById('login-player-select');
+  if(!sel)return; // email-login mode (SC.emailLogin) has no name dropdown
   const cur=sel.value;
   sel.innerHTML='<option value="">— Choose Player —</option>';
   const sorted=[...D.players].sort((a,b)=>a.court-b.court||a.lastName.localeCompare(b.lastName));
@@ -3911,6 +3920,53 @@ function playerLogin(){
   document.querySelector('.tabs').style.display='none';
   const p=gP(pid);
   document.getElementById('header-username').textContent=p?p.firstName+' '+p.lastName:'Player';
+  renderPlayerPortal();
+}
+// Email + password player login (SC.emailLogin schools only, e.g. FSU Grass). Verifies
+// the CourtSense account server-side via the worker (same fetch/error convention as the
+// coach PIN path), then resolves the club roster record by matching accountId. Sets
+// currentPlayerId to the CLUB record id so every downstream consumer is unchanged.
+let _emailLoginBusy=false;
+async function playerLoginEmail(){
+  if(_emailLoginBusy)return;
+  const emailEl=document.getElementById('login-email');
+  const pwEl=document.getElementById('login-pw');
+  const errEl=document.getElementById('pw-error');
+  const email=(emailEl?emailEl.value:'').trim().toLowerCase();
+  const pw=pwEl?pwEl.value:'';
+  if(!email){if(errEl)errEl.textContent='Enter your email';return;}
+  if(!pw){if(errEl)errEl.textContent='Enter your password';return;}
+  _emailLoginBusy=true;
+  const btn=document.getElementById('player-login-btn');
+  if(btn)btn.disabled=true;
+  if(errEl)errEl.textContent='Checking...';
+  let j=null, netErr=false;
+  try{
+    const r=await fetch(AUTH_WORKER+'/auth/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rosterPath:'tally_kotb_pickup/players',email:email,password:pw})});
+    j=await r.json().catch(()=>null);
+  }catch(e){netErr=true;}
+  const done=()=>{_emailLoginBusy=false;if(btn)btn.disabled=false;};
+  if(netErr){if(errEl)errEl.textContent='Could not reach the server. Try again.';done();return;}
+  if(!j||j.ok!==true){
+    if(errEl)errEl.textContent=(j&&j.code==='rate_limited')?'Too many attempts. Try again in a few minutes.':'Incorrect email or password';
+    done();return;
+  }
+  // Verified. Resolve the club roster record by matching accountId to the account id.
+  const accountId=j.player&&j.player.id;
+  const rec=accountId?D.players.find(p=>p.accountId===accountId):null;
+  if(!rec){if(errEl)errEl.textContent='This account is not on the FSU Grass roster yet. Contact the exec team.';done();return;}
+  if(errEl)errEl.textContent='';
+  done();
+  // Session + portal entry mirror playerLogin. currentPlayerId is the CLUB record id, not the account id.
+  currentRole='player';currentPlayerId=rec.id;
+  sessionStorage.setItem('leonAuth',JSON.stringify({role:'player',pid:rec.id}));
+  document.getElementById('login-overlay').classList.add('hidden');
+  document.getElementById('app-wrapper').style.display='block';
+  document.getElementById('coach-content').style.display='none';
+  document.getElementById('player-portal').style.display='block';
+  document.getElementById('player-portal').classList.add('active');
+  document.querySelector('.tabs').style.display='none';
+  document.getElementById('header-username').textContent=rec.firstName+' '+rec.lastName;
   renderPlayerPortal();
 }
 function logout(){
