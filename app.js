@@ -1605,15 +1605,15 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       <div id="pp-standings"></div>
     </div>`:''}
 
-    <!-- Change Password -->
-    <div class="card"><div class="card-title"><span class="bar"></span> Change Password</div>
+    <!-- Change Password (name-select login only; email-login clubs use their CourtSense account, so it is hidden for them) -->
+    ${SC.emailLogin?'':`<div class="card"><div class="card-title"><span class="bar"></span> Change Password</div>
       <div style="padding:4px;">
         <input type="password" style="width:100%;padding:10px 12px;border:2px solid var(--gray-lighter);border-radius:8px;font-family:'Barlow',sans-serif;font-size:14px;margin-bottom:8px;" id="t-pw-current" placeholder="Current Password">
         <input type="password" style="width:100%;padding:10px 12px;border:2px solid var(--gray-lighter);border-radius:8px;font-family:'Barlow',sans-serif;font-size:14px;margin-bottom:8px;" id="t-pw-new" placeholder="New Password">
         <input type="password" style="width:100%;padding:10px 12px;border:2px solid var(--gray-lighter);border-radius:8px;font-family:'Barlow',sans-serif;font-size:14px;margin-bottom:8px;" id="t-pw-confirm" placeholder="Confirm New Password">
         <button class="btn btn-primary btn-small" onclick="changePassword()">Update Password</button>
       </div>
-    </div>
+    </div>`}
 
     <!-- Email Notifications -->
     <div class="card" style="border-top:3px solid var(--blue);">
