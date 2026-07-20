@@ -1044,6 +1044,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
     <div class="sub-tabs" id="sub-tabs-manage"${SC.tiersEnabled?'':' style="display:none;"'}>
       ${SC.tiersEnabled?`
       ${SC.chatEnabled?'<button class="tab active" data-tab="broadcast">Broadcast</button>':''}
+      <button class="tab" data-tab="inbox">Inbox</button>
       <button class="tab${SC.chatEnabled?'':' active'}" data-tab="settings">Roster</button>
       <button class="tab" data-tab="teamanalysis">Practice</button>
       <button class="tab" data-tab="players">Kings/Queens</button>
@@ -1463,6 +1464,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
     </div>
   </div>`}
   ${SC.chatEnabled?'<div class="tab-content" id="tab-broadcast"></div>':''}
+  ${SC.tiersEnabled?'<div class="tab-content" id="tab-inbox"></div>':''}
   ${SC.tiersEnabled?'<div class="tab-content" id="tab-teamanalysis"></div>':''}
   <!-- Stage 2a: un-gated for HS too (was tiersEnabled-only). Panels exist for all configs; HS routing wired per surface in later commits. -->
   <div class="tab-content" id="tab-practicegroups"></div>
@@ -1497,6 +1499,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
     ${!SC.clubPortalLite?'<button class="pp-tab-btn" onclick="switchPPTab(\'matches\',this)">📋 My Matches</button>':''}
     ${!SC.clubPortalLite?'<button class="pp-tab-btn" onclick="switchPPTab(\'learn\',this)">🎓 Learn</button>':''}
     ${SC.chatEnabled?'<button class="pp-tab-btn" onclick="switchPPTab(\'chat\',this)">💬 Club Chat</button>':''}
+    ${SC.tiersEnabled?'<button class="pp-tab-btn" onclick="switchPPTab(\'messages\',this)">✉️ Messages <span id="pp-msg-unread" style="color:var(--red);font-weight:700;"></span></button>':''}
     ${SC.pickupEnabled?'<button class="pp-tab-btn" onclick="window.open(\'https://courtsense.app/pickup/\',\'_blank\')">🏖️ Pickup</button>':''}
   </div>
 
@@ -1686,6 +1689,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
     </div>
   </div>
   ${SC.chatEnabled?'<div class="pp-panel" id="pp-panel-chat"></div>':''}
+  ${SC.tiersEnabled?'<div class="pp-panel" id="pp-panel-messages"></div>':''}
 
 </div><!-- end player-portal -->
 
@@ -2324,7 +2328,7 @@ const DEF_M=[
   {id:'m09',date:'2026-02-06',court:2,team1:['p15','p04'],team2:['p05','p06'],score1:21,score2:15}
 ];
 
-let D={players:[],matches:[],planned:[],gamedays:[],scrimmages:[],schedule:[],standings:{},goals:{},assignments:{},duals:[],opponents:{},liveScoring:{},quizScores:{},tierRequests:{},broadcasts:{}};
+let D={players:[],matches:[],planned:[],gamedays:[],scrimmages:[],schedule:[],standings:{},goals:{},assignments:{},duals:[],opponents:{},liveScoring:{},quizScores:{},tierRequests:{},broadcasts:{},threads:{}};
 // Active competitive season. Config leaf at DB_ROOT/config/currentSeasonId; defaults to the current year, overwritten by the init read below if a stored value exists. Result creates are stamped with this via fbSetResult.
 let _currentSeasonId=(new Date()).getFullYear().toString();
 let profilesData={}; // from leon_queens node for AI context
@@ -2447,6 +2451,12 @@ function listenData(){if(!db)return;
     D.broadcasts=s.val()||{};
     if(currentRole==='player')renderPlayerBroadcasts();
     if(currentRole==='coach'){const t=document.querySelector('.tab.active');if(t&&t.dataset.tab==='communicate')renderHsBroadcastList();}
+  });
+  // Exec/member two-way messaging threads (club only). Re-render whichever view is showing.
+  db.ref(DB_ROOT+'/threads').on('value',s=>{
+    D.threads=s.val()||{};
+    if(currentRole==='coach'){const t=document.querySelector('.tab.active');if(t&&t.dataset.tab==='inbox'&&typeof renderExecInbox==='function')renderExecInbox();}
+    if(currentRole==='player'){if(typeof updateMemberMsgBadge==='function')updateMemberMsgBadge();const mp=document.getElementById('pp-panel-messages');if(mp&&mp.classList.contains('active')&&typeof renderMemberMessages==='function')renderMemberMessages();}
   });
   db.ref(SC.dbRoots.profiles).on('value',s=>{
     profilesData=s.val()||{};
@@ -3584,6 +3594,7 @@ function refreshTab(id){
     case'scouts':renderScouts();break;
     case'settings':renderRoster();break;
     case'broadcast':renderExecBroadcast();break;
+    case'inbox':renderExecInbox();break;
     case'communicate':renderHsCommunicate();break;
     case'teamanalysis':renderTeamAnalysis();break;
     case'practice':renderTeamAnalysis();break;
@@ -4063,6 +4074,7 @@ function renderPlayerPortal(){
   if(!p)return;
   const pid=currentPlayerId;
   renderPlayerBroadcasts();
+  if(SC.tiersEnabled&&typeof updateMemberMsgBadge==='function')updateMemberMsgBadge();
 
   document.getElementById('pp-name').textContent=p.firstName+' '+p.lastName;
   document.getElementById('pp-meta').innerHTML=`${p.jersey!=null?'<span style="font-family:\'Bebas Neue\',sans-serif;font-size:16px;color:var(--red);margin-right:6px;">#'+p.jersey+'</span>':''}<span class="class-badge class-${p.classYear}">${p.classYear}</span>`;
@@ -8419,6 +8431,7 @@ function switchPPTab(tab,btn){
   if(tab==='scouts'){if(btn)btn.classList.add('active');document.getElementById('pp-panel-scouts').classList.add('active');renderPlayerScouts();return;}
   if(tab==='learn'){if(btn)btn.classList.add('active');document.getElementById('pp-panel-learn').classList.add('active');renderPPQuizHistory();return;}
   if(tab==='chat'){if(btn)btn.classList.add('active');document.getElementById('pp-panel-chat').classList.add('active');renderClubChat();return;}
+  if(tab==='messages'){if(btn)btn.classList.add('active');document.getElementById('pp-panel-messages').classList.add('active');renderMemberMessages();return;}
   if(btn)btn.classList.add('active');
   document.getElementById('pp-panel-'+tab).classList.add('active');
   if(tab==='live')renderPlayerLiveScoring();
@@ -8656,6 +8669,166 @@ function postExecBroadcast(){
   ta.value='';
   toast('Broadcast posted to '+broadcastChannel);
   renderExecBroadcast();
+}
+
+// ============================================================
+// EXEC <-> MEMBER TWO-WAY MESSAGING (Grass Club only, gated on SC.tiersEnabled).
+// One thread per member under DB_ROOT/threads/{memberId}, where memberId is the
+// club roster id. A thread holds messages keyed by id, each { side:'exec'|'member',
+// text, createdAt }. Exec messages carry no personal identity, only the exec voice.
+// Unread is tracked per side with lastReadExec / lastReadMember timestamps: a side
+// has unread when the newest message from the OTHER side is later than its lastRead.
+// Exec sends also email the member via /hs/notify-player (notifyPlayer); member
+// replies do not email, since execs see them in the inbox.
+// ============================================================
+let _inboxThread=null;   // memberId of the open thread, or null for the list
+let _inboxCompose=false; // is the compose-new form open
+
+function _threadMsgList(t){
+  if(!t||!t.messages)return [];
+  return Object.keys(t.messages).map(k=>t.messages[k]).filter(m=>m&&typeof m==='object').sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+}
+function threadUnreadExec(t){ const lr=(t&&t.lastReadExec)||0; return _threadMsgList(t).some(m=>m.side==='member'&&(m.createdAt||0)>lr); }
+function threadUnreadMember(t){ const lr=(t&&t.lastReadMember)||0; return _threadMsgList(t).some(m=>m.side==='exec'&&(m.createdAt||0)>lr); }
+
+// Shared write: append an exec message to each member's thread, bump updatedAt,
+// mark exec-read to now (the exec just wrote), mirror in memory, and email each member.
+function execSendMessage(memberIds, text){
+  const now=Date.now();
+  memberIds.filter(Boolean).forEach(mid=>{
+    const msgId=gi('tm');
+    const msg={side:'exec',text:text,createdAt:now};
+    fbSet('threads/'+mid+'/messages/'+msgId,msg);
+    fbSet('threads/'+mid+'/updatedAt',now);
+    fbSet('threads/'+mid+'/lastReadExec',now);
+    if(!D.threads)D.threads={}; if(!D.threads[mid])D.threads[mid]={};
+    if(!D.threads[mid].messages)D.threads[mid].messages={};
+    D.threads[mid].messages[msgId]=msg; D.threads[mid].updatedAt=now; D.threads[mid].lastReadExec=now;
+    const p=gP(mid); const nm=p?p.firstName:'there';
+    notifyPlayer(mid,'cnote','New message from '+(SC.schoolName||'your club'),'Hi '+nm+',\n\n'+text+'\n\nLog in to the app to reply.');
+  });
+  toast(memberIds.length>1?('Message sent to '+memberIds.length+' members'):'Message sent');
+}
+
+function inboxOpenThread(mid){
+  _inboxThread=mid; _inboxCompose=false;
+  const now=Date.now();
+  fbSet('threads/'+mid+'/lastReadExec',now);
+  if(D.threads&&D.threads[mid])D.threads[mid].lastReadExec=now;
+  renderExecInbox();
+}
+function inboxBack(){ _inboxThread=null; _inboxCompose=false; renderExecInbox(); }
+function inboxNewCompose(){ _inboxThread=null; _inboxCompose=true; renderExecInbox(); }
+function execInboxSend(){
+  const ta=document.getElementById('inbox-reply'); if(!ta||!_inboxThread)return;
+  const text=(ta.value||'').trim(); if(!text)return;
+  execSendMessage([_inboxThread],text); ta.value=''; renderExecInbox();
+}
+function execComposeSend(){
+  const ta=document.getElementById('inbox-compose-text'); if(!ta)return;
+  const text=(ta.value||'').trim(); if(!text){toast('Enter a message');return;}
+  const ids=[...document.querySelectorAll('.inbox-compose-cb:checked')].map(c=>c.value);
+  if(!ids.length){toast('Pick at least one member');return;}
+  execSendMessage(ids,text); _inboxCompose=false; renderExecInbox();
+}
+
+function renderExecInbox(){
+  const pane=document.getElementById('tab-inbox'); if(!pane)return;
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const threads=D.threads||{};
+  // Compose-new view: pick one or more members, one thread each.
+  if(_inboxCompose){
+    const opts=[...D.players].sort((a,b)=>(a.lastName||'').localeCompare(b.lastName||'')).map(p=>
+      `<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;"><input type="checkbox" class="inbox-compose-cb" value="${p.id}"> ${esc(p.firstName+' '+p.lastName)}</label>`).join('');
+    pane.innerHTML=`<div class="card"><div class="card-title"><span class="bar"></span> ✉️ New Message</div>
+      <p style="font-size:12px;color:var(--gray);margin-bottom:10px;line-height:1.5;">Pick one or more members. Each gets their own private thread, not a group chat.</p>
+      <div style="max-height:200px;overflow-y:auto;border:1px solid var(--gray-lighter);border-radius:8px;padding:8px 12px;margin-bottom:10px;">${opts||'<span style="color:var(--gray);font-size:13px;">No members yet.</span>'}</div>
+      <textarea id="inbox-compose-text" maxlength="2000" placeholder="Write your message" style="width:100%;border:1px solid var(--gray-lighter);border-radius:8px;padding:10px 12px;font-family:inherit;font-size:14px;resize:vertical;min-height:72px;box-sizing:border-box;"></textarea>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="btn btn-primary btn-small" onclick="execComposeSend()">Send</button>
+        <button class="btn btn-secondary btn-small" onclick="inboxBack()">Cancel</button>
+      </div></div>`;
+    return;
+  }
+  // Open-thread view: history plus a reply box, posting as the exec voice.
+  if(_inboxThread){
+    const mid=_inboxThread; const p=gP(mid); const t=threads[mid]||{};
+    const msgs=_threadMsgList(t);
+    const body=msgs.length?msgs.map(m=>{
+      const who=m.side==='exec'?'Exec':(p?p.firstName+' '+p.lastName:'Member');
+      const align=m.side==='exec'?'flex-end':'flex-start';
+      const bg=m.side==='exec'?'var(--red)':'var(--gray-lighter)';
+      const col=m.side==='exec'?'#fff':'var(--black)';
+      const when=m.createdAt?new Date(m.createdAt).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+      return `<div style="display:flex;justify-content:${align};margin:4px 0;"><div style="max-width:78%;background:${bg};color:${col};border-radius:12px;padding:8px 12px;font-size:14px;white-space:pre-wrap;word-break:break-word;"><div style="font-size:10px;opacity:0.75;margin-bottom:2px;">${esc(who)} · ${when}</div>${esc(m.text)}</div></div>`;
+    }).join(''):'<p style="color:var(--gray);font-size:13px;padding:8px 0;">No messages yet.</p>';
+    pane.innerHTML=`<div class="card"><div class="card-title"><span class="bar"></span> ✉️ ${esc(p?p.firstName+' '+p.lastName:'Member')}</div>
+      <button class="btn btn-secondary btn-small" style="margin-bottom:10px;" onclick="inboxBack()">Back to all threads</button>
+      <div style="max-height:340px;overflow-y:auto;padding:4px;">${body}</div>
+      <textarea id="inbox-reply" maxlength="2000" placeholder="Reply as Exec" style="width:100%;border:1px solid var(--gray-lighter);border-radius:8px;padding:10px 12px;font-family:inherit;font-size:14px;resize:vertical;min-height:60px;box-sizing:border-box;margin-top:10px;"></textarea>
+      <button class="btn btn-primary btn-small" style="margin-top:8px;" onclick="execInboxSend()">Send</button></div>`;
+    return;
+  }
+  // Thread list: unread-for-exec first, then most recent. Unread rows are highlighted.
+  const rows=Object.keys(threads).map(mid=>({mid,t:threads[mid]})).filter(x=>x.t&&typeof x.t==='object');
+  rows.sort((a,b)=>{ const ua=threadUnreadExec(a.t)?1:0, ub=threadUnreadExec(b.t)?1:0; if(ua!==ub)return ub-ua; return (b.t.updatedAt||0)-(a.t.updatedAt||0); });
+  const list=rows.length?rows.map(({mid,t})=>{
+    const p=gP(mid); const unread=threadUnreadExec(t);
+    const msgs=_threadMsgList(t); const last=msgs[msgs.length-1];
+    const preview=last?((last.side==='exec'?'You: ':'')+last.text):'';
+    const when=t.updatedAt?new Date(t.updatedAt).toLocaleDateString([],{month:'short',day:'numeric'}):'';
+    return `<div onclick="inboxOpenThread('${mid}')" style="cursor:pointer;padding:10px;border:1px solid var(--gray-lighter);border-radius:8px;margin-bottom:6px;${unread?'background:#fff4f4;border-color:var(--red);':''}">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;">
+        <span style="font-weight:700;font-size:14px;color:var(--charcoal);">${unread?'<span style="color:var(--red);">● </span>':''}${esc(p?p.firstName+' '+p.lastName:'Member')}</span>
+        <span style="font-size:11px;color:var(--gray);white-space:nowrap;">${when}</span></div>
+      <div style="font-size:12.5px;color:var(--gray);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">${esc(preview)}</div></div>`;
+  }).join(''):'<p style="color:var(--gray);font-size:13px;padding:8px 0;">No threads yet. Start one with New Message.</p>';
+  pane.innerHTML=`<div class="card"><div class="card-title"><span class="bar"></span> 📨 Inbox</div>
+    <button class="btn btn-primary btn-small" style="margin-bottom:12px;" onclick="inboxNewCompose()">✉️ New Message</button>
+    ${list}</div>`;
+}
+
+// Member side: their single thread with the exec team, in the player portal.
+function memberSendReply(){
+  const ta=document.getElementById('mm-reply'); if(!ta||!currentPlayerId)return;
+  const text=(ta.value||'').trim(); if(!text)return;
+  const now=Date.now(); const mid=currentPlayerId; const msgId=gi('tm');
+  const msg={side:'member',text:text,createdAt:now};
+  fbSet('threads/'+mid+'/messages/'+msgId,msg);
+  fbSet('threads/'+mid+'/updatedAt',now);
+  fbSet('threads/'+mid+'/lastReadMember',now);
+  if(!D.threads)D.threads={}; if(!D.threads[mid])D.threads[mid]={};
+  if(!D.threads[mid].messages)D.threads[mid].messages={};
+  D.threads[mid].messages[msgId]=msg; D.threads[mid].updatedAt=now; D.threads[mid].lastReadMember=now;
+  ta.value=''; renderMemberMessages();
+}
+function updateMemberMsgBadge(){
+  const el=document.getElementById('pp-msg-unread'); if(!el||!currentPlayerId)return;
+  const t=(D.threads||{})[currentPlayerId]||{};
+  const lr=t.lastReadMember||0;
+  const n=_threadMsgList(t).filter(m=>m.side==='exec'&&(m.createdAt||0)>lr).length;
+  el.textContent=n>0?('('+n+')'):'';
+}
+function renderMemberMessages(){
+  const panel=document.getElementById('pp-panel-messages'); if(!panel||!currentPlayerId)return;
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const mid=currentPlayerId; const t=(D.threads||{})[mid]||{};
+  // Mark member-read on view.
+  if(threadUnreadMember(t)){ const now=Date.now(); fbSet('threads/'+mid+'/lastReadMember',now); if(D.threads&&D.threads[mid])D.threads[mid].lastReadMember=now; }
+  const msgs=_threadMsgList(t);
+  const body=msgs.length?msgs.map(m=>{
+    const who=m.side==='exec'?(SC.coachSignoff||'Exec'):'You';
+    const align=m.side==='member'?'flex-end':'flex-start';
+    const bg=m.side==='member'?'var(--red)':'var(--gray-lighter)';
+    const col=m.side==='member'?'#fff':'var(--black)';
+    const when=m.createdAt?new Date(m.createdAt).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+    return `<div style="display:flex;justify-content:${align};margin:4px 0;"><div style="max-width:78%;background:${bg};color:${col};border-radius:12px;padding:8px 12px;font-size:14px;white-space:pre-wrap;word-break:break-word;"><div style="font-size:10px;opacity:0.75;margin-bottom:2px;">${esc(who)} · ${when}</div>${esc(m.text)}</div></div>`;
+  }).join(''):'<p style="color:var(--gray);font-size:13px;padding:8px 0;">No messages yet. Your club will reach out here, and you can reply any time.</p>';
+  panel.innerHTML=`<div class="card"><div class="card-title"><span class="bar"></span> ✉️ Messages</div>
+    <div style="max-height:360px;overflow-y:auto;padding:4px;">${body}</div>
+    <textarea id="mm-reply" maxlength="2000" placeholder="Message your club" style="width:100%;border:1px solid var(--gray-lighter);border-radius:8px;padding:10px 12px;font-family:inherit;font-size:14px;resize:vertical;min-height:60px;box-sizing:border-box;margin-top:10px;"></textarea>
+    <button class="btn btn-primary btn-small" style="margin-top:8px;" onclick="memberSendReply()">Send</button></div>`;
+  updateMemberMsgBadge();
 }
 
 // ── HS Communicate: coach broadcast to players/parents. Sends real email via the
