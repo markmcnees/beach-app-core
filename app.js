@@ -9468,6 +9468,18 @@ function tsToggleDoor(sid){
 }
 
 // ---- Invitations (reuse execSendMessage: in-app thread + email) ----------
+// Render a session's ISO date (YYYY-MM-DD) as "Weekday, Month D". Parsed as a local date so it does
+// not shift a day across time zones. Returns the raw value for anything that is not ISO (legacy or
+// free text), and never throws.
+function tsReadableDate(iso){
+  var s=String(iso==null?'':iso).trim();
+  var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if(!m) return s;
+  var dt=new Date(parseInt(m[1],10), parseInt(m[2],10)-1, parseInt(m[3],10));
+  if(isNaN(dt.getTime())) return s;
+  try{ return dt.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}); }
+  catch(e){ return s; }
+}
 function tsSendInvite(pid){
   var boxes=document.querySelectorAll('input.ts-inv-box[data-pid="'+pid+'"]:checked');
   if(!boxes.length){ toast('Pick at least one session first'); return; }
@@ -9477,14 +9489,25 @@ function tsSendInvite(pid){
     var sid=b.getAttribute('data-sid');
     var sess=(D.tryoutSessions||{})[sid]; if(!sess) return;
     fbSet('tryoutSessions/'+sid+'/invited/'+pid, now);
-    var line=sess.name||'Tryout';
-    if(sess.date) line+=' on '+sess.date;
-    if(sess.time) line+=' at '+sess.time;
-    if(sess.location) line+=', '+sess.location;
-    lines.push(line);
+    // One clean sentence per session: time, then date, then location, each omitted if missing so
+    // there is never a stray separator or empty fragment.
+    var t=String(sess.time||'').trim();
+    var d=tsReadableDate(sess.date);
+    var loc=String(sess.location||'').trim();
+    var s='';
+    if(t) s+=t;
+    if(d) s+=(s?' on ':'')+d;
+    if(loc) s+=(s?' at ':'')+loc;
+    if(!s) s=String(sess.name||'a tryout').trim(); // nothing set: fall back to the session name
+    lines.push(s);
   });
   if(!lines.length){ toast('No valid sessions'); return; }
-  var body='You are invited to tryouts:\n\n'+lines.map(function(l){ return '- '+l; }).join('\n')+'\n\nLog in to the app for details, and check in at the door when you arrive.';
+  // No greeting here: execSendMessage prepends "Hi <name>," for the email, and its own "Log in to
+  // the app to reply." closing. This body is the message content between those.
+  var closing='Log in to the app for additional details, and check in with an Exec when you arrive with your phone.';
+  var body=(lines.length===1)
+    ? 'You are invited to tryouts: '+lines[0]+'.\n\n'+closing
+    : 'You are invited to tryouts:\n\n'+lines.map(function(l){ return '- '+l+'.'; }).join('\n')+'\n\n'+closing;
   execSendMessage([pid], body);
 }
 function tsRemoveInvite(sid,pid){
