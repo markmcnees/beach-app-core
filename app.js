@@ -1483,6 +1483,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
     <div class="pp-name" id="pp-name"></div>
     <div class="pp-meta" id="pp-meta"></div>
     <div id="pp-tier-request"></div>
+    <div id="pp-practice"></div>
   </div>
 
   <!-- Notification banner -->
@@ -2328,7 +2329,7 @@ const DEF_M=[
   {id:'m09',date:'2026-02-06',court:2,team1:['p15','p04'],team2:['p05','p06'],score1:21,score2:15}
 ];
 
-let D={players:[],matches:[],planned:[],gamedays:[],scrimmages:[],schedule:[],standings:{},goals:{},assignments:{},duals:[],opponents:{},liveScoring:{},quizScores:{},tierRequests:{},broadcasts:{},threads:{},tryoutSessions:{},tryoutAttendance:{},dues:{}};
+let D={players:[],matches:[],planned:[],gamedays:[],scrimmages:[],schedule:[],standings:{},goals:{},assignments:{},duals:[],opponents:{},liveScoring:{},quizScores:{},tierRequests:{},broadcasts:{},threads:{},tryoutSessions:{},tryoutAttendance:{},dues:{},practiceSchedule:{}};
 // Active competitive season. Config leaf at DB_ROOT/config/currentSeasonId; defaults to the current year, overwritten by the init read below if a stored value exists. Result creates are stamped with this via fbSetResult.
 let _currentSeasonId=(new Date()).getFullYear().toString();
 let profilesData={}; // from leon_queens node for AI context
@@ -2479,6 +2480,17 @@ function listenData(){if(!db)return;
     const pane=document.getElementById('tab-accounting'); if(!pane)return;
     const ae=document.activeElement; if(ae&&ae.id==='acct-amount')return;
     if(typeof renderAccounting==='function')renderAccounting();
+  });
+  // Weekly practice schedule (club). Members see their own squad card; execs see both. Do not
+  // clobber an exec who is mid-edit (any ps-* control focused).
+  db.ref(DB_ROOT+'/practiceSchedule').on('value',s=>{
+    D.practiceSchedule=s.val()||{};
+    if(currentRole==='player'){ renderPlayerPortal(); return; }
+    if(currentRole==='coach'){
+      const pane=document.getElementById('tab-teamanalysis'); if(!pane)return;
+      const ae=document.activeElement; if(ae&&ae.id&&ae.id.indexOf('ps-')===0)return;
+      if(typeof renderTeamAnalysis==='function')renderTeamAnalysis();
+    }
   });
   db.ref(SC.dbRoots.profiles).on('value',s=>{
     profilesData=s.val()||{};
@@ -4135,6 +4147,7 @@ function renderPlayerPortal(){
       tierReqEl.innerHTML='';
     }
   }
+  const _ppPr=document.getElementById('pp-practice'); if(_ppPr) _ppPr.innerHTML=memberPracticeHtml(p);
 
   // Summary stats — filtered by ppStatView
   const qs=queensStats(pid,D.matches);
@@ -9909,6 +9922,92 @@ function renderTravel(){
   </div>`;
 }
 
+// ---- Weekly practice schedule (Grass Club) -------------------------------
+// A fixed weekly schedule per squad for the semester, persisted under DB_ROOT/practiceSchedule/{tier}
+// (a sub-key of the *_matches node the live rule already governs; no new node, no rules change).
+//   practiceSchedule/{gold|garnet} = { days:['Mon','Wed'], time:'H:MM AM/PM', location, updatedAt:ms }
+// The time control mirrors the tryout session form (hour, minute, AM/PM); location defaults to the
+// same club field. No one is notified on a change; execs message the club if something moves.
+var PS_DAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+var PS_LOC_DEFAULT='FSU Main Campus Fields';
+function psSchedule(tier){ return ((D.practiceSchedule||{})[tier])||{}; }
+function psTimeSelects(tier, stored){
+  var tp=/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(String(stored||'').trim());
+  var th=tp?String(parseInt(tp[1],10)):'', tmn=tp?tp[2]:'', ap=tp?tp[3].toUpperCase():'';
+  var hourOpts='<option value="">Hour</option>';
+  for(var h=1;h<=12;h++){ hourOpts+='<option value="'+h+'"'+(th===String(h)?' selected':'')+'>'+h+'</option>'; }
+  var minOpts=['00','15','30','45'].map(function(mm){ return '<option value="'+mm+'"'+(tmn===mm?' selected':'')+'>'+mm+'</option>'; }).join('');
+  var apOpts=['AM','PM'].map(function(x){ return '<option value="'+x+'"'+(ap===x?' selected':'')+'>'+x+'</option>'; }).join('');
+  return '<div style="display:flex;gap:4px;align-items:center;">'
+    +'<select class="form-select" id="ps-th-'+tier+'" style="padding:6px 4px;font-size:12px;">'+hourOpts+'</select>'
+    +'<span style="font-size:12px;color:var(--gray);">:</span>'
+    +'<select class="form-select" id="ps-tm-'+tier+'" style="padding:6px 4px;font-size:12px;">'+minOpts+'</select>'
+    +'<select class="form-select" id="ps-tap-'+tier+'" style="padding:6px 4px;font-size:12px;">'+apOpts+'</select>'
+    +'</div>';
+}
+function psComposeTime(tier){
+  var g=function(id){ var el=document.getElementById(id); return el?el.value:''; };
+  var th=g('ps-th-'+tier);
+  return th===''?'':(th+':'+(g('ps-tm-'+tier)||'00')+' '+(g('ps-tap-'+tier)||'AM'));
+}
+function psReadDays(tier){
+  return PS_DAYS.filter(function(d){ var el=document.getElementById('ps-day-'+tier+'-'+d); return el&&el.checked; });
+}
+function psSaveSchedule(tier){
+  if(tier!=='gold'&&tier!=='garnet') return;
+  var locEl=document.getElementById('ps-loc-'+tier);
+  var rec={ days:psReadDays(tier), time:psComposeTime(tier), location:locEl?locEl.value.trim():'', updatedAt:Date.now() };
+  fbSet('practiceSchedule/'+tier, rec);
+  if(!D.practiceSchedule)D.practiceSchedule={}; D.practiceSchedule[tier]=rec;
+  renderTeamAnalysis();
+  toast((tier==='gold'?'Gold':'Garnet')+' practice schedule saved');
+}
+// One readable line: "Mon, Wed, Fri at 6:00 PM, FSU Main Campus Fields". Parts omitted if unset.
+function psScheduleText(sched){
+  if(!sched) return '';
+  var days=Array.isArray(sched.days)?sched.days:[];
+  var s=days.length?days.join(', '):'';
+  if(sched.time) s+=(s?' at ':'at ')+sched.time;
+  if(sched.location) s+=(s?', ':'')+sched.location;
+  return s.trim();
+}
+// Exec editor for both squads, shown at the top of the Practice tab (club only).
+function practiceScheduleEditorHtml(){
+  var esc=function(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]); }); };
+  var sq=function(tier,label,color){
+    var sched=psSchedule(tier);
+    var days=Array.isArray(sched.days)?sched.days:[];
+    var loc=(sched.location!=null)?sched.location:PS_LOC_DEFAULT;
+    var dayBoxes=PS_DAYS.map(function(d){
+      var on=days.indexOf(d)>=0;
+      return '<label style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--charcoal);margin-right:6px;margin-bottom:4px;"><input type="checkbox" id="ps-day-'+tier+'-'+d+'"'+(on?' checked':'')+'> '+d+'</label>';
+    }).join('');
+    return '<div style="border:1px solid var(--gray-lighter);border-radius:8px;padding:10px 12px;margin-bottom:10px;">'
+      +'<div style="font-family:\'Bebas Neue\',sans-serif;font-size:14px;letter-spacing:1px;color:'+color+';margin-bottom:6px;">'+label+' squad</div>'
+      +'<div style="display:flex;flex-wrap:wrap;margin-bottom:8px;">'+dayBoxes+'</div>'
+      +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;"><span style="font-size:12px;color:var(--gray);">Time</span>'+psTimeSelects(tier, sched.time)+'</div>'
+      +'<input class="form-input" id="ps-loc-'+tier+'" value="'+esc(loc)+'" placeholder="Location" style="padding:6px 8px;font-size:12px;width:100%;box-sizing:border-box;margin-bottom:8px;">'
+      +'<button class="btn btn-small btn-secondary" style="padding:3px 12px;font-size:11px;" onclick="psSaveSchedule(\''+tier+'\')">Save '+label+' schedule</button>'
+      +'</div>';
+  };
+  return '<div class="card"><div class="card-title"><span class="bar"></span> 🗓️ Weekly Practice Schedule</div>'
+    +'<p style="font-size:11px;color:var(--gray);margin-bottom:10px;">Set each squad\'s weekly practice. Members see their own squad\'s schedule in the app. No one is notified on changes.</p>'
+    +sq('gold','Gold','#8a6d2b')
+    +sq('garnet','Garnet','#782F40')
+    +'</div>';
+}
+// The member's own squad practice card for the player portal.
+function memberPracticeHtml(p){
+  if(!(SC.tiersEnabled && p && (p.tier==='gold'||p.tier==='garnet'))) return '';
+  var esc=function(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]); }); };
+  var squad=p.tier==='gold'?'Gold':'Garnet';
+  var txt=psScheduleText(psSchedule(p.tier));
+  return '<div class="card" style="padding:12px 14px;margin-top:10px;">'
+    +'<div style="font-family:\'Bebas Neue\';font-size:13px;letter-spacing:1px;color:var(--charcoal);margin-bottom:6px;">Your Practice Schedule</div>'
+    +'<div style="font-size:13px;margin-bottom:4px;">You are on the <span class="tier-badge tier-'+p.tier+'">'+squad+'</span> squad.</div>'
+    +(txt?'<div style="font-size:13px;color:var(--charcoal);line-height:1.5;">'+esc(txt)+'</div>':'<div style="font-size:12px;color:var(--gray);">Your practice schedule will be posted soon.</div>')
+    +'</div>';
+}
 function renderTeamAnalysis(){
   // Club renders into tab-teamanalysis; HS renders the same analysis into the Practice destination mount.
   const pane=document.getElementById(SC.tiersEnabled?'tab-teamanalysis':'tab-practice');
@@ -9948,7 +10047,7 @@ function renderTeamAnalysis(){
       <div id="ta-plan-output" style="margin-top:14px;">${analysisPlanText}</div>
       <div id="ta-builder" style="margin-top:14px;"></div>`;
   }
-  pane.innerHTML=`<div class="card"><div class="card-title"><span class="bar"></span> 📋 Team Analysis</div>
+  pane.innerHTML=(SC.tiersEnabled?practiceScheduleEditorHtml():'')+`<div class="card"><div class="card-title"><span class="bar"></span> 📋 Team Analysis</div>
     <p style="font-size:12px;color:var(--gray);margin-bottom:12px;line-height:1.5;">Pick a team to see its collective skill averages, then generate a practice session aimed at the weakest spots. Assessment scores of zero mean unassessed and are left out of the averages.</p>
     ${picker}
     ${body}
