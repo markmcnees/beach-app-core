@@ -1735,7 +1735,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
           <select id="cpm-id-hand" class="form-select" style="flex:1;min-width:100px;padding:8px;font-size:13px;"><option value="">Hand</option><option value="R">Right</option><option value="L">Left</option></select>
           <input type="number" id="cpm-id-truvolley" class="form-input" placeholder="TruVolley Rating" step="0.01" min="0" style="flex:1;min-width:130px;padding:8px;font-size:13px;">
         </div>
-        <div style="font-family:'Bebas Neue';font-size:13px;letter-spacing:1px;color:var(--gray);margin:4px 0 8px;">Parent Contacts</div>
+        ${!SC.tiersEnabled ? `<div style="font-family:'Bebas Neue';font-size:13px;letter-spacing:1px;color:var(--gray);margin:4px 0 8px;">Parent Contacts</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
           <input type="text" id="cpm-p1-name" class="form-input" placeholder="Parent 1 Name" style="flex:1;min-width:120px;padding:8px;font-size:13px;">
           <input type="email" id="cpm-p1-email" class="form-input" placeholder="Parent 1 Email" style="flex:1;min-width:150px;padding:8px;font-size:13px;">
@@ -1745,7 +1745,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
           <input type="text" id="cpm-p2-name" class="form-input" placeholder="Parent 2 Name" style="flex:1;min-width:120px;padding:8px;font-size:13px;">
           <input type="email" id="cpm-p2-email" class="form-input" placeholder="Parent 2 Email" style="flex:1;min-width:150px;padding:8px;font-size:13px;">
           <input type="tel" id="cpm-p2-phone" class="form-input" placeholder="Parent 2 Phone" style="flex:1;min-width:120px;padding:8px;font-size:13px;">
-        </div>
+        </div>` : ''}
         <button class="btn btn-red btn-small" style="width:100%;" onclick="coachSaveIdentity()">Save Identity</button>
         <button class="btn btn-secondary btn-small" style="width:100%;margin-top:8px;" onclick="showAthleteCard(document.getElementById('coach-player-overlay').dataset.pid)">View Athlete Card</button>
       </div>
@@ -3463,6 +3463,15 @@ function savePlayerName(pid){
 // Also mutates the in-memory player so the change reflects immediately in demo mode, where fbSet is a no-op.
 function coachSetTier(pid,newTier){
   const p=gP(pid);if(!p)return;
+  const oldTier=p.tier||'unassigned';
+  const wasProspect=(p.status==='prospect');
+  // A genuine squad placement (club only): onto Gold or Garnet from a prospect or an unassigned
+  // member, or a move between the two squads. It is NOT a no-op (same tier on an already placed
+  // member) and never applies to HS tiers. Such a placement clears prospect status (so the record
+  // becomes a regular member) and notifies the member via the shared placement path, so wherever an
+  // exec does it the result is the same.
+  const isPlacement = SC.tiersEnabled && (newTier==='gold'||newTier==='garnet') && (wasProspect || newTier!==oldTier);
+  if(isPlacement && wasProspect) delete p.status;
   p.tier=newTier;
   fbSet('players/'+pid,{...p,tier:newTier});
   // Clear any pending tier request now that the coach has acted, closing the loop. Removes from the separate node only.
@@ -3473,6 +3482,7 @@ function coachSetTier(pid,newTier){
   const b=document.getElementById('cpm-tier-badge');
   if(b){b.className='tier-badge tier-'+newTier;b.textContent=TIER_LABELS[newTier];}
   toast('Tier set: '+TIER_LABELS[newTier]);
+  if(isPlacement) rcSendPlacementNotice(pid,newTier);
   // Refresh the roster behind the modal so a filtered view stays in sync (a player whose new tier no longer matches the active filter drops out immediately). Club and HS both.
   if(typeof renderRoster==='function') renderRoster();
 }
@@ -9574,20 +9584,22 @@ function tsClearAttendance(sid,pid){
 }
 // ---- Placement (prospect to squad) ---------------------------------------
 var TS_SQUAD_LABELS={gold:'Gold',garnet:'Garnet'};
-// Place a prospect on a squad. Clearing status first, then reusing coachSetTier, means one whole-
-// object write sets the tier and drops the prospect status so the record is now a regular member;
-// coachSetTier also clears any pending tier request and syncs the roster. Every other field (rating,
-// TruVolley, attendance, createdAt) is preserved, so nothing about the person or their history is
-// lost. The member is told which squad they are on via the existing exec messaging path.
+// The placement notice, shared so the recruiting tab and the player card word it identically. No
+// greeting (the worker greets by name); execSendMessage handles the in-app thread and the email.
+function rcSendPlacementNotice(pid, tier){
+  var squad=TS_SQUAD_LABELS[tier]||tier;
+  execSendMessage([pid], 'You made the '+squad+' squad. Welcome to '+(SC.schoolName||'the club')+', we are glad to have you here. Log in to the app any time to see your squad and what comes next.');
+}
+// Place a prospect on a squad from the recruiting tab. coachSetTier does the whole-object tier write,
+// clears prospect status, clears any pending tier request, notifies the member, and syncs the roster,
+// so this delegates to it. Every other field (rating, TruVolley, attendance, createdAt) is preserved,
+// so nothing about the person or their history is lost.
 function rcPlaceProspect(pid, tier){
   var p=gP(pid); if(!p) return;
   if(tier!=='gold'&&tier!=='garnet') return;
-  delete p.status;              // becomes a regular roster record (no status field, like a seed player)
-  coachSetTier(pid, tier);      // whole-object write (now without status) + tier-request clear + roster sync
-  var squad=TS_SQUAD_LABELS[tier]||tier;
-  execSendMessage([pid], 'You made the '+squad+' squad. Welcome to '+(SC.schoolName||'the club')+', we are glad to have you here. Log in to the app any time to see your squad and what comes next.');
+  coachSetTier(pid, tier);
   renderRecruiting();
-  toast((p.firstName||'Prospect')+' placed on '+squad);
+  toast((p.firstName||'Prospect')+' placed on '+(TS_SQUAD_LABELS[tier]||tier));
 }
 // Mark a prospect inactive (applied but never came) or restore them. Uses the existing active field
 // and touches nothing else, so the record and its history stay intact and an exec can restore it.
