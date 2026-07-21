@@ -2328,7 +2328,7 @@ const DEF_M=[
   {id:'m09',date:'2026-02-06',court:2,team1:['p15','p04'],team2:['p05','p06'],score1:21,score2:15}
 ];
 
-let D={players:[],matches:[],planned:[],gamedays:[],scrimmages:[],schedule:[],standings:{},goals:{},assignments:{},duals:[],opponents:{},liveScoring:{},quizScores:{},tierRequests:{},broadcasts:{},threads:{}};
+let D={players:[],matches:[],planned:[],gamedays:[],scrimmages:[],schedule:[],standings:{},goals:{},assignments:{},duals:[],opponents:{},liveScoring:{},quizScores:{},tierRequests:{},broadcasts:{},threads:{},tryoutSessions:{},tryoutAttendance:{}};
 // Active competitive season. Config leaf at DB_ROOT/config/currentSeasonId; defaults to the current year, overwritten by the init read below if a stored value exists. Result creates are stamped with this via fbSetResult.
 let _currentSeasonId=(new Date()).getFullYear().toString();
 let profilesData={}; // from leon_queens node for AI context
@@ -2349,6 +2349,8 @@ function initFB(){
       _autoLoginDone=true;
     }
   }catch(e){}
+  // Door check-in deep link: hold ?tryout=<sid> and strip it; recorded once the member is logged in.
+  try{captureTryoutParam();}catch(e){}
   if(SC.demoMode){
     // DEMO MODE: hydrate D from _DEMO fixture, no Firebase touched.
     D.players     = JSON.parse(JSON.stringify(_DEMO.players));
@@ -2457,6 +2459,18 @@ function listenData(){if(!db)return;
     D.threads=s.val()||{};
     if(currentRole==='coach'){const t=document.querySelector('.tab.active');if(t&&t.dataset.tab==='inbox'&&typeof renderExecInbox==='function')renderExecInbox();}
     if(currentRole==='player'){if(typeof updateMemberMsgBadge==='function')updateMemberMsgBadge();const mp=document.getElementById('pp-panel-messages');if(mp&&mp.classList.contains('active')&&typeof renderMemberMessages==='function')renderMemberMessages();}
+  });
+  // Tryout sessions and attendance (recruiting). Live-update the exec view so a scanned door
+  // check-in appears without a manual refresh; also drain any pending ?tryout once sessions load.
+  db.ref(DB_ROOT+'/tryoutSessions').on('value',s=>{
+    D.tryoutSessions=s.val()||{};
+    _tryoutSessionsLoaded=true;
+    processPendingTryout();
+    _maybeRenderRecruiting();
+  });
+  db.ref(DB_ROOT+'/tryoutAttendance').on('value',s=>{
+    D.tryoutAttendance=s.val()||{};
+    _maybeRenderRecruiting();
   });
   db.ref(SC.dbRoots.profiles).on('value',s=>{
     profilesData=s.val()||{};
@@ -4073,6 +4087,7 @@ function renderPlayerPortal(){
   const p=gP(currentPlayerId);
   if(!p)return;
   const pid=currentPlayerId;
+  processPendingTryout(); // record a pending door check-in once the member is logged in
   renderPlayerBroadcasts();
   if(SC.tiersEnabled&&typeof updateMemberMsgBadge==='function')updateMemberMsgBadge();
 
@@ -9295,219 +9310,190 @@ function renderPracticeGroups(){
 }
 
 // ============================================================
-// LOGISTICS mockups (Grass Club only, gated on SC.tiersEnabled).
-// Pure in-memory demo previews: no Firebase, no fbSet, no network. State resets on refresh.
+// LOGISTICS (Grass Club only, gated on SC.tiersEnabled). Recruiting below is now persisted (it has
+// its own header). Accounting and Travel further down remain pure in-memory demo previews: no
+// Firebase, no fbSet, no network, and their state resets on refresh.
 // ============================================================
-// Recruiting (Grass Club demo, in-memory only, resets on refresh): sample tryout sessions plus a
-// prospect list with a live invite toggle into Session A. Stage 1 upgraded prospects from plain
-// name strings to objects and added an FSU-skinned signup that creates new prospects.
-// Prospect object shape: { id, firstName, lastName, gender, classYear, truVolley (0-10 decimal or
-// null), rating (CS rating from the real TruVolley band table, or null when no TruVolley), rd,
-// manualRating (Exec-set starting rating for unrated prospects, or null), tierRequest, photo, status,
-// team, sessionId }. Effective rating = rating if present, else manualRating, else unrated (no 1500).
-// recruitSessions[].invited stores prospect ids (not names) so renames and dupes stay stable; a
-// prospect may be invited to more than one session.
-// Demo-only seed data. A real (non-demo) school starts with zero sessions/prospects;
-// recruiting is not persisted yet, so it must not show another program's fake prospects.
-let recruitSessions = SC.demoMode ? [
-  {name:'Fall Tryout - Session A', date:'Sept 6', time:'9:00 AM', invited:['prospect_seed1','prospect_seed2']},
-  {name:'Fall Tryout - Session B', date:'Sept 7', time:'10:00 AM', invited:['prospect_seed3']}
-] : [];
-// TruVolley values are 0-10 decimals; ratings below match csSeedFromTruVolley (7.2->1800, 5.5->1600,
-// 4.0->1600, 2.8->1450). Mia and Zoe have no TruVolley, so they are unrated until the Exec sets one.
-let recruitProspects = SC.demoMode ? [
-  {id:'prospect_seed1', firstName:'Ava',    lastName:'Nguyen', gender:'F', classYear:'SO', truVolley:7.2,  rating:1800, rd:150,  manualRating:null, tierRequest:'garnet', photo:null, status:'prospect', team:null, sessionId:null},
-  {id:'prospect_seed2', firstName:'Mia',    lastName:'Torres', gender:'F', classYear:'FR', truVolley:null, rating:null, rd:null, manualRating:null, tierRequest:'gold',   photo:null, status:'prospect', team:null, sessionId:null},
-  {id:'prospect_seed3', firstName:'Harper', lastName:'Lee',    gender:'F', classYear:'JR', truVolley:5.5,  rating:1600, rd:200,  manualRating:null, tierRequest:'garnet', photo:null, status:'prospect', team:null, sessionId:null},
-  {id:'prospect_seed4', firstName:'Zoe',    lastName:'Carter', gender:'F', classYear:'FR', truVolley:null, rating:null, rd:null, manualRating:null, tierRequest:'gold',   photo:null, status:'prospect', team:null, sessionId:null},
-  {id:'prospect_seed5', firstName:'Lily',   lastName:'Brooks', gender:'F', classYear:'SO', truVolley:4.0,  rating:1600, rd:200,  manualRating:null, tierRequest:null,     photo:null, status:'prospect', team:null, sessionId:null},
-  {id:'prospect_seed6', firstName:'Sofia',  lastName:'Ramos',  gender:'F', classYear:'SR', truVolley:2.8,  rating:1450, rd:250,  manualRating:null, tierRequest:'garnet', photo:null, status:'prospect', team:null, sessionId:null}
-] : [];
-// Real CS conversion, replicated EXACTLY from courtsense/community/profile/index.html truvolleySeed:
-// a 0-to-10 TruVolley decimal maps to a Glicko-2 seed. Blank/non-numeric returns null (unrated, no seed).
-function csSeedFromTruVolley(raw){
-  const v=parseFloat(raw);
-  if(!isFinite(v)) return null;
-  if(v < 2)  return { rating:1300, rd:300 };
-  if(v < 4)  return { rating:1450, rd:250 };
-  if(v < 6)  return { rating:1600, rd:200 };
-  if(v < 8)  return { rating:1800, rd:150 };
-  if(v < 10) return { rating:2000, rd:150 };
-  return { rating:2200, rd:100 };
-}
-// Effective rating shown for a prospect: the TruVolley-derived rating if present, else the Exec-set
-// manual rating, else null (unrated). No 1500 default.
-function rcEffectiveRating(p){
-  if(!p) return null;
-  if(p.rating!=null) return p.rating;
-  if(p.manualRating!=null) return p.manualRating;
-  return null;
-}
-// Exec sets a starting rating for an unrated prospect (mirrors admin-players.html manual entry).
-function rcSetManualRating(prospectId){
-  const el=document.getElementById('rc-mr-'+prospectId);
-  if(!el) return;
-  const v=parseFloat(el.value);
-  if(!isFinite(v)){ toast('Enter a starting rating'); return; }
-  const p=recruitProspects.find(x=>x.id===prospectId);
-  if(!p) return;
-  p.manualRating=Math.round(v);
-  renderRecruiting();
-  toast('Starting rating set');
-}
-// Pending signup photo (data URL), held between the photo pick and submit so a re-render does not lose it.
-let _rcSignupPhoto=null;
-// Toggle a prospect's invite to a specific session (by index). Multi-session capable: a prospect can
-// be invited to more than one session. Used by the per-session remove tags.
-function recruitToggleInvite(id, si){
-  const s=recruitSessions[si!=null?si:0];
-  if(!id||!s)return;
-  const idx=s.invited.indexOf(id);
-  if(idx>=0)s.invited.splice(idx,1); else s.invited.push(id);
-  renderRecruiting();
-}
-// Invite a prospect to the session chosen in their per-prospect dropdown (add only; removal is via the
-// session tags). Reads the selected session index from the dropdown, then re-renders.
-function rcInviteSelected(prospectId){
-  const sel=document.getElementById('rc-inv-sel-'+prospectId);
-  if(!sel) return;
-  const si=parseInt(sel.value,10);
-  const s=recruitSessions[si];
-  if(!s) return;
-  if(s.invited.indexOf(prospectId)<0) s.invited.push(prospectId);
-  renderRecruiting();
-  toast('Invited to '+s.name);
-}
-// Local-preview-only photo: read the picked file to a data URL on the in-memory pending var and
-// show it. No upload, no Firebase Storage. Updates the preview directly so the form is not re-rendered.
-function rcSignupPhoto(input){
-  const f=input&&input.files&&input.files[0]; if(!f)return;
-  const r=new FileReader();
-  r.onload=function(e){
-    _rcSignupPhoto=e.target.result;
-    const pv=document.getElementById('rc-su-photo-preview');
-    if(pv)pv.innerHTML='<img src="'+_rcSignupPhoto+'" alt="preview" style="height:64px;width:64px;object-fit:cover;border-radius:8px;border:1px solid var(--gray-lighter);">';
+// Recruiting: tryout sessions, invitations, and attendance, persisted under the club matches node
+// (DB_ROOT = SC.dbRoots.matches, which the live *_matches rule already governs; no new top-level
+// node, so no rules change). Prospects are real roster records (D.players with status 'prospect'),
+// not a separate in-memory list, so the roster and Recruiting stay on one model. Invitations reuse
+// execSendMessage, so a prospect gets the same in-app message and email as any exec message. Door
+// check-in uses a QR from a pinned CDN library loaded on demand with Subresource Integrity; if the
+// library fails, the same check-in link is shown as text and the exec takes attendance by hand.
+//
+// Firebase paths (all under DB_ROOT):
+//   tryoutSessions/{sid}                      = { name, date, time, location, createdAt }
+//   tryoutSessions/{sid}/invited/{prospectId} = invitedAt (ms epoch)
+//   tryoutAttendance/{sid}/{prospectId}       = { present:bool, at:ms, method:'qr'|'manual' }
+// ============================================================
+
+// Pinned QR generator. jsDelivr serves the exact npm-published file for this version, so the
+// integrity hash is stable. The shell is never touched, so the tag is injected here. Any failure
+// (offline, blocked, hash mismatch) leaves the state 'failed' and every QR spot falls back to the
+// check-in link shown as text.
+var QR_LIB_URL='https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js';
+var QR_LIB_SRI='sha384-8FWZA6BGMXhsfO+BLtrJK0We6gg5o1JyO8xQm6peWDEUs17ACA5ziE/NIAkl9z2k';
+var _qrLibState='idle'; // idle | loading | ready | failed
+var _qrLibWaiters=[];
+function ensureQrLib(cb){
+  if(_qrLibState==='ready'){ if(cb)cb(true); return; }
+  if(_qrLibState==='failed'){ if(cb)cb(false); return; }
+  if(cb)_qrLibWaiters.push(cb);
+  if(_qrLibState==='loading') return;
+  _qrLibState='loading';
+  var s=document.createElement('script');
+  s.src=QR_LIB_URL;
+  s.integrity=QR_LIB_SRI;
+  s.crossOrigin='anonymous';
+  s.referrerPolicy='no-referrer';
+  s.onload=function(){
+    _qrLibState=(typeof window.qrcode==='function')?'ready':'failed';
+    var w=_qrLibWaiters; _qrLibWaiters=[]; w.forEach(function(f){ f(_qrLibState==='ready'); });
   };
-  r.readAsDataURL(f);
-}
-// Create an in-memory prospect from the demo signup form, push it, clear, re-render. Nothing persists.
-function rcAddSignup(){
-  const v=id=>{const el=document.getElementById(id);return el?el.value:'';};
-  const first=(v('rc-su-first')||'').trim();
-  const last=(v('rc-su-last')||'').trim();
-  if(!first||!last){toast('Enter first and last name');return;}
-  const tvRaw=v('rc-su-tv');
-  const tv=(tvRaw!==''&&tvRaw!=null&&isFinite(parseFloat(tvRaw)))?parseFloat(tvRaw):null;
-  const seed=csSeedFromTruVolley(tv); // null when no TruVolley -> unrated, no 1500 default
-  const tier=v('rc-su-tier')||null;
-  const prospect={
-    id:gi('prospect'),
-    firstName:first,
-    lastName:last,
-    gender:v('rc-su-gender')||'F',
-    classYear:v('rc-su-class')||'FR',
-    truVolley:tv,
-    rating:seed?seed.rating:null,
-    rd:seed?seed.rd:null,
-    manualRating:null,
-    tierRequest:tier||null,
-    photo:_rcSignupPhoto||null,
-    status:'prospect',
-    team:null,
-    sessionId:null
+  s.onerror=function(){
+    _qrLibState='failed';
+    var w=_qrLibWaiters; _qrLibWaiters=[]; w.forEach(function(f){ f(false); });
   };
-  recruitProspects.push(prospect);
-  _rcSignupPhoto=null;
-  renderRecruiting();
-  toast('Signup added: '+first+' '+last);
+  document.head.appendChild(s);
 }
-// Exec edits a tryout session in place (demo, in-memory, resets on refresh).
-function rcUpdateSession(si){
-  const s=recruitSessions[si]; if(!s)return;
-  const g=id=>{const el=document.getElementById(id);return el?el.value:undefined;};
-  const nmv=g('rc-se-name-'+si), dt=g('rc-se-date-'+si), tm=g('rc-se-time-'+si);
-  if(nmv!=null&&nmv.trim())s.name=nmv.trim();
-  if(dt!=null)s.date=dt.trim();
-  if(tm!=null)s.time=tm.trim();
-  renderRecruiting();
-  toast('Session updated');
+// Draw a QR for text into the element with the given id once the lib is ready. On failure the box
+// shows a short note; the readable link beside it is the real fallback.
+function renderQrInto(elId, text){
+  ensureQrLib(function(ok){
+    var el=document.getElementById(elId); if(!el) return;
+    if(ok&&typeof window.qrcode==='function'){
+      try{
+        var qr=window.qrcode(0,'M');
+        qr.addData(text);
+        qr.make();
+        el.innerHTML=qr.createSvgTag(5,4);
+        return;
+      }catch(e){}
+    }
+    el.innerHTML='<div style="font-size:11px;color:var(--gray);line-height:1.4;">QR code unavailable.<br>Use the link below or take attendance by hand.</div>';
+  });
 }
-function rcAddSession(){
-  recruitSessions.push({name:'New Tryout Session', date:'', time:'', invited:[]});
+
+// The URL a prospect follows to check in: this same club app with ?tryout=<sid>, read once at boot
+// by captureTryoutParam and acted on by processPendingTryout.
+function tryoutAttendUrl(sid){
+  return location.origin+location.pathname+'?tryout='+encodeURIComponent(sid);
+}
+// Boot: capture ?tryout=<sid>, hold it, and strip it from the URL (same pattern as ?csadmin).
+var _pendingTryout=null;
+var _tryoutSessionsLoaded=false;
+function captureTryoutParam(){
+  try{
+    var sid=new URLSearchParams(location.search).get('tryout');
+    if(sid){ _pendingTryout=sid; history.replaceState(null,'',location.pathname+location.hash); }
+  }catch(e){}
+}
+// Record attendance for a held ?tryout once a member is logged in and sessions have loaded. A member
+// who is not logged in keeps the pending id until login (renderPlayerPortal re-calls this).
+function processPendingTryout(){
+  if(!_pendingTryout) return;
+  if(currentRole!=='player'||!currentPlayerId) return;
+  if(!_tryoutSessionsLoaded) return;
+  var sid=_pendingTryout;
+  var sess=(D.tryoutSessions||{})[sid];
+  if(!sess){ _pendingTryout=null; toast('That tryout session was not found'); return; }
+  _pendingTryout=null;
+  fbSet('tryoutAttendance/'+sid+'/'+currentPlayerId,{present:true,at:Date.now(),method:'qr'});
+  toast('Checked in to '+(sess.name||'tryout'));
+}
+
+// ---- Exec-side helpers over the persisted model --------------------------
+function tsSessionsArr(){
+  var o=D.tryoutSessions||{};
+  return Object.keys(o).map(function(sid){ return Object.assign({sid:sid},o[sid]); })
+    .sort(function(a,b){ return (a.createdAt||0)-(b.createdAt||0); });
+}
+function tsProspects(){
+  return (Array.isArray(D.players)?D.players:[]).filter(function(p){ return p&&p.status==='prospect'; });
+}
+function tsInvitedTo(sid,pid){
+  var sess=(D.tryoutSessions||{})[sid];
+  return !!(sess&&sess.invited&&sess.invited[pid]);
+}
+function tsAttendance(sid,pid){
+  var a=(D.tryoutAttendance||{})[sid];
+  return a?(a[pid]||null):null;
+}
+function tsInvitesForProspect(pid){
+  return tsSessionsArr().filter(function(sess){ return tsInvitedTo(sess.sid,pid); });
+}
+// Re-render Recruiting on a live data change, but never while the exec is typing in one of its
+// fields (a Firebase echo must not clobber an edit in progress).
+function _maybeRenderRecruiting(){
+  if(currentRole!=='coach') return;
+  var pane=document.getElementById('tab-recruiting'); if(!pane) return;
+  var ae=document.activeElement;
+  if(ae&&pane.contains(ae)&&(ae.tagName==='INPUT'||ae.tagName==='SELECT'||ae.tagName==='TEXTAREA')) return;
   renderRecruiting();
+}
+
+// ---- Session create / edit / delete (persisted) --------------------------
+function tsAddSession(){
+  var sid=gi('ts');
+  fbSet('tryoutSessions/'+sid,{name:'New Tryout Session',date:'',time:'',location:'',createdAt:Date.now()});
   toast('Session added');
 }
-// Exec places a prospect on Gold or Garnet (Exec choice, independent of what the player requested).
-// Promotes the prospect into the live in-memory roster (D.players) with a record that mirrors the
-// demo player shape so the roster, Kings/Queens, and coachOpenPlayer all work with it. csRank = the
-// prospect rating; photo carried for the Stage 3 profile. In-memory only, nothing persists.
-function rcAddToTeam(prospectId, tier){
-  const p=recruitProspects.find(x=>x.id===prospectId);
-  if(!p||p.status==='assigned')return;
-  if(tier!=='gold'&&tier!=='garnet')return;
-  const newId=gi('player');
-  const rec={
-    id:newId,
-    firstName:p.firstName,
-    lastName:p.lastName,
-    classYear:p.classYear||'FR',
-    court:(tier==='gold'?1:5),
-    jersey:null,
-    active:true,
-    tier:tier,
-    gender:p.gender||'F',
-    csRank:rcEffectiveRating(p),
-    photo:p.photo||null
-  };
-  if(!Array.isArray(D.players))D.players=[];
-  D.players.push(rec);
-  p.team=tier; p.status='assigned'; p.playerId=newId;
-  renderRecruiting();
-  if(typeof renderRoster==='function')renderRoster();
-  if(typeof renderPlayers==='function')renderPlayers();
-  const TIER_LABELS={gold:'Gold',garnet:'Garnet'};
-  toast(p.firstName+' '+p.lastName+' added to '+(TIER_LABELS[tier]||tier));
+function tsUpdateSession(sid){
+  var sess=(D.tryoutSessions||{})[sid]; if(!sess) return;
+  var g=function(id){ var el=document.getElementById(id); return el?el.value.trim():null; };
+  var nm=g('ts-name-'+sid), dt=g('ts-date-'+sid), tm=g('ts-time-'+sid), loc=g('ts-loc-'+sid);
+  if(nm!=null) fbSet('tryoutSessions/'+sid+'/name', nm||'Tryout Session');
+  if(dt!=null) fbSet('tryoutSessions/'+sid+'/date', dt);
+  if(tm!=null) fbSet('tryoutSessions/'+sid+'/time', tm);
+  if(loc!=null) fbSet('tryoutSessions/'+sid+'/location', loc);
+  toast('Session saved');
 }
-// HS recruiting add-to-roster: creates the player record with the MINIMUM fields only.
-// No tier (squad is set later via the coach player modal control), no tier-based court
-// auto-assign, no health or medical fields. This path never writes tier.
-function rcAddToRosterHS(prospectId){
-  const p=recruitProspects.find(x=>x.id===prospectId);
-  if(!p||p.status==='assigned')return;
-  const newId=gi('player');
-  const rec={
-    id:newId,
-    firstName:p.firstName,
-    lastName:p.lastName,
-    classYear:p.classYear||'FR',
-    court:1,
-    jersey:null,
-    active:true,
-    gender:p.gender||'F',
-    csRank:rcEffectiveRating(p),
-    photo:p.photo||null
-  };
-  if(!Array.isArray(D.players))D.players=[];
-  D.players.push(rec);
-  p.status='assigned'; p.playerId=newId;
-  renderRecruiting();
-  if(typeof renderRoster==='function')renderRoster();
-  if(typeof renderPlayers==='function')renderPlayers();
-  toast(p.firstName+' '+p.lastName+' added to roster');
+function tsDeleteSession(sid){
+  if(!window.confirm('Delete this tryout session? Its invitations and attendance will be removed.')) return;
+  fbSet('tryoutSessions/'+sid,null);
+  fbSet('tryoutAttendance/'+sid,null);
+  toast('Session deleted');
 }
-// Undo a placement: remove the promoted roster record and return the prospect to the unplaced list.
-function rcUndoAssign(prospectId){
-  const p=recruitProspects.find(x=>x.id===prospectId);
-  if(!p||p.status!=='assigned')return;
-  if(p.playerId&&Array.isArray(D.players)){
-    const i=D.players.findIndex(pl=>pl.id===p.playerId);
-    if(i>=0)D.players.splice(i,1);
-  }
-  p.team=null; p.status='prospect'; p.playerId=null;
+// Door QR panel open/closed per session (in memory; the QR lib loads when a panel first opens).
+var _tsOpenDoor={};
+function tsToggleDoor(sid){
+  if(_tsOpenDoor[sid]) delete _tsOpenDoor[sid]; else _tsOpenDoor[sid]=true;
   renderRecruiting();
-  if(typeof renderRoster==='function')renderRoster();
-  if(typeof renderPlayers==='function')renderPlayers();
-  toast('Placement undone');
+}
+
+// ---- Invitations (reuse execSendMessage: in-app thread + email) ----------
+function tsSendInvite(pid){
+  var boxes=document.querySelectorAll('input.ts-inv-box[data-pid="'+pid+'"]:checked');
+  if(!boxes.length){ toast('Pick at least one session first'); return; }
+  var now=Date.now();
+  var lines=[];
+  Array.prototype.forEach.call(boxes,function(b){
+    var sid=b.getAttribute('data-sid');
+    var sess=(D.tryoutSessions||{})[sid]; if(!sess) return;
+    fbSet('tryoutSessions/'+sid+'/invited/'+pid, now);
+    var line=sess.name||'Tryout';
+    if(sess.date) line+=' on '+sess.date;
+    if(sess.time) line+=' at '+sess.time;
+    if(sess.location) line+=', '+sess.location;
+    lines.push(line);
+  });
+  if(!lines.length){ toast('No valid sessions'); return; }
+  var body='You are invited to tryouts:\n\n'+lines.map(function(l){ return '- '+l; }).join('\n')+'\n\nLog in to the app for details, and check in at the door when you arrive.';
+  execSendMessage([pid], body);
+}
+function tsRemoveInvite(sid,pid){
+  fbSet('tryoutSessions/'+sid+'/invited/'+pid, null);
+  toast('Invitation removed');
+}
+// ---- Attendance ----------------------------------------------------------
+function tsMarkAttendance(sid,pid,present){
+  fbSet('tryoutAttendance/'+sid+'/'+pid,{present:!!present,at:Date.now(),method:'manual'});
+  toast(present?'Marked present':'Marked absent');
+}
+function tsClearAttendance(sid,pid){
+  fbSet('tryoutAttendance/'+sid+'/'+pid, null);
+  toast('Attendance cleared');
 }
 // Shared avatar: the local-preview photo data URL if present, else an initials circle. Null-safe so
 // existing players (no photo field) render fine. Used by the prospect profile and the coach modal.
@@ -9521,168 +9507,113 @@ function avatarHtml(person, size){
   const initials=((fi+li).toUpperCase()||'?').replace(/[&<>"']/g,'');
   return '<div style="height:'+s+'px;width:'+s+'px;border-radius:50%;background:var(--gold,#CEB888);color:#2d2d2d;display:flex;align-items:center;justify-content:center;font-family:\'Bebas Neue\',sans-serif;font-size:'+Math.round(s*0.4)+'px;letter-spacing:1px;border:2px solid rgba(255,255,255,0.5);flex:none;">'+initials+'</div>';
 }
-// Clickable prospect name target (demo, club only). A placed prospect is a real roster record, so it
-// opens the normal coach player modal; an unplaced prospect opens a lightweight read-only profile built
-// from the signup object (name, class, gender, rating, tier request, photo). In-memory only.
-function rcOpenProspect(prospectId){
-  const p=recruitProspects.find(x=>x.id===prospectId); if(!p)return;
-  if(p.status==='assigned'&&p.playerId&&typeof coachOpenPlayer==='function'&&gP(p.playerId)){
-    coachOpenPlayer(p.playerId); return;
-  }
-  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const GENDER={F:'Female',M:'Male'};
-  const TIER_LABELS={gold:'Gold (entry level)',garnet:'Garnet (experienced)'};
-  const tierReqHtml = p.tierRequest
-    ? `<span class="tier-badge tier-${p.tierRequest}">${esc(TIER_LABELS[p.tierRequest]||p.tierRequest)}</span>`
-    : '<span style="font-size:12px;color:var(--gray);">No tier request</span>';
-  const _eff=rcEffectiveRating(p);
-  const ratingHtml = _eff==null
-    ? '<span style="font-size:13px;color:var(--gray);font-style:italic;">Unrated</span>'
-    : `<span class="cs-rank">${esc(_eff)}</span> <span style="font-size:11px;color:var(--gray);">${p.rating!=null?'from TruVolley':'set by exec'}</span>`;
-  const old=document.getElementById('rc-prospect-overlay'); if(old)old.remove();
-  const ov=document.createElement('div');
-  ov.id='rc-prospect-overlay';
-  ov.className='modal-overlay';
-  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;';
-  ov.onclick=function(e){ if(e.target===ov)ov.remove(); };
-  ov.innerHTML=`<div style="background:var(--white);border-radius:16px;max-width:460px;width:100%;max-height:90vh;overflow-y:auto;">
-    <div style="background:var(--primary);color:#fff;padding:16px 20px;border-radius:16px 16px 0 0;display:flex;justify-content:space-between;align-items:center;">
-      <div style="display:flex;align-items:center;gap:12px;">
-        ${avatarHtml(p,56)}
-        <div>
-          <div style="font-family:'Bebas Neue';font-size:22px;letter-spacing:1px;">${esc(p.firstName+' '+p.lastName)}</div>
-          <div style="margin-top:4px;font-size:12px;color:rgba(255,255,255,0.85);">Prospect, not yet placed</div>
-        </div>
-      </div>
-      <button onclick="document.getElementById('rc-prospect-overlay').remove()" style="background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:16px;">✕</button>
-    </div>
-    <div style="padding:16px 20px;display:flex;flex-direction:column;gap:14px;">
-      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-        <span class="class-badge class-${esc(p.classYear)}">${esc(p.classYear)}</span>
-        <span style="font-size:12px;color:var(--charcoal);">${esc(GENDER[p.gender]||p.gender||'')}</span>
-      </div>
-      <div><div style="font-size:11px;letter-spacing:1px;color:var(--gray);text-transform:uppercase;margin-bottom:4px;">Rating</div>${ratingHtml}</div>
-      ${SC.tiersEnabled?`<div><div style="font-size:11px;letter-spacing:1px;color:var(--gray);text-transform:uppercase;margin-bottom:4px;">Tier requested</div>${tierReqHtml}</div>`:''}
-      <div style="border-top:1px solid var(--gray-lighter);padding-top:12px;font-size:12px;color:var(--gray);line-height:1.5;">Match stats, skills, and rankings appear once this prospect is placed on a team. ${SC.tiersEnabled?'Add them to Gold or Garnet from the Recruiting list.':'Use the Decision control to add them to the roster.'}</div>
-    </div>
-  </div>`;
-  document.body.appendChild(ov);
-}
+// Recruiting tab: sessions with door check-in and manual attendance, and a prospect list built from
+// the real roster (D.players, status 'prospect') showing name, class, tier request, TruVolley,
+// invitation state, and attendance.
 function renderRecruiting(){
-  const pane=document.getElementById('tab-recruiting'); if(!pane)return;
-  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  // Resolve invited prospect ids back to display names for the session summary.
-  const pById={}; recruitProspects.forEach(p=>{pById[p.id]=p;});
-  const nm=id=>{const p=pById[id]; return p?(p.firstName+' '+p.lastName):id;};
-  // Sessions are editable in the demo: the Exec can change name/date/time/court in place.
-  const sessionsHtml=recruitSessions.map((s,si)=>{
-    const names=s.invited.length?s.invited.map(id=>esc(nm(id))).join(', '):'No one invited yet';
-    return `<div style="border:1px solid var(--gray-lighter);border-radius:8px;padding:10px 12px;margin-bottom:8px;">
-      <input class="form-input" id="rc-se-name-${si}" value="${esc(s.name)}" placeholder="Session name" style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:1px;color:var(--charcoal);padding:6px 8px;margin-bottom:6px;width:100%;box-sizing:border-box;">
-      <div class="form-row" style="margin-bottom:6px;">
-        <input class="form-input" id="rc-se-date-${si}" value="${esc(s.date)}" placeholder="Date" style="padding:6px 8px;font-size:12px;">
-        <input class="form-input" id="rc-se-time-${si}" value="${esc(s.time)}" placeholder="Time" style="padding:6px 8px;font-size:12px;">
-      </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
-        <div style="font-size:12px;color:var(--charcoal);"><span style="font-weight:700;">${s.invited.length} invited</span> <span style="color:var(--gray);">${names}</span></div>
-        <button class="btn btn-small btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="rcUpdateSession(${si})">Save</button>
-      </div>
-    </div>`;
-  }).join('');
-  // Rating badge (cs-rank style, consistent with the roster). Shows the effective rating with a subtle
-  // source hint (TruVolley vs Exec-set), or a muted "Unrated" when there is no rating yet.
-  const ratingBadge=p=>{
-    const eff=rcEffectiveRating(p);
-    if(eff==null) return '<span style="font-size:11px;color:var(--gray);font-style:italic;">Unrated</span>';
-    const src=p.rating!=null?'TruVolley':'exec';
-    return `<span class="cs-rank">${eff}</span><span style="font-size:10px;color:var(--gray);margin-left:4px;">${src}</span>`;
+  var pane=document.getElementById('tab-recruiting'); if(!pane) return;
+  var esc=function(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]); }); };
+  var sessions=tsSessionsArr();
+  var prospects=tsProspects();
+  var pName=function(p){ return ((p.firstName||'')+' '+(p.lastName||'')).trim(); };
+  var tierBadge=function(t){ return t==='gold'?'<span class="tier-badge tier-gold">Gold</span>':t==='garnet'?'<span class="tier-badge tier-garnet">Garnet</span>':'<span style="font-size:11px;color:var(--gray);">No request</span>'; };
+  var tvText=function(p){ return (p.truVolley!=null&&p.truVolley!=='')?('TV '+esc(p.truVolley)):'<span style="color:var(--gray);">No TruVolley</span>'; };
+
+  var sessionsHtml=sessions.length?sessions.map(function(sess){
+    var sid=sess.sid;
+    var invitedIds=(sess.invited?Object.keys(sess.invited):[]);
+    var attendRows=invitedIds.length?invitedIds.map(function(pid){
+      var p=gP(pid); var nm=p?(p.firstName+' '+p.lastName):pid;
+      var a=tsAttendance(sid,pid);
+      var stateHtml=a?(a.present
+          ?'<span style="font-size:11px;color:#217F7F;font-weight:700;">Present</span> <span style="font-size:10px;color:var(--gray);">('+(a.method==='qr'?'scanned':'by hand')+')</span>'
+          :'<span style="font-size:11px;color:var(--red);font-weight:700;">Absent</span>')
+        :'<span style="font-size:11px;color:var(--gray);">No mark</span>';
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid var(--gray-lighter);flex-wrap:wrap;">'
+        +'<span style="font-size:12px;color:var(--charcoal);">'+esc(nm)+'</span>'
+        +'<span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">'+stateHtml
+        +'<button class="btn btn-small" style="padding:2px 8px;font-size:10px;background:#217F7F;color:#fff;border:none;" onclick="tsMarkAttendance(\''+esc(sid)+'\',\''+esc(pid)+'\',true)">Present</button>'
+        +'<button class="btn btn-small" style="padding:2px 8px;font-size:10px;background:var(--gray-light);color:var(--charcoal);border:none;" onclick="tsMarkAttendance(\''+esc(sid)+'\',\''+esc(pid)+'\',false)">Absent</button>'
+        +(a?'<button class="btn btn-small" style="padding:2px 8px;font-size:10px;" onclick="tsClearAttendance(\''+esc(sid)+'\',\''+esc(pid)+'\')">Clear</button>':'')
+        +'</span></div>';
+    }).join(''):'<div style="font-size:11px;color:var(--gray);padding:4px 0;">No one invited to this session yet.</div>';
+
+    var doorHtml='';
+    if(_tsOpenDoor[sid]){
+      var url=tryoutAttendUrl(sid);
+      doorHtml='<div style="border-top:1px dashed var(--gray-lighter);margin-top:8px;padding-top:8px;">'
+        +'<div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;">'
+        +'<div id="ts-qr-'+esc(sid)+'" style="min-width:130px;min-height:130px;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid var(--gray-lighter);border-radius:8px;padding:6px;"></div>'
+        +'<div style="flex:1;min-width:180px;">'
+        +'<div style="font-size:11px;color:var(--gray);margin-bottom:4px;">Members open this link (logged in) or scan the code to check in.</div>'
+        +'<a href="'+esc(url)+'" target="_blank" rel="noopener" style="font-size:11px;color:var(--red);word-break:break-all;">'+esc(url)+'</a>'
+        +'</div></div></div>';
+    }
+
+    return '<div style="border:1px solid var(--gray-lighter);border-radius:8px;padding:10px 12px;margin-bottom:8px;">'
+      +'<input class="form-input" id="ts-name-'+esc(sid)+'" value="'+esc(sess.name)+'" placeholder="Session name" style="font-family:\'Bebas Neue\',sans-serif;font-size:15px;letter-spacing:1px;color:var(--charcoal);padding:6px 8px;margin-bottom:6px;width:100%;box-sizing:border-box;">'
+      +'<div class="form-row" style="margin-bottom:6px;">'
+      +'<input class="form-input" id="ts-date-'+esc(sid)+'" value="'+esc(sess.date)+'" placeholder="Date" style="padding:6px 8px;font-size:12px;">'
+      +'<input class="form-input" id="ts-time-'+esc(sid)+'" value="'+esc(sess.time)+'" placeholder="Time" style="padding:6px 8px;font-size:12px;">'
+      +'</div>'
+      +'<input class="form-input" id="ts-loc-'+esc(sid)+'" value="'+esc(sess.location||'')+'" placeholder="Location" style="padding:6px 8px;font-size:12px;width:100%;box-sizing:border-box;margin-bottom:6px;">'
+      +'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px;">'
+      +'<button class="btn btn-small btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="tsUpdateSession(\''+esc(sid)+'\')">Save</button>'
+      +'<button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:#082A4F;color:#fff;border:none;" onclick="tsToggleDoor(\''+esc(sid)+'\')">'+(_tsOpenDoor[sid]?'Hide door code':'Door check-in code')+'</button>'
+      +'<button class="btn btn-small btn-danger" style="padding:3px 10px;font-size:11px;" onclick="tsDeleteSession(\''+esc(sid)+'\')">Delete</button>'
+      +'<span style="font-size:11px;color:var(--gray);margin-left:auto;">'+invitedIds.length+' invited</span>'
+      +'</div>'
+      +doorHtml
+      +'<div style="margin-top:6px;">'+attendRows+'</div>'
+      +'</div>';
+  }).join(''):'<div style="font-size:12px;color:var(--gray);padding:6px 0;">No tryout sessions yet. Add one to start inviting prospects.</div>';
+
+  var checkboxesFor=function(pid){
+    if(!sessions.length) return '<span style="font-size:11px;color:var(--gray);">Add a session to invite.</span>';
+    return sessions.map(function(sess){
+      return '<label style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--charcoal);margin-right:8px;">'
+        +'<input type="checkbox" class="ts-inv-box" data-pid="'+esc(pid)+'" data-sid="'+esc(sess.sid)+'"> '+esc(sess.name)+'</label>';
+    }).join('');
   };
-  // Tier-request badge, colored to match the gold/garnet tier badges used elsewhere.
-  const tierBadge=t=> t==='gold'?'<span class="tier-badge tier-gold">Gold</span>'
-    : t==='garnet'?'<span class="tier-badge tier-garnet">Garnet</span>'
-    : '<span style="font-size:11px;color:var(--gray);">No request</span>';
-  // Clickable prospect name (dotted-underline style, same as the Kings/Queens coach name button).
-  const nameBtn=p=>`<button class="player-name" style="background:none;border:none;padding:0;cursor:pointer;text-decoration:underline dotted;color:var(--red);font-family:inherit;font-size:inherit;font-weight:700;text-align:left;-webkit-tap-highlight-color:transparent;" onclick="rcOpenProspect('${esc(p.id)}')">${esc(p.firstName+' '+p.lastName)}</button>`;
-  const unplaced=recruitProspects.filter(p=>p.status!=='assigned');
-  const assigned=recruitProspects.filter(p=>p.status==='assigned');
-  const prospectsHtml=unplaced.length?unplaced.map(p=>{
-    // Per-prospect session invite: a dropdown of every session plus removable tags for current invites.
-    const sessOpts=recruitSessions.map((s,si)=>`<option value="${si}">${esc(s.name)}</option>`).join('');
-    const inviteTags=recruitSessions.map((s,si)=>({s,si})).filter(x=>x.s.invited.indexOf(p.id)>=0)
-      .map(x=>`<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;background:var(--gray-lighter);color:var(--charcoal);border-radius:10px;padding:2px 8px;">${esc(x.s.name)}<button onclick="recruitToggleInvite('${esc(p.id)}',${x.si})" style="background:none;border:none;color:var(--gray);cursor:pointer;font-size:12px;line-height:1;padding:0;" title="Remove invite">✕</button></span>`).join('');
-    const unrated=rcEffectiveRating(p)==null;
-    const setRatingHtml=unrated?`<div style="display:flex;align-items:center;gap:4px;">
-          <input id="rc-mr-${esc(p.id)}" type="number" min="0" max="3000" step="10" placeholder="Rating" style="width:78px;padding:3px 6px;font-size:11px;border:1px solid var(--gray-lighter);border-radius:6px;">
-          <button class="btn btn-small btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="rcSetManualRating('${esc(p.id)}')">Set rating</button>
-        </div>`:'';
-    return `<div style="padding:8px 0;border-bottom:1px solid var(--gray-lighter);font-size:13px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          ${nameBtn(p)}
-          ${ratingBadge(p)}
-          ${SC.tiersEnabled?tierBadge(p.tierRequest):''}
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-          ${SC.tiersEnabled?`<button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:#CEB888;color:#2d2d2d;border:none;" onclick="rcAddToTeam('${esc(p.id)}','gold')">Add to Gold</button>
-          <button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:#782F40;color:#ffffff;border:none;" onclick="rcAddToTeam('${esc(p.id)}','garnet')">Add to Garnet</button>`:`<span style="font-size:11px;font-weight:700;letter-spacing:0.5px;color:var(--gray);text-transform:uppercase;">Decision</span>
-          <button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:#082A4F;color:#fff;border:none;" onclick="toast('Decision controls coming soon')">Roster</button>
-          <button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:#217F7F;color:#fff;border:none;" onclick="toast('Decision controls coming soon')">Development</button>
-          <button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:var(--gray-light);color:var(--charcoal);border:none;" onclick="toast('Decision controls coming soon')">Decline</button>`}
-        </div>
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px;">
-        <select id="rc-inv-sel-${esc(p.id)}" class="form-select" style="padding:3px 8px;font-size:11px;max-width:200px;">${sessOpts}</select>
-        <button class="btn btn-small btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="rcInviteSelected('${esc(p.id)}')">Invite</button>
-        ${inviteTags?`<span style="display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;">${inviteTags}</span>`:'<span style="font-size:11px;color:var(--gray);">Not invited yet</span>'}
-        ${setRatingHtml}
-      </div>
-    </div>`;
-  }).join(''):(recruitProspects.length?'<div style="font-size:12px;color:var(--gray);padding:6px 0;">No prospects waiting to be placed.</div>':'<div style="font-size:12px;color:var(--gray);padding:6px 0;">No prospects yet. Add a tryout session above to get started.</div>');
-  const assignedHtml=assigned.map(p=>{
-    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--gray-lighter);font-size:13px;flex-wrap:wrap;">
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-        ${nameBtn(p)}
-        ${ratingBadge(p)}
-        <span style="font-size:11px;color:var(--gray);">Added to</span> ${tierBadge(p.team)}
-      </div>
-      <button class="btn btn-small btn-danger" style="padding:3px 10px;font-size:11px;" onclick="rcUndoAssign('${esc(p.id)}')">Undo</button>
-    </div>`;
-  }).join('');
-  // FSU-skinned signup form (club only). Inherits the garnet/gold skin via the app's themed classes
-  // and CSS vars. Local-preview-only photo. In-memory only, nothing saves.
-  const signupHtml = SC.tiersEnabled ? `<div style="border:1px dashed var(--gray-lighter);border-radius:8px;padding:12px;margin-bottom:14px;background:var(--off-white,#faf8f9);">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1px;color:var(--charcoal);margin-bottom:2px;">PLAYER SIGNUP (DEMO)</div>
-      <p style="font-size:11px;color:var(--gray);margin-bottom:10px;">Demo of the player-facing signup. Creates an in-memory prospect below. Nothing saves.</p>
-      <div class="form-row" style="margin-bottom:8px;">
-        <input class="form-input" id="rc-su-first" placeholder="First name" style="padding:8px;font-size:13px;">
-        <input class="form-input" id="rc-su-last" placeholder="Last name" style="padding:8px;font-size:13px;">
-      </div>
-      <div class="form-row" style="margin-bottom:8px;">
-        <select class="form-select" id="rc-su-gender" style="padding:8px;font-size:13px;"><option value="F">Female</option><option value="M">Male</option></select>
-        <select class="form-select" id="rc-su-class" style="padding:8px;font-size:13px;"><option value="FR">FR</option><option value="SO">SO</option><option value="JR">JR</option><option value="SR">SR</option></select>
-      </div>
-      <div class="form-row" style="margin-bottom:8px;">
-        <input class="form-input" id="rc-su-tv" type="number" min="0" max="10" step="0.1" placeholder="TruVolley rating 0-10, e.g. 5.1" style="padding:8px;font-size:13px;">
-        <select class="form-select" id="rc-su-tier" style="padding:8px;font-size:13px;"><option value="">No tier request</option><option value="gold">Request Gold (entry level)</option><option value="garnet">Request Garnet (experienced)</option></select>
-      </div>
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-        <label class="btn btn-small btn-secondary" style="padding:6px 12px;font-size:11px;cursor:pointer;">Add photo<input type="file" accept="image/*" id="rc-su-photo" onchange="rcSignupPhoto(this)" style="display:none;"></label>
-        <div id="rc-su-photo-preview">${_rcSignupPhoto?`<img src="${_rcSignupPhoto}" alt="preview" style="height:64px;width:64px;object-fit:cover;border-radius:8px;border:1px solid var(--gray-lighter);">`:'<span style="font-size:11px;color:var(--gray);">No photo (preview only)</span>'}</div>
-      </div>
-      <button class="btn btn-primary btn-small" style="width:100%;" onclick="rcAddSignup()">Add Signup</button>
-    </div>` : '';
-  pane.innerHTML=`<div class="card"><div class="card-title"><span class="bar"></span> 🎯 Recruiting</div>
-    <p style="font-size:11px;color:var(--gray);margin-bottom:12px;">Demo preview, not yet saving.</p>
-    ${signupHtml}
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1px;color:var(--charcoal);">TRYOUT SESSIONS</div>
-      <button class="btn btn-small btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="rcAddSession()">Add session</button>
-    </div>
-    ${sessionsHtml}
-    <div style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1px;color:var(--charcoal);margin:14px 0 4px;">PROSPECTS</div>
-    ${prospectsHtml}
-    ${assigned.length?`<div style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1px;color:var(--charcoal);margin:14px 0 4px;">PLACED ON A TEAM</div>${assignedHtml}`:''}
-  </div>`;
+  var prospectsHtml=prospects.length?prospects.map(function(p){
+    var pid=p.id;
+    var invites=tsInvitesForProspect(pid);
+    var inviteTags=invites.length?invites.map(function(sess){
+      return '<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;background:var(--gray-lighter);color:var(--charcoal);border-radius:10px;padding:2px 8px;">'+esc(sess.name)
+        +'<button onclick="tsRemoveInvite(\''+esc(sess.sid)+'\',\''+esc(pid)+'\')" style="background:none;border:none;color:var(--gray);cursor:pointer;font-size:12px;line-height:1;padding:0;" title="Remove invite">&times;</button></span>';
+    }).join(' '):'<span style="font-size:11px;color:var(--gray);">Not invited yet</span>';
+    var attended=sessions.filter(function(sess){ var a=tsAttendance(sess.sid,pid); return a&&a.present; });
+    var attendHtml=attended.length
+      ?'<span style="font-size:11px;color:#217F7F;font-weight:700;">Attended:</span> <span style="font-size:11px;color:var(--charcoal);">'+attended.map(function(sess){ return esc(sess.name); }).join(', ')+'</span>'
+      :'<span style="font-size:11px;color:var(--gray);">No attendance yet</span>';
+    return '<div style="padding:8px 0;border-bottom:1px solid var(--gray-lighter);font-size:13px;">'
+      +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+      +'<span style="font-weight:700;color:var(--charcoal);">'+esc(pName(p))+'</span>'
+      +'<span class="class-badge class-'+esc(p.classYear||'')+'">'+esc(p.classYear||'')+'</span>'
+      +(SC.tiersEnabled?tierBadge(p.tierRequest):'')
+      +'<span style="font-size:11px;color:var(--gray);">'+tvText(p)+'</span>'
+      +'</div>'
+      +'<div style="margin-top:5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">'+inviteTags+'</div>'
+      +'<div style="margin-top:5px;">'+attendHtml+'</div>'
+      +'<div style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">'
+      +checkboxesFor(pid)
+      +(sessions.length?'<button class="btn btn-small btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="tsSendInvite(\''+esc(pid)+'\')">Send invite</button>':'')
+      +'</div>'
+      +'</div>';
+  }).join(''):'<div style="font-size:12px;color:var(--gray);padding:6px 0;">No prospects yet. They appear here when they sign up.</div>';
+
+  pane.innerHTML='<div class="card"><div class="card-title"><span class="bar"></span> \u{1F3AF} Recruiting</div>'
+    +'<p style="font-size:11px;color:var(--gray);margin-bottom:12px;">Create tryout sessions, invite prospects, and take attendance at the door.</p>'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
+    +'<div style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;letter-spacing:1px;color:var(--charcoal);">TRYOUT SESSIONS</div>'
+    +'<button class="btn btn-small btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="tsAddSession()">Add session</button>'
+    +'</div>'
+    +sessionsHtml
+    +'<div style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;letter-spacing:1px;color:var(--charcoal);margin:14px 0 4px;">PROSPECTS</div>'
+    +prospectsHtml
+    +'</div>';
+
+  sessions.forEach(function(sess){ if(_tsOpenDoor[sess.sid]) renderQrInto('ts-qr-'+sess.sid, tryoutAttendUrl(sess.sid)); });
 }
 // Accounting: sample dues table with a per-member paid toggle and a live collected summary.
 let acctMembers=[
