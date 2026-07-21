@@ -9463,15 +9463,25 @@ function tsReadSessionForm(sid){
 }
 // Persist a session's four editable fields from a form-values object.
 function tsPersistSessionForm(sid,form){
-  fbSet('tryoutSessions/'+sid+'/name', form.name||'Tryout Session');
+  var nm=form.name||'Tryout Session';
+  fbSet('tryoutSessions/'+sid+'/name', nm);
   fbSet('tryoutSessions/'+sid+'/date', form.date);
   fbSet('tryoutSessions/'+sid+'/time', form.time);
   fbSet('tryoutSessions/'+sid+'/location', form.location);
+  // Mirror into D so an immediate redraw shows the saved values before the Firebase echo returns.
+  // Preserves other fields on the record (invited map, createdAt).
+  if(!D.tryoutSessions)D.tryoutSessions={};
+  var rec=D.tryoutSessions[sid]||{};
+  rec.name=nm; rec.date=form.date; rec.time=form.time; rec.location=form.location;
+  D.tryoutSessions[sid]=rec;
 }
 function tsUpdateSession(sid){
   var sess=(D.tryoutSessions||{})[sid]; if(!sess) return;
   var form=tsReadSessionForm(sid); if(!form) return;
   tsPersistSessionForm(sid,form);
+  // Redraw now so the prospect-list invite checkboxes show the new name immediately, even if a
+  // checkbox is focused (which would otherwise suppress the echo-driven re-render).
+  renderRecruiting();
   toast('Session saved');
 }
 function tsDeleteSession(sid){
@@ -9504,7 +9514,7 @@ function tsSendInvite(pid){
   var boxes=document.querySelectorAll('input.ts-inv-box[data-pid="'+pid+'"]:checked');
   if(!boxes.length){ toast('Pick at least one session first'); return; }
   var now=Date.now();
-  var lines=[];
+  var items=[];
   Array.prototype.forEach.call(boxes,function(b){
     var sid=b.getAttribute('data-sid');
     var sess=(D.tryoutSessions||{})[sid]; if(!sess) return;
@@ -9514,25 +9524,35 @@ function tsSendInvite(pid){
     if(form) tsPersistSessionForm(sid,form);
     var cur=form||sess;
     fbSet('tryoutSessions/'+sid+'/invited/'+pid, now);
-    // One clean sentence per session: time, then date, then location, each omitted if missing so
-    // there is never a stray separator or empty fragment.
+    // Time, then date, then location, each omitted if missing so there is never a stray fragment.
     var t=String(cur.time||'').trim();
     var d=tsReadableDate(cur.date);
     var loc=String(cur.location||'').trim();
-    var s='';
-    if(t) s+=t;
-    if(d) s+=(s?' on ':'')+d;
-    if(loc) s+=(s?' at ':'')+loc;
-    if(!s) s=String(cur.name||sess.name||'a tryout').trim(); // nothing set: fall back to the session name
-    lines.push(s);
+    var details='';
+    if(t) details+=t;
+    if(d) details+=(details?' on ':'')+d;
+    if(loc) details+=(details?' at ':'')+loc;
+    items.push({ name:String(cur.name||'').trim(), details:details });
   });
-  if(!lines.length){ toast('No valid sessions'); return; }
-  // No greeting here: execSendMessage prepends "Hi <name>," for the email, and its own "Log in to
-  // the app to reply." closing. This body is the message content between those.
+  if(!items.length){ toast('No valid sessions'); return; }
+  // Link back to this club app (same base as the door check-in link, without the tryout param).
+  var appUrl=location.origin+location.pathname;
+  // execSendMessage adds no greeting (the worker template greets by name) and appends its own
+  // "Log in to the app to reply." for the email; this body is the content between those.
   var closing='Log in to the app for additional details, and check in with an Exec when you arrive with your phone.';
-  var body=(lines.length===1)
-    ? 'You are invited to tryouts: '+lines[0]+'.\n\n'+closing
-    : 'You are invited to tryouts:\n\n'+lines.map(function(l){ return '- '+l+'.'; }).join('\n')+'\n\n'+closing;
+  var lead;
+  if(items.length===1){
+    var it=items[0];
+    var subj=it.name||'tryouts'; // no session name: fall back to today's wording
+    lead='You are invited to '+subj+(it.details?': '+it.details:'')+'.';
+  } else {
+    // Several sessions: each line carries its own name so a prospect knows which is which.
+    lead='You are invited to tryouts:\n\n'+items.map(function(it){
+      var label=it.name?(it.name+(it.details?': '+it.details:'')):(it.details||'a tryout');
+      return '- '+label+'.';
+    }).join('\n');
+  }
+  var body=lead+'\n\nOpen the app: '+appUrl+'\n\n'+closing;
   execSendMessage([pid], body);
 }
 function tsRemoveInvite(sid,pid){
