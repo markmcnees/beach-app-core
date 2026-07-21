@@ -7171,9 +7171,11 @@ function notifyPlayer(pid,notifType,subject,body){
   try{
     let session=null; try{session=JSON.parse(sessionStorage.getItem('csCoachSession'));}catch(e){}
     if(!session||!session.token||session.dbRoot!==DB_ROOT)return; // a player cannot send these
+    // coachLabel lets the worker sign the email with the school's own word (Exec for the club). It
+    // is absent for high schools, where the worker falls back to today's "your coach" wording.
     fetch(AUTH_WORKER+'/hs/notify-player',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({dbRoot:DB_ROOT,token:session.token,playerId:pid,notifType:notifType,subject:subject,body:body})
+      body:JSON.stringify({dbRoot:DB_ROOT,token:session.token,playerId:pid,notifType:notifType,subject:subject,body:body,coachLabel:SC.coachLabel})
     }).catch(function(e){console.warn('notifyPlayer failed',e);});
   }catch(e){console.warn('notifyPlayer failed',e);}
 }
