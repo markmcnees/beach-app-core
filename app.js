@@ -9436,13 +9436,18 @@ function _maybeRenderRecruiting(){
 // ---- Session create / edit / delete (persisted) --------------------------
 function tsAddSession(){
   var sid=gi('ts');
-  fbSet('tryoutSessions/'+sid,{name:'New Tryout Session',date:'',time:'',location:'',createdAt:Date.now()});
+  fbSet('tryoutSessions/'+sid,{name:'New Tryout Session',date:'',time:'',location:'FSU Main Campus Fields',createdAt:Date.now()});
   toast('Session added');
 }
 function tsUpdateSession(sid){
   var sess=(D.tryoutSessions||{})[sid]; if(!sess) return;
   var g=function(id){ var el=document.getElementById(id); return el?el.value.trim():null; };
-  var nm=g('ts-name-'+sid), dt=g('ts-date-'+sid), tm=g('ts-time-'+sid), loc=g('ts-loc-'+sid);
+  var hv=function(id){ var el=document.getElementById(id); return el?el.value:null; };
+  var nm=g('ts-name-'+sid), dt=g('ts-date-'+sid), loc=g('ts-loc-'+sid);
+  // Time is composed from the hour, minute, and AM/PM selects into the app's "H:MM AM/PM" string.
+  // A blank hour means the exec left the time unset, so an empty string is stored.
+  var th=hv('ts-th-'+sid), tmin=hv('ts-tm-'+sid), tap=hv('ts-tap-'+sid);
+  var tm=(th==null)?null:(th===''?'':(th+':'+(tmin||'00')+' '+(tap||'AM')));
   if(nm!=null) fbSet('tryoutSessions/'+sid+'/name', nm||'Tryout Session');
   if(dt!=null) fbSet('tryoutSessions/'+sid+'/date', dt);
   if(tm!=null) fbSet('tryoutSessions/'+sid+'/time', tm);
@@ -9550,11 +9555,23 @@ function renderRecruiting(){
         +'</div></div></div>';
     }
 
+    // Time-of-day selects, prefilled from the stored "H:MM AM/PM" string (blank when unset or legacy).
+    var _tp=/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(String(sess.time||'').trim());
+    var _th=_tp?String(parseInt(_tp[1],10)):'', _tmin=_tp?_tp[2]:'', _tap=_tp?_tp[3].toUpperCase():'';
+    var hourOpts='<option value="">Hour</option>';
+    for(var _h=1;_h<=12;_h++){ hourOpts+='<option value="'+_h+'"'+(_th===String(_h)?' selected':'')+'>'+_h+'</option>'; }
+    var minOpts=['00','15','30','45'].map(function(mm){ return '<option value="'+mm+'"'+(_tmin===mm?' selected':'')+'>'+mm+'</option>'; }).join('');
+    var apOpts=['AM','PM'].map(function(ap){ return '<option value="'+ap+'"'+(_tap===ap?' selected':'')+'>'+ap+'</option>'; }).join('');
     return '<div style="border:1px solid var(--gray-lighter);border-radius:8px;padding:10px 12px;margin-bottom:8px;">'
       +'<input class="form-input" id="ts-name-'+esc(sid)+'" value="'+esc(sess.name)+'" placeholder="Session name" style="font-family:\'Bebas Neue\',sans-serif;font-size:15px;letter-spacing:1px;color:var(--charcoal);padding:6px 8px;margin-bottom:6px;width:100%;box-sizing:border-box;">'
       +'<div class="form-row" style="margin-bottom:6px;">'
-      +'<input class="form-input" id="ts-date-'+esc(sid)+'" value="'+esc(sess.date)+'" placeholder="Date" style="padding:6px 8px;font-size:12px;">'
-      +'<input class="form-input" id="ts-time-'+esc(sid)+'" value="'+esc(sess.time)+'" placeholder="Time" style="padding:6px 8px;font-size:12px;">'
+      +'<input type="date" class="form-input" id="ts-date-'+esc(sid)+'" value="'+esc(sess.date)+'" style="padding:6px 8px;font-size:12px;">'
+      +'<div style="display:flex;gap:4px;align-items:center;flex:1;min-width:0;">'
+      +'<select class="form-select" id="ts-th-'+esc(sid)+'" style="padding:6px 4px;font-size:12px;flex:1;min-width:0;">'+hourOpts+'</select>'
+      +'<span style="font-size:12px;color:var(--gray);">:</span>'
+      +'<select class="form-select" id="ts-tm-'+esc(sid)+'" style="padding:6px 4px;font-size:12px;flex:1;min-width:0;">'+minOpts+'</select>'
+      +'<select class="form-select" id="ts-tap-'+esc(sid)+'" style="padding:6px 4px;font-size:12px;flex:1;min-width:0;">'+apOpts+'</select>'
+      +'</div>'
       +'</div>'
       +'<input class="form-input" id="ts-loc-'+esc(sid)+'" value="'+esc(sess.location||'')+'" placeholder="Location" style="padding:6px 8px;font-size:12px;width:100%;box-sizing:border-box;margin-bottom:6px;">'
       +'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px;">'
