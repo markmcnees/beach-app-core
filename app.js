@@ -8721,8 +8721,8 @@ function execSendMessage(memberIds, text){
     if(!D.threads)D.threads={}; if(!D.threads[mid])D.threads[mid]={};
     if(!D.threads[mid].messages)D.threads[mid].messages={};
     D.threads[mid].messages[msgId]=msg; D.threads[mid].updatedAt=now; D.threads[mid].lastReadExec=now;
-    const p=gP(mid); const nm=p?p.firstName:'there';
-    notifyPlayer(mid,'cnote','New message from '+(SC.schoolName||'your club'),'Hi '+nm+',\n\n'+text+'\n\nLog in to the app to reply.');
+    // The worker template already greets the member by name, so send the body without a greeting.
+    notifyPlayer(mid,'cnote','New message from '+(SC.schoolName||'your club'),text+'\n\nLog in to the app to reply.');
   });
   toast(memberIds.length>1?('Message sent to '+memberIds.length+' members'):'Message sent');
 }
@@ -9441,19 +9441,37 @@ function tsAddSession(){
   fbSet('tryoutSessions/'+sid,{name:'New Tryout Session',date:'',time:'',location:'FSU Main Campus Fields',createdAt:Date.now()});
   toast('Session added');
 }
+// Read a session's live form values (what the exec currently sees on screen). Time is composed from
+// the hour, minute, and AM/PM selects into the app's "H:MM AM/PM" string, matching how the record
+// stores it; a blank hour means the time is unset. Returns null when the session is not rendered.
+function tsReadSessionForm(sid){
+  var nameEl=document.getElementById('ts-name-'+sid);
+  var dateEl=document.getElementById('ts-date-'+sid);
+  var locEl=document.getElementById('ts-loc-'+sid);
+  var thEl=document.getElementById('ts-th-'+sid);
+  var tmEl=document.getElementById('ts-tm-'+sid);
+  var tapEl=document.getElementById('ts-tap-'+sid);
+  if(!nameEl&&!dateEl&&!locEl&&!thEl) return null;
+  var th=thEl?thEl.value:'';
+  var time=(th==='')?'':(th+':'+((tmEl&&tmEl.value)||'00')+' '+((tapEl&&tapEl.value)||'AM'));
+  return {
+    name: nameEl?nameEl.value.trim():'',
+    date: dateEl?dateEl.value.trim():'',
+    time: time,
+    location: locEl?locEl.value.trim():''
+  };
+}
+// Persist a session's four editable fields from a form-values object.
+function tsPersistSessionForm(sid,form){
+  fbSet('tryoutSessions/'+sid+'/name', form.name||'Tryout Session');
+  fbSet('tryoutSessions/'+sid+'/date', form.date);
+  fbSet('tryoutSessions/'+sid+'/time', form.time);
+  fbSet('tryoutSessions/'+sid+'/location', form.location);
+}
 function tsUpdateSession(sid){
   var sess=(D.tryoutSessions||{})[sid]; if(!sess) return;
-  var g=function(id){ var el=document.getElementById(id); return el?el.value.trim():null; };
-  var hv=function(id){ var el=document.getElementById(id); return el?el.value:null; };
-  var nm=g('ts-name-'+sid), dt=g('ts-date-'+sid), loc=g('ts-loc-'+sid);
-  // Time is composed from the hour, minute, and AM/PM selects into the app's "H:MM AM/PM" string.
-  // A blank hour means the exec left the time unset, so an empty string is stored.
-  var th=hv('ts-th-'+sid), tmin=hv('ts-tm-'+sid), tap=hv('ts-tap-'+sid);
-  var tm=(th==null)?null:(th===''?'':(th+':'+(tmin||'00')+' '+(tap||'AM')));
-  if(nm!=null) fbSet('tryoutSessions/'+sid+'/name', nm||'Tryout Session');
-  if(dt!=null) fbSet('tryoutSessions/'+sid+'/date', dt);
-  if(tm!=null) fbSet('tryoutSessions/'+sid+'/time', tm);
-  if(loc!=null) fbSet('tryoutSessions/'+sid+'/location', loc);
+  var form=tsReadSessionForm(sid); if(!form) return;
+  tsPersistSessionForm(sid,form);
   toast('Session saved');
 }
 function tsDeleteSession(sid){
@@ -9490,17 +9508,22 @@ function tsSendInvite(pid){
   Array.prototype.forEach.call(boxes,function(b){
     var sid=b.getAttribute('data-sid');
     var sess=(D.tryoutSessions||{})[sid]; if(!sess) return;
+    // Use the session's CURRENT form values, not just the saved record, so an edit the exec made
+    // without clicking Save is still sent. Persist them here so the record matches what is sent.
+    var form=tsReadSessionForm(sid);
+    if(form) tsPersistSessionForm(sid,form);
+    var cur=form||sess;
     fbSet('tryoutSessions/'+sid+'/invited/'+pid, now);
     // One clean sentence per session: time, then date, then location, each omitted if missing so
     // there is never a stray separator or empty fragment.
-    var t=String(sess.time||'').trim();
-    var d=tsReadableDate(sess.date);
-    var loc=String(sess.location||'').trim();
+    var t=String(cur.time||'').trim();
+    var d=tsReadableDate(cur.date);
+    var loc=String(cur.location||'').trim();
     var s='';
     if(t) s+=t;
     if(d) s+=(s?' on ':'')+d;
     if(loc) s+=(s?' at ':'')+loc;
-    if(!s) s=String(sess.name||'a tryout').trim(); // nothing set: fall back to the session name
+    if(!s) s=String(cur.name||sess.name||'a tryout').trim(); // nothing set: fall back to the session name
     lines.push(s);
   });
   if(!lines.length){ toast('No valid sessions'); return; }
