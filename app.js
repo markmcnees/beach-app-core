@@ -9412,7 +9412,11 @@ function tsSessionsArr(){
     .sort(function(a,b){ return (a.createdAt||0)-(b.createdAt||0); });
 }
 function tsProspects(){
-  return (Array.isArray(D.players)?D.players:[]).filter(function(p){ return p&&p.status==='prospect'; });
+  // Active prospects only. Inactive ones (applied, never came) are held in tsInactiveProspects.
+  return (Array.isArray(D.players)?D.players:[]).filter(function(p){ return p&&p.status==='prospect'&&p.active!==false; });
+}
+function tsInactiveProspects(){
+  return (Array.isArray(D.players)?D.players:[]).filter(function(p){ return p&&p.status==='prospect'&&p.active===false; });
 }
 function tsInvitedTo(sid,pid){
   var sess=(D.tryoutSessions||{})[sid];
@@ -9568,6 +9572,32 @@ function tsClearAttendance(sid,pid){
   fbSet('tryoutAttendance/'+sid+'/'+pid, null);
   toast('Attendance cleared');
 }
+// ---- Placement (prospect to squad) ---------------------------------------
+var TS_SQUAD_LABELS={gold:'Gold',garnet:'Garnet'};
+// Place a prospect on a squad. Clearing status first, then reusing coachSetTier, means one whole-
+// object write sets the tier and drops the prospect status so the record is now a regular member;
+// coachSetTier also clears any pending tier request and syncs the roster. Every other field (rating,
+// TruVolley, attendance, createdAt) is preserved, so nothing about the person or their history is
+// lost. The member is told which squad they are on via the existing exec messaging path.
+function rcPlaceProspect(pid, tier){
+  var p=gP(pid); if(!p) return;
+  if(tier!=='gold'&&tier!=='garnet') return;
+  delete p.status;              // becomes a regular roster record (no status field, like a seed player)
+  coachSetTier(pid, tier);      // whole-object write (now without status) + tier-request clear + roster sync
+  var squad=TS_SQUAD_LABELS[tier]||tier;
+  execSendMessage([pid], 'You made the '+squad+' squad. Welcome to '+(SC.schoolName||'the club')+', we are glad to have you here. Log in to the app any time to see your squad and what comes next.');
+  renderRecruiting();
+  toast((p.firstName||'Prospect')+' placed on '+squad);
+}
+// Mark a prospect inactive (applied but never came) or restore them. Uses the existing active field
+// and touches nothing else, so the record and its history stay intact and an exec can restore it.
+function rcSetProspectActive(pid, active){
+  var p=gP(pid); if(!p) return;
+  p.active=active;
+  fbSet('players/'+pid,{...p,active:active});
+  renderRecruiting();
+  toast(active?'Prospect restored':'Prospect marked inactive');
+}
 // Shared avatar: the local-preview photo data URL if present, else an initials circle. Null-safe so
 // existing players (no photo field) render fine. Used by the prospect profile and the coach modal.
 function avatarHtml(person, size){
@@ -9675,7 +9705,7 @@ function renderRecruiting(){
       +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
       +'<span style="font-weight:700;color:var(--charcoal);">'+esc(pName(p))+'</span>'
       +'<span class="class-badge class-'+esc(p.classYear||'')+'">'+esc(p.classYear||'')+'</span>'
-      +(SC.tiersEnabled?tierBadge(p.tierRequest):'')
+      +(SC.tiersEnabled?(p.tierRequest?'<span style="font-size:10px;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;">Requested</span> '+tierBadge(p.tierRequest):tierBadge(null)):'')
       +'<span style="font-size:11px;color:var(--gray);">'+tvText(p)+'</span>'
       +'</div>'
       +'<div style="margin-top:5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">'+inviteTags+'</div>'
@@ -9684,9 +9714,30 @@ function renderRecruiting(){
       +checkboxesFor(pid)
       +(sessions.length?'<button class="btn btn-small btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="tsSendInvite(\''+esc(pid)+'\')">Send invite</button>':'')
       +'</div>'
+      // Placement and inactive controls. The prospect's requested tier is labeled above and marked
+      // on the matching Place button, so an exec can honor or override it deliberately.
+      +'<div style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;border-top:1px dashed var(--gray-lighter);padding-top:6px;">'
+      +(SC.tiersEnabled?(
+          '<span style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;">Place</span>'
+         +'<button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:#CEB888;color:#2d2d2d;border:none;'+(p.tierRequest==='gold'?'box-shadow:0 0 0 2px var(--charcoal);':'')+'" onclick="rcPlaceProspect(\''+esc(pid)+'\',\'gold\')">Gold'+(p.tierRequest==='gold'?' (requested)':'')+'</button>'
+         +'<button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:#782F40;color:#fff;border:none;'+(p.tierRequest==='garnet'?'box-shadow:0 0 0 2px var(--charcoal);':'')+'" onclick="rcPlaceProspect(\''+esc(pid)+'\',\'garnet\')">Garnet'+(p.tierRequest==='garnet'?' (requested)':'')+'</button>'
+        ):'')
+      +'<button class="btn btn-small btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="rcSetProspectActive(\''+esc(pid)+'\',false)">Mark inactive</button>'
+      +'</div>'
       +'</div>';
   }).join(''):'<div style="font-size:12px;color:var(--gray);padding:6px 0;">No prospects yet. They appear here when they sign up.</div>';
 
+  // Inactive prospects: applied but marked inactive. Held out of the main list, restorable, not deleted.
+  var inactive=tsInactiveProspects();
+  var inactiveHtml=inactive.map(function(p){
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--gray-lighter);font-size:13px;flex-wrap:wrap;">'
+      +'<span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+      +'<span style="color:var(--gray);text-decoration:line-through;">'+esc(pName(p))+'</span>'
+      +'<span class="class-badge class-'+esc(p.classYear||'')+'">'+esc(p.classYear||'')+'</span>'
+      +'</span>'
+      +'<button class="btn btn-small btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="rcSetProspectActive(\''+esc(p.id)+'\',true)">Restore</button>'
+      +'</div>';
+  }).join('');
   pane.innerHTML='<div class="card"><div class="card-title"><span class="bar"></span> \u{1F3AF} Recruiting</div>'
     +'<p style="font-size:11px;color:var(--gray);margin-bottom:12px;">Create tryout sessions, invite prospects, and take attendance at the door.</p>'
     +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
@@ -9696,6 +9747,7 @@ function renderRecruiting(){
     +sessionsHtml
     +'<div style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;letter-spacing:1px;color:var(--charcoal);margin:14px 0 4px;">PROSPECTS</div>'
     +prospectsHtml
+    +(inactive.length?'<div style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;letter-spacing:1px;color:var(--gray);margin:14px 0 4px;">INACTIVE PROSPECTS</div>'+inactiveHtml:'')
     +'</div>';
 
   sessions.forEach(function(sess){ if(_tsOpenDoor[sess.sid]) renderQrInto('ts-qr-'+sess.sid, tryoutAttendUrl(sess.sid)); });
