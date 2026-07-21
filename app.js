@@ -2328,7 +2328,7 @@ const DEF_M=[
   {id:'m09',date:'2026-02-06',court:2,team1:['p15','p04'],team2:['p05','p06'],score1:21,score2:15}
 ];
 
-let D={players:[],matches:[],planned:[],gamedays:[],scrimmages:[],schedule:[],standings:{},goals:{},assignments:{},duals:[],opponents:{},liveScoring:{},quizScores:{},tierRequests:{},broadcasts:{},threads:{},tryoutSessions:{},tryoutAttendance:{}};
+let D={players:[],matches:[],planned:[],gamedays:[],scrimmages:[],schedule:[],standings:{},goals:{},assignments:{},duals:[],opponents:{},liveScoring:{},quizScores:{},tierRequests:{},broadcasts:{},threads:{},tryoutSessions:{},tryoutAttendance:{},dues:{}};
 // Active competitive season. Config leaf at DB_ROOT/config/currentSeasonId; defaults to the current year, overwritten by the init read below if a stored value exists. Result creates are stamped with this via fbSetResult.
 let _currentSeasonId=(new Date()).getFullYear().toString();
 let profilesData={}; // from leon_queens node for AI context
@@ -2471,6 +2471,14 @@ function listenData(){if(!db)return;
   db.ref(DB_ROOT+'/tryoutAttendance').on('value',s=>{
     D.tryoutAttendance=s.val()||{};
     _maybeRenderRecruiting();
+  });
+  // Club dues (exec only). Re-render Accounting live, but never while the exec is typing the amount.
+  db.ref(DB_ROOT+'/dues').on('value',s=>{
+    D.dues=s.val()||{};
+    if(currentRole!=='coach')return;
+    const pane=document.getElementById('tab-accounting'); if(!pane)return;
+    const ae=document.activeElement; if(ae&&ae.id==='acct-amount')return;
+    if(typeof renderAccounting==='function')renderAccounting();
   });
   db.ref(SC.dbRoots.profiles).on('value',s=>{
     profilesData=s.val()||{};
@@ -9764,35 +9772,87 @@ function renderRecruiting(){
 
   sessions.forEach(function(sess){ if(_tsOpenDoor[sess.sid]) renderQrInto('ts-qr-'+sess.sid, tryoutAttendUrl(sess.sid)); });
 }
-// Accounting: sample dues table with a per-member paid toggle and a live collected summary.
-let acctMembers=[
-  {name:'Suzie Spiker',dues:75,paid:true},
-  {name:'Debby Digger',dues:75,paid:true},
-  {name:'Bonnie Blocker',dues:75,paid:false},
-  {name:'Sammy Setter',dues:75,paid:true},
-  {name:'Penny Passer',dues:75,paid:false},
-  {name:'Sandy Server',dues:75,paid:true},
-  {name:'Riley Receiver',dues:75,paid:false},
-  {name:'Olivia Option',dues:75,paid:true}
-];
-function acctTogglePaid(i){ if(acctMembers[i]){ acctMembers[i].paid=!acctMembers[i].paid; renderAccounting(); } }
+// Accounting (Grass Club): real dues tracking. One dues amount for the club, a per-member paid toggle
+// (records who and when), a paid/collected summary, and a reminder that emails unpaid members. All
+// persisted under DB_ROOT/dues, a sub-key of the *_matches node the live rule already governs (no new
+// node, no rules change). Exec only: the player portal never renders any of this.
+//   dues/amount              = number (per-member dues)
+//   dues/members/{memberId}  = { paid:true, at:ms }   (absent means not paid)
+//   dues/lastReminderAt      = ms (when a reminder was last sent)
+function acctMembersList(){
+  // Real club members: everyone on the roster who is not a prospect. Dues apply to placed members.
+  return (Array.isArray(D.players)?D.players:[]).filter(function(p){ return p&&p.status!=='prospect'; })
+    .slice().sort(function(a,b){ return _cmpLast(a,b); });
+}
+function acctAmount(){ var a=(D.dues||{}).amount; return (typeof a==='number'&&isFinite(a))?a:0; }
+function acctIsPaid(pid){ var m=((D.dues||{}).members||{})[pid]; return !!(m&&m.paid); }
+function acctSetAmount(){
+  var el=document.getElementById('acct-amount'); if(!el) return;
+  var v=parseFloat(el.value);
+  if(!isFinite(v)||v<0){ toast('Enter a dues amount'); return; }
+  var amt=Math.round(v*100)/100;
+  fbSet('dues/amount', amt);
+  if(!D.dues)D.dues={}; D.dues.amount=amt;
+  renderAccounting();
+  toast('Dues amount saved');
+}
+function acctTogglePaid(pid){
+  if(!D.dues)D.dues={}; if(!D.dues.members)D.dues.members={};
+  if(acctIsPaid(pid)){
+    fbSet('dues/members/'+pid, null);
+    delete D.dues.members[pid];
+  } else {
+    var rec={paid:true, at:Date.now()};
+    fbSet('dues/members/'+pid, rec);
+    D.dues.members[pid]=rec;
+  }
+  renderAccounting();
+}
+function acctSendReminder(){
+  var amount=acctAmount();
+  if(!(amount>0)){ toast('Set a dues amount first.'); return; }
+  var unpaid=acctMembersList().filter(function(p){ return !acctIsPaid(p.id); });
+  if(!unpaid.length){ toast('Everyone has paid. No reminder to send.'); return; }
+  var names=unpaid.map(function(p){ return ((p.firstName||'')+' '+(p.lastName||'')).trim(); });
+  var many=(unpaid.length!==1);
+  if(!window.confirm('Send a dues reminder to '+unpaid.length+' member'+(many?'s':'')+' who '+(many?'have':'has')+' not paid?\n\n'+names.join('\n'))) return;
+  var text='Just a friendly reminder that club dues of $'+amount+' are due. If you have already paid, thank you and please ignore this note. If not, please square up with an exec when you can, and reach out with any questions.';
+  execSendMessage(unpaid.map(function(p){ return p.id; }), text);
+  var now=Date.now();
+  fbSet('dues/lastReminderAt', now);
+  if(!D.dues)D.dues={}; D.dues.lastReminderAt=now;
+  renderAccounting();
+}
 function renderAccounting(){
   const pane=document.getElementById('tab-accounting'); if(!pane)return;
   const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const total=acctMembers.length;
-  const paidCount=acctMembers.filter(m=>m.paid).length;
-  const collected=acctMembers.filter(m=>m.paid).reduce((s,m)=>s+m.dues,0);
-  const owed=acctMembers.reduce((s,m)=>s+m.dues,0);
-  const rows=acctMembers.map((m,i)=>`<tr>
-      <td style="padding:6px 4px;border-bottom:1px solid var(--gray-lighter);font-size:13px;color:var(--charcoal);">${esc(m.name)}</td>
-      <td style="padding:6px 4px;border-bottom:1px solid var(--gray-lighter);font-size:13px;color:var(--charcoal);text-align:right;">$${m.dues}</td>
-      <td style="padding:6px 4px;border-bottom:1px solid var(--gray-lighter);text-align:right;">
-        <button class="btn btn-small ${m.paid?'btn-secondary':'btn-danger'}" style="padding:3px 10px;font-size:11px;" onclick="acctTogglePaid(${i})">${m.paid?'Paid':'Not paid'}</button>
+  const members=acctMembersList();
+  const amount=acctAmount();
+  const total=members.length;
+  const paidCount=members.filter(m=>acctIsPaid(m.id)).length;
+  const collected=paidCount*amount;
+  const owed=total*amount;
+  const lastRem=(D.dues||{}).lastReminderAt;
+  const lastRemText=lastRem?('Last reminder sent '+new Date(lastRem).toLocaleString()):'No reminder sent yet.';
+  const rows=members.length?members.map(m=>{
+    const paid=acctIsPaid(m.id);
+    const when=paid?(((D.dues||{}).members||{})[m.id]||{}).at:null;
+    return `<tr>
+      <td style="padding:6px 4px;border-bottom:1px solid var(--gray-lighter);font-size:13px;color:var(--charcoal);">${esc(((m.firstName||'')+' '+(m.lastName||'')).trim())}</td>
+      <td style="padding:6px 4px;border-bottom:1px solid var(--gray-lighter);font-size:13px;color:var(--charcoal);text-align:right;">$${amount}</td>
+      <td style="padding:6px 4px;border-bottom:1px solid var(--gray-lighter);text-align:right;white-space:nowrap;">
+        ${paid&&when?`<span style="font-size:10px;color:var(--gray);margin-right:6px;">${esc(new Date(when).toLocaleDateString())}</span>`:''}
+        <button class="btn btn-small ${paid?'btn-secondary':'btn-danger'}" style="padding:3px 10px;font-size:11px;" onclick="acctTogglePaid('${esc(m.id)}')">${paid?'Paid':'Not paid'}</button>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join(''):`<tr><td colspan="3" style="padding:10px 4px;font-size:12px;color:var(--gray);">No club members yet. Place prospects onto a squad and they appear here.</td></tr>`;
   pane.innerHTML=`<div class="card"><div class="card-title"><span class="bar"></span> 💵 Accounting</div>
-    <p style="font-size:11px;color:var(--gray);margin-bottom:10px;">Demo preview, not yet saving.</p>
-    <div style="font-size:13px;color:var(--charcoal);margin-bottom:10px;"><span style="font-weight:700;">${paidCount} of ${total} paid</span>, $${collected} collected of $${owed}</div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+      <span style="font-size:12px;color:var(--charcoal);">Dues per member $</span>
+      <input type="number" id="acct-amount" min="0" step="1" value="${amount||''}" placeholder="0" style="width:90px;padding:6px 8px;font-size:13px;border:1px solid var(--gray-lighter);border-radius:6px;">
+      <button class="btn btn-small btn-secondary" style="padding:4px 12px;font-size:11px;" onclick="acctSetAmount()">Save amount</button>
+    </div>
+    <div style="font-size:13px;color:var(--charcoal);margin-bottom:8px;"><span style="font-weight:700;">${paidCount} of ${total} paid</span>, $${collected} collected of $${owed}</div>
     <table style="width:100%;border-collapse:collapse;">
       <thead><tr>
         <th style="text-align:left;font-size:11px;letter-spacing:1px;color:var(--gray);padding:4px;">MEMBER</th>
@@ -9801,6 +9861,11 @@ function renderAccounting(){
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;">
+      <button class="btn btn-small" style="padding:5px 14px;font-size:12px;background:#082A4F;color:#fff;border:none;" onclick="acctSendReminder()">Email unpaid members a reminder</button>
+      <span style="font-size:11px;color:var(--gray);">${esc(lastRemText)}</span>
+    </div>
+    <p style="font-size:10px;color:var(--gray);margin-top:8px;">Dues status is exec only and is not shown to members. Not linked to any payment system.</p>
   </div>`;
 }
 // Travel: sample away tournament with line items and a per-player paid-up toggle.
