@@ -2329,7 +2329,7 @@ const DEF_M=[
   {id:'m09',date:'2026-02-06',court:2,team1:['p15','p04'],team2:['p05','p06'],score1:21,score2:15}
 ];
 
-let D={players:[],matches:[],planned:[],gamedays:[],scrimmages:[],schedule:[],standings:{},goals:{},assignments:{},duals:[],opponents:{},liveScoring:{},quizScores:{},tierRequests:{},broadcasts:{},threads:{},tryoutSessions:{},tryoutAttendance:{},dues:{},practiceSchedule:{}};
+let D={players:[],matches:[],planned:[],gamedays:[],scrimmages:[],schedule:[],standings:{},goals:{},assignments:{},duals:[],opponents:{},liveScoring:{},quizScores:{},tierRequests:{},broadcasts:{},threads:{},tryoutSessions:{},tryoutAttendance:{},dues:{},practiceSchedule:{},travel:{}};
 // Active competitive season. Config leaf at DB_ROOT/config/currentSeasonId; defaults to the current year, overwritten by the init read below if a stored value exists. Result creates are stamped with this via fbSetResult.
 let _currentSeasonId=(new Date()).getFullYear().toString();
 let profilesData={}; // from leon_queens node for AI context
@@ -2491,6 +2491,15 @@ function listenData(){if(!db)return;
       const ae=document.activeElement; if(ae&&ae.id&&ae.id.indexOf('ps-')===0)return;
       if(typeof renderTeamAnalysis==='function')renderTeamAnalysis();
     }
+  });
+  // Travel tournaments (club). Loaded for members too (member side, pass 2). Re-render the exec
+  // Travel tab live, but never while an exec is mid-edit (any tv-* field focused).
+  db.ref(DB_ROOT+'/travel').on('value',s=>{
+    D.travel=s.val()||{};
+    if(currentRole!=='coach')return;
+    const pane=document.getElementById('tab-travel'); if(!pane)return;
+    const ae=document.activeElement; if(ae&&ae.id&&ae.id.indexOf('tv-')===0)return;
+    if(typeof renderTravel==='function')renderTravel();
   });
   db.ref(SC.dbRoots.profiles).on('value',s=>{
     profilesData=s.val()||{};
@@ -9882,43 +9891,236 @@ function renderAccounting(){
   </div>`;
 }
 // Travel: sample away tournament with line items and a per-player paid-up toggle.
-let travelTrips=[
-  {event:'Gulf Shores Open', dates:'Oct 18-19', location:'Gulf Shores, AL',
-   items:[{label:'Registration',amount:40},{label:'Lodging',amount:60},{label:'Travel',amount:25}],
-   roster:[
-     {name:'Suzie Spiker',paidUp:true},
-     {name:'Debby Digger',paidUp:true},
-     {name:'Bonnie Blocker',paidUp:false},
-     {name:'Sammy Setter',paidUp:false},
-     {name:'Penny Passer',paidUp:true}
-   ]}
-];
-function travelTogglePaid(ti,ri){ const t=travelTrips[ti]; if(t&&t.roster[ri]){ t.roster[ri].paidUp=!t.roster[ri].paidUp; renderTravel(); } }
+// ============================================================
+// Travel tournaments (Grass Club). Two-sided: execs create/manage tournaments and see the full
+// picture; members join, form teams, offer/claim rides, request lodging, and pay per event (member
+// side is pass 2). All persisted under DB_ROOT, sub-keys of the *_matches node the live rule already
+// governs (no new node, no rules change). This pass builds the exec side and the record model.
+//
+//   travel/{eventId} = { name, location, startDate, endDate, regUrl, deadline,
+//       costs:{lineId:{label,amount}}, formats:{twos,threes,fours}, lodgingOffered,
+//       scope:'gold'|'garnet'|'both', announcedAt, createdAt }
+//   travel/{eventId}/participants/{memberId} = { status:'in'|'declined', freeAgent, teamId,
+//       canDrive, seats, rideWith, lodging, at }              [member side, pass 2]
+//   travel/{eventId}/teams/{teamId} = { format, createdBy, members:{mid:'accepted'|'pending'}, createdAt }  [pass 2]
+//   travel/{eventId}/paid/{memberId} = { paid:true, at }      [exec-set, per event, separate from dues]
+//   standing/{memberId} = { good:false, note, at }            [exec-set; absent = good standing]  [pass 2]
+// ============================================================
+var TRAVEL_FORMAT_SIZE={twos:2,threes:3,fours:4};
+var TRAVEL_FORMAT_LABEL={twos:'Twos',threes:'Threes',fours:'Fours'};
+function travelEvents(){
+  var o=D.travel||{};
+  return Object.keys(o).map(function(id){ return Object.assign({id:id},o[id]); })
+    .sort(function(a,b){ return (String(a.startDate||'')).localeCompare(String(b.startDate||''))||((a.createdAt||0)-(b.createdAt||0)); });
+}
+function travelCostTotal(ev){
+  var c=(ev&&ev.costs)||{};
+  return Object.keys(c).reduce(function(s,k){ var a=parseFloat(c[k]&&c[k].amount); return s+(isFinite(a)?a:0); },0);
+}
+function travelParticipants(id){ var ev=(D.travel||{})[id]; return (ev&&ev.participants)||{}; }
+function travelTeams(id){ var ev=(D.travel||{})[id]; return (ev&&ev.teams)||{}; }
+function travelIsPaid(id,mid){ var ev=(D.travel||{})[id]; var p=ev&&ev.paid&&ev.paid[mid]; return !!(p&&p.paid); }
+function travelTeamComplete(team){
+  if(!team) return false;
+  var size=TRAVEL_FORMAT_SIZE[team.format]||0;
+  var mem=team.members||{}; var keys=Object.keys(mem);
+  return size>0 && keys.length===size && keys.every(function(k){ return mem[k]==='accepted'; });
+}
+// Members an event is announced to, by squad scope (same tier scoping as the chat channels).
+function travelScopeMembers(scope){
+  var tiers = scope==='gold'?['gold']:scope==='garnet'?['garnet']:['gold','garnet'];
+  return (Array.isArray(D.players)?D.players:[]).filter(function(p){ return p&&p.status!=='prospect'&&tiers.indexOf(p.tier)>=0; });
+}
+// ---- Exec create / edit / delete -----------------------------------------
+function travelAddEvent(){
+  var id=gi('tv');
+  var rec={ name:'New Tournament', location:'', startDate:'', endDate:'', regUrl:'', deadline:'',
+    costs:{}, formats:{twos:false,threes:false,fours:false}, lodgingOffered:false,
+    scope:'both', announcedAt:null, createdAt:Date.now() };
+  fbSet('travel/'+id, rec);
+  if(!D.travel)D.travel={}; D.travel[id]=rec;
+  renderTravel();
+  toast('Tournament added');
+}
+function travelSaveDetails(id){
+  var ev=(D.travel||{})[id]; if(!ev) return;
+  var g=function(f){ var el=document.getElementById('tv-'+f+'-'+id); return el?el.value.trim():''; };
+  var ck=function(f){ var el=document.getElementById('tv-'+f+'-'+id); return !!(el&&el.checked); };
+  var scEl=document.getElementById('tv-scope-'+id);
+  var updates={ name:g('name')||'Tournament', location:g('location'), startDate:g('start'), endDate:g('end'),
+    regUrl:g('url'), deadline:g('deadline'),
+    formats:{ twos:ck('fmt-twos'), threes:ck('fmt-threes'), fours:ck('fmt-fours') },
+    lodgingOffered:ck('lodging'), scope:(scEl?scEl.value:'both')||'both' };
+  Object.keys(updates).forEach(function(k){ fbSet('travel/'+id+'/'+k, updates[k]); ev[k]=updates[k]; });
+  renderTravel();
+  toast('Tournament saved');
+}
+function travelDeleteEvent(id){
+  if(!window.confirm('Delete this tournament? All signups, teams, rides, and paid status for it will be removed.')) return;
+  fbSet('travel/'+id, null);
+  if(D.travel) delete D.travel[id];
+  renderTravel();
+  toast('Tournament deleted');
+}
+// ---- Itemized cost lines --------------------------------------------------
+function travelAddCost(id){
+  var lid=gi('tc'); var rec={label:'New line', amount:0};
+  fbSet('travel/'+id+'/costs/'+lid, rec);
+  var ev=(D.travel||{})[id]; if(ev){ if(!ev.costs)ev.costs={}; ev.costs[lid]=rec; }
+  renderTravel();
+}
+function travelSaveCost(id, lid){
+  var le=document.getElementById('tv-cost-label-'+id+'-'+lid);
+  var ae=document.getElementById('tv-cost-amt-'+id+'-'+lid);
+  var amt=ae?parseFloat(ae.value):0; if(!isFinite(amt))amt=0;
+  var rec={ label:(le?le.value.trim():'')||'Line', amount:Math.round(amt*100)/100 };
+  fbSet('travel/'+id+'/costs/'+lid, rec);
+  var ev=(D.travel||{})[id]; if(ev){ if(!ev.costs)ev.costs={}; ev.costs[lid]=rec; }
+  renderTravel();
+}
+function travelRemoveCost(id, lid){
+  fbSet('travel/'+id+'/costs/'+lid, null);
+  var ev=(D.travel||{})[id]; if(ev&&ev.costs) delete ev.costs[lid];
+  renderTravel();
+}
+// ---- Announce (reuse exec messaging) -------------------------------------
+function travelAnnounce(id){
+  var ev=(D.travel||{})[id]; if(!ev) return;
+  var members=travelScopeMembers(ev.scope);
+  if(!members.length){ toast('No members in the selected squads to announce to.'); return; }
+  var scopeLabel=ev.scope==='gold'?'Gold':ev.scope==='garnet'?'Garnet':'Gold and Garnet';
+  if(!window.confirm('Announce "'+(ev.name||'this tournament')+'" to '+members.length+' '+scopeLabel+' member'+(members.length===1?'':'s')+'?')) return;
+  var total=travelCostTotal(ev);
+  var when=(ev.startDate?tsReadableDate(ev.startDate):'');
+  if(ev.endDate&&ev.endDate!==ev.startDate) when+=(when?' to ':'')+tsReadableDate(ev.endDate);
+  var lines=[];
+  lines.push('New travel tournament: '+(ev.name||'Tournament')+(ev.location?' in '+ev.location:'')+'.');
+  if(when.trim()) lines.push('Dates: '+when.trim()+'.');
+  if(total>0) lines.push('Cost is about $'+total+' per player.');
+  if(ev.deadline) lines.push('Sign up by '+tsReadableDate(ev.deadline)+'.');
+  if(ev.regUrl) lines.push('Register: '+ev.regUrl);
+  lines.push('Open the app to join, form a team, or mark yourself a free agent.');
+  execSendMessage(members.map(function(p){ return p.id; }), lines.join('\n'));
+  var now=Date.now();
+  fbSet('travel/'+id+'/announcedAt', now);
+  ev.announcedAt=now;
+  renderTravel();
+}
+// ---- Per-event paid toggle (exec-set; separate from club dues) ------------
+function travelTogglePaid(id, mid){
+  var ev=(D.travel||{})[id]; if(!ev) return;
+  if(!ev.paid) ev.paid={};
+  if(travelIsPaid(id,mid)){ fbSet('travel/'+id+'/paid/'+mid, null); delete ev.paid[mid]; }
+  else { var rec={paid:true, at:Date.now()}; fbSet('travel/'+id+'/paid/'+mid, rec); ev.paid[mid]=rec; }
+  renderTravel();
+}
 function renderTravel(){
   const pane=document.getElementById('tab-travel'); if(!pane)return;
   const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const cards=travelTrips.map((t,ti)=>{
-    const itemsTotal=t.items.reduce((s,it)=>s+it.amount,0);
-    const itemsHtml=t.items.map(it=>`<div style="display:flex;justify-content:space-between;font-size:13px;color:var(--charcoal);padding:3px 0;">
-      <span>${esc(it.label)}</span><span>$${it.amount}</span></div>`).join('');
-    const paidCount=t.roster.filter(p=>p.paidUp).length;
-    const rosterHtml=t.roster.map((p,ri)=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--gray-lighter);font-size:13px;">
-      <span style="color:var(--charcoal);">${esc(p.name)}</span>
-      <button class="btn btn-small ${p.paidUp?'btn-secondary':'btn-danger'}" style="padding:3px 10px;font-size:11px;" onclick="travelTogglePaid(${ti},${ri})">${p.paidUp?'Paid up':'Owes'}</button>
-    </div>`).join('');
-    return `<div style="border:1px solid var(--gray-lighter);border-radius:8px;padding:12px;margin-bottom:10px;">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:1px;color:var(--charcoal);">${esc(t.event)}</div>
-      <div style="font-size:12px;color:var(--gray);margin:2px 0 8px;">${esc(t.dates)} · ${esc(t.location)}</div>
+  const nm=mid=>{const p=gP(mid);return p?((p.firstName||'')+' '+(p.lastName||'')).trim():String(mid);};
+  const events=travelEvents();
+  const eventsHtml=events.length?events.map(ev=>{
+    const id=ev.id;
+    const total=travelCostTotal(ev);
+    const costs=ev.costs||{};
+    const costRows=Object.keys(costs).length?Object.keys(costs).map(lid=>{
+      const c=costs[lid]||{};
+      return `<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">
+        <input class="form-input" id="tv-cost-label-${esc(id)}-${esc(lid)}" value="${esc(c.label||'')}" placeholder="Label" style="flex:1;min-width:0;padding:5px 7px;font-size:12px;">
+        <span style="font-size:12px;color:var(--gray);">$</span>
+        <input class="form-input" id="tv-cost-amt-${esc(id)}-${esc(lid)}" type="number" min="0" step="1" value="${c.amount!=null?esc(c.amount):''}" placeholder="0" style="width:74px;padding:5px 7px;font-size:12px;">
+        <button class="btn btn-small btn-secondary" style="padding:3px 8px;font-size:10px;" onclick="travelSaveCost('${esc(id)}','${esc(lid)}')">Save</button>
+        <button class="btn btn-small btn-danger" style="padding:3px 8px;font-size:10px;" onclick="travelRemoveCost('${esc(id)}','${esc(lid)}')">&times;</button>
+      </div>`;
+    }).join(''):'<div style="font-size:11px;color:var(--gray);padding:2px 0;">No cost lines yet.</div>';
+    const parts=travelParticipants(id);
+    const going=Object.keys(parts).filter(mid=>parts[mid]&&parts[mid].status==='in');
+    const teams=travelTeams(id);
+    const teamRows=Object.keys(teams).length?Object.keys(teams).map(tid=>{
+      const t=teams[tid]||{}; const mem=t.members||{};
+      const size=TRAVEL_FORMAT_SIZE[t.format]||0; const complete=travelTeamComplete(t);
+      const memList=Object.keys(mem).map(mid=>esc(nm(mid))+(mem[mid]==='pending'?' (pending)':'')).join(', ');
+      return `<div style="font-size:12px;color:var(--charcoal);padding:2px 0;">${esc(TRAVEL_FORMAT_LABEL[t.format]||t.format||'Team')}: ${memList||'empty'} <span style="color:${complete?'#217F7F':'var(--red)'};font-weight:700;">${complete?'complete':'incomplete ('+Object.keys(mem).length+'/'+size+')'}</span></div>`;
+    }).join(''):'<div style="font-size:11px;color:var(--gray);">No teams formed yet.</div>';
+    const freeAgents=going.filter(mid=>parts[mid].freeAgent&&!parts[mid].teamId);
+    const drivers=going.filter(mid=>parts[mid].canDrive&&(parts[mid].seats||0)>0);
+    const driverRows=drivers.length?drivers.map(mid=>{
+      const seats=parts[mid].seats||0; const claimed=going.filter(x=>parts[x].rideWith===mid).length;
+      return `<div style="font-size:12px;color:var(--charcoal);padding:2px 0;">${esc(nm(mid))}: ${Math.max(0,seats-claimed)} of ${seats} seats open</div>`;
+    }).join(''):'<div style="font-size:11px;color:var(--gray);">No drivers yet.</div>';
+    const lodgingList=ev.lodgingOffered?going.filter(mid=>parts[mid].lodging):[];
+    const paidRows=going.length?going.map(mid=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0;font-size:12px;">
+        <span style="color:var(--charcoal);">${esc(nm(mid))}</span>
+        <button class="btn btn-small ${travelIsPaid(id,mid)?'btn-secondary':'btn-danger'}" style="padding:2px 10px;font-size:10px;" onclick="travelTogglePaid('${esc(id)}','${esc(mid)}')">${travelIsPaid(id,mid)?'Paid':'Owes'}</button>
+      </div>`).join(''):'<div style="font-size:11px;color:var(--gray);">No one signed up yet.</div>';
+    const unaccounted=going.filter(mid=>{
+      const p=parts[mid];
+      const onTeam=p.teamId&&teams[p.teamId]&&travelTeamComplete(teams[p.teamId]);
+      const hasRide=p.canDrive||p.rideWith;
+      const needsLodging=ev.lodgingOffered&&!p.lodging;
+      return !onTeam || !hasRide || needsLodging;
+    });
+    const unaccountedRows=unaccounted.length?unaccounted.map(mid=>{
+      const p=parts[mid]; const gaps=[];
+      if(!(p.teamId&&teams[p.teamId]&&travelTeamComplete(teams[p.teamId]))) gaps.push('no team');
+      if(!(p.canDrive||p.rideWith)) gaps.push('no ride');
+      if(ev.lodgingOffered&&!p.lodging) gaps.push('no lodging');
+      return `<div style="font-size:12px;color:var(--charcoal);padding:2px 0;">${esc(nm(mid))} <span style="color:var(--red);">${gaps.join(', ')}</span></div>`;
+    }).join(''):(going.length?'<div style="font-size:11px;color:#217F7F;">Everyone signed up is fully set.</div>':'<div style="font-size:11px;color:var(--gray);">No one signed up yet.</div>');
+    const H=t=>`<div style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:1px;color:var(--charcoal);margin:8px 0 4px;">${t}</div>`;
+    return `<div style="border:1px solid var(--gray-lighter);border-radius:10px;padding:12px;margin-bottom:12px;">
+      <input class="form-input" id="tv-name-${esc(id)}" value="${esc(ev.name||'')}" placeholder="Tournament name" style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:1px;color:var(--charcoal);padding:6px 8px;width:100%;box-sizing:border-box;margin-bottom:6px;">
+      <input class="form-input" id="tv-location-${esc(id)}" value="${esc(ev.location||'')}" placeholder="Location" style="padding:6px 8px;font-size:12px;width:100%;box-sizing:border-box;margin-bottom:6px;">
+      <div class="form-row" style="margin-bottom:6px;">
+        <div style="flex:1;min-width:0;"><label style="font-size:10px;color:var(--gray);">Start</label><input type="date" class="form-input" id="tv-start-${esc(id)}" value="${esc(ev.startDate||'')}" style="padding:5px 7px;font-size:12px;width:100%;box-sizing:border-box;"></div>
+        <div style="flex:1;min-width:0;"><label style="font-size:10px;color:var(--gray);">End</label><input type="date" class="form-input" id="tv-end-${esc(id)}" value="${esc(ev.endDate||'')}" style="padding:5px 7px;font-size:12px;width:100%;box-sizing:border-box;"></div>
+        <div style="flex:1;min-width:0;"><label style="font-size:10px;color:var(--gray);">Deadline</label><input type="date" class="form-input" id="tv-deadline-${esc(id)}" value="${esc(ev.deadline||'')}" style="padding:5px 7px;font-size:12px;width:100%;box-sizing:border-box;"></div>
+      </div>
+      <input class="form-input" id="tv-url-${esc(id)}" value="${esc(ev.regUrl||'')}" placeholder="Registration website link" style="padding:6px 8px;font-size:12px;width:100%;box-sizing:border-box;margin-bottom:6px;">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:6px;font-size:12px;color:var(--charcoal);">
+        <span style="color:var(--gray);">Formats</span>
+        <label style="display:inline-flex;align-items:center;gap:3px;"><input type="checkbox" id="tv-fmt-twos-${esc(id)}" ${ev.formats&&ev.formats.twos?'checked':''}> Twos</label>
+        <label style="display:inline-flex;align-items:center;gap:3px;"><input type="checkbox" id="tv-fmt-threes-${esc(id)}" ${ev.formats&&ev.formats.threes?'checked':''}> Threes</label>
+        <label style="display:inline-flex;align-items:center;gap:3px;"><input type="checkbox" id="tv-fmt-fours-${esc(id)}" ${ev.formats&&ev.formats.fours?'checked':''}> Fours</label>
+        <label style="display:inline-flex;align-items:center;gap:3px;margin-left:8px;"><input type="checkbox" id="tv-lodging-${esc(id)}" ${ev.lodgingOffered?'checked':''}> Lodging offered</label>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;font-size:12px;color:var(--charcoal);">
+        <span style="color:var(--gray);">Goes to</span>
+        <select class="form-select" id="tv-scope-${esc(id)}" style="padding:5px 8px;font-size:12px;">
+          <option value="gold"${ev.scope==='gold'?' selected':''}>Gold</option>
+          <option value="garnet"${ev.scope==='garnet'?' selected':''}>Garnet</option>
+          <option value="both"${(!ev.scope||ev.scope==='both')?' selected':''}>Both</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+        <button class="btn btn-small btn-secondary" style="padding:4px 12px;font-size:11px;" onclick="travelSaveDetails('${esc(id)}')">Save details</button>
+        <button class="btn btn-small" style="padding:4px 12px;font-size:11px;background:#082A4F;color:#fff;border:none;" onclick="travelAnnounce('${esc(id)}')">Announce</button>
+        <button class="btn btn-small btn-danger" style="padding:4px 12px;font-size:11px;" onclick="travelDeleteEvent('${esc(id)}')">Delete</button>
+        <span style="font-size:11px;color:var(--gray);margin-left:auto;">${ev.announcedAt?('Announced '+esc(new Date(ev.announcedAt).toLocaleDateString())):'Not announced'}</span>
+      </div>
       <div style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:1px;color:var(--charcoal);margin-bottom:4px;">COST PER PLAYER</div>
-      ${itemsHtml}
-      <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:var(--charcoal);border-top:1px solid var(--gray-lighter);margin-top:4px;padding-top:6px;"><span>Total</span><span>$${itemsTotal}</span></div>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:1px;color:var(--charcoal);margin:12px 0 4px;">ROSTER (${paidCount} of ${t.roster.length} paid up)</div>
-      ${rosterHtml}
+      ${costRows}
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+        <button class="btn btn-small btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="travelAddCost('${esc(id)}')">Add cost line</button>
+        <span style="font-size:13px;font-weight:700;color:var(--charcoal);">Total $${total} per player</span>
+      </div>
+      <div style="border-top:1px solid var(--gray-lighter);margin-top:10px;padding-top:6px;">
+        ${H('GOING ('+going.length+')')}<div style="font-size:12px;color:var(--charcoal);">${going.length?going.map(mid=>esc(nm(mid))).join(', '):'<span style="color:var(--gray);">No one has joined yet.</span>'}</div>
+        ${H('TEAMS')}${teamRows}
+        ${H('FREE AGENTS')}<div style="font-size:12px;color:var(--charcoal);">${freeAgents.length?freeAgents.map(mid=>esc(nm(mid))).join(', '):'<span style="color:var(--gray);">None.</span>'}</div>
+        ${H('RIDES')}${driverRows}
+        ${H('LODGING')}<div style="font-size:12px;color:var(--charcoal);">${ev.lodgingOffered?(lodgingList.length?lodgingList.map(mid=>esc(nm(mid))).join(', '):'<span style="color:var(--gray);">No one has requested lodging.</span>'):'<span style="color:var(--gray);">Lodging not offered.</span>'}</div>
+        ${H('PAID (per event)')}${paidRows}
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:1px;color:var(--red);margin:8px 0 4px;">UNACCOUNTED</div>${unaccountedRows}
+      </div>
     </div>`;
-  }).join('');
-  pane.innerHTML=`<div class="card"><div class="card-title"><span class="bar"></span> 🚌 Travel</div>
-    <p style="font-size:11px;color:var(--gray);margin-bottom:12px;">Demo preview, not yet saving.</p>
-    ${cards}
+  }).join(''):'<div style="font-size:12px;color:var(--gray);padding:6px 0;">No tournaments yet. Add one to get started.</div>';
+  pane.innerHTML=`<div class="card"><div class="card-title"><span class="bar"></span> 🚌 Travel Tournaments</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+      <p style="font-size:11px;color:var(--gray);margin:0;flex:1;min-width:180px;">Create tournaments, itemize costs, set formats, and announce to a squad. Members join and form teams in their app.</p>
+      <button class="btn btn-small btn-secondary" style="padding:4px 12px;font-size:11px;white-space:nowrap;" onclick="travelAddEvent()">Add tournament</button>
+    </div>
+    ${eventsHtml}
   </div>`;
 }
 
