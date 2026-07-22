@@ -836,9 +836,15 @@ body.demo{padding-top:32px;}
   .live-score-row{gap:12px;}
 }
 /* LOGIN SCREEN */
-.login-overlay{position:fixed;top:0;left:0;width:100%;height:100%;min-height:100dvh;background:linear-gradient(135deg,var(--red-deeper) 0%,var(--red) 50%,var(--red-dark) 100%);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;}
+/* Scrollable overlay + margin:auto box: when the card fits the viewport it sits
+   dead center (auto margins on both axes), and when it is taller (exec sign-in,
+   enlarged phone numpad, short windows) the auto margins collapse to zero and
+   the overlay scrolls, so the bottom buttons are always reachable. Centering
+   via align-items would instead clip a tall card off BOTH ends unreachably. */
+.login-overlay{position:fixed;top:0;left:0;width:100%;height:100%;min-height:100dvh;background:linear-gradient(135deg,var(--red-deeper) 0%,var(--red) 50%,var(--red-dark) 100%);z-index:9999;display:flex;overflow-y:auto;padding:20px;}
 body.demo .login-overlay{align-items:flex-start;padding-top:60px;padding-bottom:40px;overflow-y:auto;}
-body.demo .login-box{padding:20px 28px;}
+/* Demo keeps its original top-aligned look: zero the vertical auto margins. */
+body.demo .login-box{padding:20px 28px;margin:0 auto;}
 body.demo .login-logo > span[style*="font-size"]{margin-bottom:4px;}
 body.demo .login-sub{margin-bottom:12px;}
 body.demo .login-toggle{margin-bottom:12px;}
@@ -849,7 +855,7 @@ body.demo .login-numpad-btn{padding:10px;}
 body.demo .login-pin-dots{margin:10px 0;}
 body.demo .login-error{margin-top:4px;min-height:14px;}
 .login-overlay.hidden{display:none;}
-.login-box{background:var(--white);border-radius:16px;padding:36px 28px;width:100%;max-width:380px;box-shadow:var(--shadow-lg);text-align:center;}
+.login-box{background:var(--white);border-radius:16px;padding:36px 28px;width:100%;max-width:380px;box-shadow:var(--shadow-lg);text-align:center;margin:auto;}
 .login-logo{font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:4px;color:var(--red);margin-bottom:4px;display:flex;flex-direction:column;align-items:center;gap:6px;}
 .login-logo > span[style*="font-size"]{margin-bottom:20px;}
 .login-logo .crown{font-size:30px;}
