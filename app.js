@@ -2437,6 +2437,8 @@ async function execManage(action,target,name){
     j=await r.json().catch(()=>null);
   }catch(e){}
   if(j&&j.ok===true){
+    if(action==='add') execSyncLeadership(target,true);
+    if(action==='remove') execSyncLeadership(target,false);
     toast(action==='add'?'Exec added':action==='remove'?'Exec removed':'Ownership transferred');
   }else{
     const code=j&&j.code;
@@ -2454,6 +2456,22 @@ function execAddSelected(){
   const id=sel?sel.value:'';
   if(!id){toast('Pick a member with a CourtSense account');return;}
   execManage('add',id,'');
+}
+// Keep the chat-authority marker in step with the exec list, so a freshly added
+// exec can post in All Club immediately instead of hitting the leadership gate.
+// Adding marks their club roster record leadership 'exec'; removing clears it.
+// A 'faculty' marker is never touched in either direction: faculty already
+// carries the same chat powers, so an add does not downgrade it and a remove
+// does not strip it. Same whole-object spread write coachSetLeadership uses.
+// An exec with no roster record (off-roster account) is a quiet no-op.
+function execSyncLeadership(accountId,isExec){
+  const rec=(Array.isArray(D.players)?D.players:[]).find(p=>p&&p.accountId===accountId);
+  if(!rec)return;
+  if(rec.leadership==='faculty')return;
+  const want=isExec?'exec':null;
+  if((rec.leadership||null)===want)return;
+  rec.leadership=want;
+  fbSet('players/'+rec.id,{...rec,leadership:want});
 }
 
 const COURTS=[1,2,3,4,5,6,7,8],CL={1:'PG 1',2:'PG 2',3:'PG 3',4:'PG 4',5:'PG 5',6:'Exhib',7:'Exhib',8:'Exhib'};
@@ -11031,11 +11049,29 @@ function psReadDays(tier){
 function psSaveSchedule(tier){
   if(tier!=='gold'&&tier!=='garnet') return;
   var locEl=document.getElementById('ps-loc-'+tier);
+  var prev=psSchedule(tier);
   var rec={ days:psReadDays(tier), time:psComposeTime(tier), location:locEl?locEl.value.trim():'', updatedAt:Date.now() };
+  // Meaningful-change check BEFORE the save overwrites prev: same days, time,
+  // and location mean a re-save or a stray second click, so keep the write but
+  // send nothing. Members hear about it only when the schedule actually moved.
+  var changed=JSON.stringify(prev.days||[])!==JSON.stringify(rec.days)
+    ||String(prev.time||'')!==rec.time
+    ||String(prev.location||'')!==rec.location;
   fbSet('practiceSchedule/'+tier, rec);
   if(!D.practiceSchedule)D.practiceSchedule={}; D.practiceSchedule[tier]=rec;
   renderTeamAnalysis();
-  toast((tier==='gold'?'Gold':'Garnet')+' practice schedule saved');
+  var squad=tier==='gold'?'Gold':'Garnet';
+  if(changed){
+    // Tell that squad's placed members the new schedule, through the same
+    // message-plus-email path exec sends already use (execSendMessage).
+    var line=psScheduleText(rec);
+    var members=(Array.isArray(D.players)?D.players:[]).filter(function(p){ return p&&p.status!=='prospect'&&p.tier===tier; });
+    if(line&&members.length){
+      execSendMessage(members.map(function(p){ return p.id; }), squad+' practice schedule update: '+line+'.');
+      return; // execSendMessage's own toast reports the send; the save is implied
+    }
+  }
+  toast(squad+' practice schedule saved');
 }
 // One readable line: "Mon, Wed, Fri at 6:00 PM, FSU Main Campus Fields". Parts omitted if unset.
 function psScheduleText(sched){
