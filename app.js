@@ -1713,11 +1713,12 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
     </div>
   </div>
   ${(SC.chatEnabled && !SC.tiersEnabled)?'<div class="pp-panel" id="pp-panel-chat"></div>':''}
-  ${SC.tiersEnabled?`<!-- ══ CLUB LIFE PANEL (group-facing: practice schedule, club chat, travel) ══ -->
+  ${SC.tiersEnabled?`<!-- ══ CLUB LIFE PANEL (group-facing: practice schedule, club chat, travel, partner posts) ══ -->
   <div class="pp-panel" id="pp-panel-clublife">
     <div id="pp-practice"></div>
     ${SC.chatEnabled?'<div id="pp-panel-chat"></div>':''}
     <div id="pp-panel-travel"></div>
+    <div id="pp-partner"></div>
   </div>`:''}
   ${SC.tiersEnabled?'<div class="pp-panel" id="pp-panel-messages"></div>':''}
 
@@ -10562,13 +10563,148 @@ function renderMemberTravel(){
 }
 
 // Club Life panel: the group-facing tab. Renders the member's practice-schedule card, then club chat,
-// then travel, into the containers nested in pp-panel-clublife. Each renderer targets its own id, so
-// nesting them under one tab does not change how they draw.
+// then travel, then tournament partner posts, into the containers nested in pp-panel-clublife. Each
+// renderer targets its own id, so nesting them under one tab does not change how they draw.
 function renderClubLife(){
   var p=gP(currentPlayerId);
   var pr=document.getElementById('pp-practice'); if(pr&&p) pr.innerHTML=memberPracticeHtml(p);
   if(SC.chatEnabled && typeof renderClubChat==='function') renderClubChat();
   if(typeof renderMemberTravel==='function') renderMemberTravel();
+  if(typeof renderMemberPartnerPosts==='function') renderMemberPartnerPosts();
+}
+
+// ---- Tournament partner posts (Grass Club) --------------------------------
+// Read-only Club Life card listing open tournament partner posts from the pickup app
+// (tally_kotb_pickup/invites, postType 'partner') that this member is eligible for, club-scoped
+// and community-wide alike. Posting and responding stay in pickup; each row links out to
+// /pickup/?game={id} in a new tab. Reads two world-readable community nodes (the live rule grants
+// .read on all of tally_kotb_pickup); writes nothing. The member is bridged into community data by
+// the accountId on their club roster record (the same field playerLoginEmail resolves by).
+//
+// Eligibility MIRRORS the pickup app's renderPartnerList/computeEligible/isChatEligible logic
+// exactly rather than inventing a second rule set:
+//   - open, not cancelled, tournament date not past (ISO string vs td())
+//   - circle union: host, OR a non-declined rsvps entry under the member's nameKey, OR the base
+//     circle ('club' = account carries memberships[orgId]; 'open' = any known non-blocked account),
+//     with includeList adding and excludeList removing by nameKey (exclude never overrides the
+//     host/rsvp union, matching isChatEligible)
+//   - division gate from the member's own account gender (profile.gender): men's hides from 'F',
+//     women's from 'M', coed shows to all, unknown or unspecified sees every division; host exempt
+var _ppPartnerCache=null; // { ts, invites, players }; 60s TTL so tab flips do not re-read
+// Same nameKey convention as pickup's Identity.nameKey and auth.js's snake-case account keys.
+function ppNameKey(name){ return String(name||'').toLowerCase().trim().replace(/[.#$/[\]]/g,'').replace(/\s+/g,'_'); }
+function ppDivisionLabel(d){ return d==='mens'?"Men's":d==='womens'?"Women's":'Coed'; }
+// Resolve a community account record to a display string (pickup's nameStr pattern).
+function ppNameStr(a){
+  if(!a) return '';
+  if(typeof a.displayName==='string'&&a.displayName.trim()) return a.displayName.trim();
+  var n=a.name;
+  if(n&&typeof n==='object'){ var f=((n.first||'')+' '+(n.last||'')).trim(); if(f) return f; }
+  if(typeof n==='string'&&n.trim()) return n.trim();
+  return '';
+}
+// Club badge for a poster, read from their community account's memberships object (pickup's
+// clubBadge pattern: first membership wins, label from orgName with a trailing "Club" stripped).
+function ppClubBadge(acct){
+  var m=acct&&acct.memberships;
+  if(!m||typeof m!=='object') return '';
+  var orgId=Object.keys(m)[0];
+  if(!orgId) return '';
+  var label=String((m[orgId]&&m[orgId].orgName)||orgId).replace(/\s*club\s*$/i,'').toUpperCase();
+  var esc=function(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]); }); };
+  return ' <span style="background:#782F40;color:#fff;font-family:\'Bebas Neue\';font-size:9px;letter-spacing:1px;padding:2px 6px;border-radius:4px;vertical-align:middle;">'+esc(label)+'</span>';
+}
+function renderMemberPartnerPosts(){
+  var box=document.getElementById('pp-partner'); if(!box) return;
+  var esc=function(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]); }); };
+  var shell=function(inner){ return '<div class="card"><div class="card-title"><span class="bar"></span> 🤝 Tournament Partner Posts</div>'+inner+'</div>'; };
+  var meP=gP(currentPlayerId);
+  var accountId=meP&&meP.accountId;
+  if(!accountId){
+    box.innerHTML=shell('<div style="font-size:13px;color:var(--gray);padding:6px 0;">Partner posts show here once your CourtSense account is linked to your club record. Contact the exec team if you signed up but do not see them.</div>');
+    return;
+  }
+  if(!db){
+    box.innerHTML=shell('<div style="font-size:13px;color:var(--gray);padding:6px 0;">Partner posts need a live connection.</div>');
+    return;
+  }
+  var cached=_ppPartnerCache&&(Date.now()-_ppPartnerCache.ts<60000)?_ppPartnerCache:null;
+  if(!cached){
+    box.innerHTML=shell('<div style="font-size:13px;color:var(--gray);padding:6px 0;">Loading partner posts...</div>');
+    Promise.all([
+      db.ref('tally_kotb_pickup/invites').once('value'),
+      db.ref('tally_kotb_pickup/players').once('value')
+    ]).then(function(snaps){
+      _ppPartnerCache={ ts:Date.now(), invites:snaps[0].val()||{}, players:snaps[1].val()||{} };
+      // Re-render only if the card is still on screen (member may have switched tabs).
+      if(document.getElementById('pp-partner')) renderMemberPartnerPosts();
+    }).catch(function(e){
+      console.warn('partner posts read failed', e);
+      var b=document.getElementById('pp-partner');
+      if(b) b.innerHTML=shell('<div style="font-size:13px;color:var(--gray);padding:6px 0;">Could not load partner posts. Try again in a minute.</div>');
+    });
+    return;
+  }
+  var players=cached.players;
+  var myAcct=players[accountId];
+  if(!myAcct){
+    box.innerHTML=shell('<div style="font-size:13px;color:var(--gray);padding:6px 0;">Partner posts show here once your CourtSense account is linked to your club record. Contact the exec team if you signed up but do not see them.</div>');
+    return;
+  }
+  // Mirror of pickup's gameplayKey for a logged-in account: nameKey field, else nameKey of the
+  // display name, else the account id itself.
+  var myKey=myAcct.nameKey||ppNameKey(ppNameStr(myAcct))||accountId;
+  var myGender=myAcct.profile&&myAcct.profile.gender;
+  if(myGender!=='M'&&myGender!=='F') myGender=null;
+  var myBlocked=!!myAcct.blocked;
+  var today=td();
+
+  var posts=Object.keys(cached.invites).map(function(id){ return cached.invites[id]; }).filter(function(p){
+    if(!(p&&p.id&&p.postType==='partner'&&p.status!=='cancelled')) return false;
+    if(p.date&&p.date<today) return false;
+    var isHost=!!(p.hostId&&p.hostId===accountId);
+    // Division gate (host exempt): men's hides from 'F', women's from 'M', coed shows to all.
+    if(!isHost){
+      if(p.division==='mens'&&myGender==='F') return false;
+      if(p.division==='womens'&&myGender==='M') return false;
+    }
+    if(isHost) return true;
+    // Non-declined RSVP under my nameKey (I am the accepted partner) always shows.
+    var mine=(p.rsvps||{})[myKey];
+    if(mine&&mine.status!=='declined') return true;
+    // Base circle. Partner posts only ever carry baseMode 'club' or 'open'; anything else
+    // (rating/group modes from games) is not a partner circle this card can resolve, so skip it.
+    var e=p.eligibility||{};
+    var inCircle=false;
+    if(!myBlocked){
+      if(e.baseMode==='club') inCircle=!!(myAcct.memberships&&e.orgId&&myAcct.memberships[e.orgId]);
+      else if(e.baseMode==='open'||!e.baseMode) inCircle=true;
+    }
+    // includeList overrides up, excludeList overrides down, both by nameKey (computeEligible).
+    var inc=Array.isArray(e.includeList)?e.includeList:[];
+    if(!inCircle&&inc.some(function(n){ return ppNameKey(n)===myKey; })) inCircle=true;
+    var exc=Array.isArray(e.excludeList)?e.excludeList:[];
+    if(inCircle&&exc.some(function(n){ return ppNameKey(n)===myKey; })) inCircle=false;
+    return inCircle;
+  }).sort(function(a,b){ return String(a.date).localeCompare(String(b.date)); });
+
+  if(!posts.length){
+    box.innerHTML=shell('<div style="font-size:13px;color:var(--gray);padding:6px 0;">No open partner posts you are eligible for right now. Playing a tournament soon? Post one from the Pickup tab.</div>');
+    return;
+  }
+  var rows=posts.map(function(p){
+    var acct=p.hostId?players[p.hostId]:null;
+    var partnered=Object.keys(p.rsvps||{}).some(function(k){ var r=p.rsvps[k]; return r&&r.status==='confirmed'; });
+    var status=partnered?'<span style="background:var(--gray-lighter);color:var(--gray);font-family:\'Bebas Neue\';font-size:9px;letter-spacing:1px;padding:2px 6px;border-radius:4px;">PARTNER FOUND</span>'
+      :'<span style="background:#d1fae5;color:#065f46;font-family:\'Bebas Neue\';font-size:9px;letter-spacing:1px;padding:2px 6px;border-radius:4px;">LOOKING</span>';
+    return '<a href="/pickup/?game='+encodeURIComponent(p.id)+'" target="_blank" rel="noopener" style="display:block;text-decoration:none;color:inherit;padding:10px 0;border-bottom:1px solid var(--gray-lighter);">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'
+      +'<div style="font-weight:700;font-size:14px;color:var(--charcoal);">'+esc(p.name||'Tournament')+'</div>'+status+'</div>'
+      +'<div style="font-size:12px;color:var(--charcoal);margin-top:2px;">'+esc(fD(p.date))+' · '+(p.surface==='grass'?'Grass':'Sand')+' · '+ppDivisionLabel(p.division)+(p.location?' · '+esc(p.location):'')+'</div>'
+      +'<div style="font-size:12px;color:var(--gray);margin-top:2px;">Posted by '+esc(ppNameStr(acct)||p.hostName||'Anonymous')+ppClubBadge(acct)+'</div>'
+      +'</a>';
+  }).join('');
+  box.innerHTML=shell(rows+'<div style="font-size:11px;color:var(--gray);margin-top:8px;">Opens in the pickup app, where you can respond.</div>');
 }
 
 // ---- Good standing (Grass Club) ------------------------------------------
