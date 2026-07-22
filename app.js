@@ -999,10 +999,19 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       `}
     </div>
     <div class="login-fans" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--gray-lighter);text-align:center;">
+      ${SC.applyUrl ? `
+      <!-- Apply path: shells that set applyUrl (e.g. FSU Grass, which has no fans or press) point this
+           button at their application instead of the fan overlay. Label and subline come from config. -->
+      <button onclick="window.open('${SC.applyUrl}','_blank')" style="display:inline-flex;align-items:center;gap:6px;font-family:'Bebas Neue';font-size:14px;letter-spacing:1.5px;color:var(--white);border:none;cursor:pointer;padding:9px 20px;border-radius:8px;background:var(--red);transition:background 0.2s;" onmouseover="this.style.background='var(--red-dark)';" onmouseout="this.style.background='var(--red)';">
+        ${SC.applyLabel || (SC.displayName + ' Application')}
+      </button>
+      ${SC.applySubline ? `<div style="font-size:11px;color:var(--red);font-weight:700;margin-top:6px;">${SC.applySubline}</div>` : ''}
+      ` : `
       <button onclick="showLeonFans()" style="display:inline-flex;align-items:center;gap:6px;font-family:'Bebas Neue';font-size:14px;letter-spacing:1.5px;color:var(--white);border:none;cursor:pointer;padding:9px 20px;border-radius:8px;background:var(--red);transition:background 0.2s;" onmouseover="this.style.background='var(--red-dark)';" onmouseout="this.style.background='var(--red)';">
         🏐 ${SC.displayName} Fan Page
       </button>
       <div style="font-size:11px;color:var(--red);font-weight:700;margin-top:6px;">Parents · Fans · Press — No login required</div>
+      `}
     </div>
   </div>
 </div>
