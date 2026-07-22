@@ -9959,7 +9959,42 @@ function travelScopeMembers(scope){
   return (Array.isArray(D.players)?D.players:[]).filter(function(p){ return p&&p.status!=='prospect'&&tiers.indexOf(p.tier)>=0; });
 }
 // ---- Exec create / edit / delete -----------------------------------------
+// ---- Flush-before-render: never lose an in-progress detail edit ----------
+// The detail fields (name, location, dates, deadline, link, formats, lodging, scope) live only in the
+// DOM until Save details. Any handler that re-renders the Travel tab rebuilds EVERY card from
+// D.travel, so without this an unsaved edit on any card is discarded on the next render. Mirrors the
+// tryout session fix: read the live editor and persist it before renderTravel tears the cards down.
+// Read one event's detail fields from its live editor. Returns null if that editor is not rendered.
+// Single source of truth for the detail-field reads (Save details and the flush both use it).
+function travelReadDetails(id){
+  var nameEl=document.getElementById('tv-name-'+id);
+  if(!nameEl) return null;
+  var g=function(f){ var el=document.getElementById('tv-'+f+'-'+id); return el?el.value.trim():''; };
+  var ck=function(f){ var el=document.getElementById('tv-'+f+'-'+id); return !!(el&&el.checked); };
+  var scEl=document.getElementById('tv-scope-'+id);
+  return { name:g('name')||'Tournament', location:g('location'), startDate:g('start'), endDate:g('end'),
+    regUrl:g('url'), deadline:g('deadline'),
+    formats:{ twos:ck('fmt-twos'), threes:ck('fmt-threes'), fours:ck('fmt-fours') },
+    lodgingOffered:ck('lodging'), scope:(scEl?scEl.value:'both')||'both' };
+}
+// Persist one event's detail fields (fbSet + mirror into D) from its live editor. No toast, no render.
+function travelPersistDetails(id){
+  var ev=(D.travel||{})[id]; if(!ev) return false;
+  var updates=travelReadDetails(id); if(!updates) return false;
+  Object.keys(updates).forEach(function(k){ fbSet('travel/'+id+'/'+k, updates[k]); ev[k]=updates[k]; });
+  return true;
+}
+// Persist every travel editor currently in the DOM. Call this first in any handler that re-renders, so
+// unsaved edits on ALL cards (not just the one being acted on) survive the rebuild.
+function travelFlushEditors(){
+  var inputs=document.querySelectorAll('input[id^="tv-name-"]');
+  Array.prototype.forEach.call(inputs,function(el){
+    var id=el.id.slice('tv-name-'.length);
+    if(id) travelPersistDetails(id);
+  });
+}
 function travelAddEvent(){
+  travelFlushEditors();
   var id=gi('tv');
   var rec={ name:'New Tournament', location:'', startDate:'', endDate:'', regUrl:'', deadline:'',
     costs:{}, formats:{twos:false,threes:false,fours:false}, lodgingOffered:false,
@@ -9971,19 +10006,13 @@ function travelAddEvent(){
 }
 function travelSaveDetails(id){
   var ev=(D.travel||{})[id]; if(!ev) return;
-  var g=function(f){ var el=document.getElementById('tv-'+f+'-'+id); return el?el.value.trim():''; };
-  var ck=function(f){ var el=document.getElementById('tv-'+f+'-'+id); return !!(el&&el.checked); };
-  var scEl=document.getElementById('tv-scope-'+id);
-  var updates={ name:g('name')||'Tournament', location:g('location'), startDate:g('start'), endDate:g('end'),
-    regUrl:g('url'), deadline:g('deadline'),
-    formats:{ twos:ck('fmt-twos'), threes:ck('fmt-threes'), fours:ck('fmt-fours') },
-    lodgingOffered:ck('lodging'), scope:(scEl?scEl.value:'both')||'both' };
-  Object.keys(updates).forEach(function(k){ fbSet('travel/'+id+'/'+k, updates[k]); ev[k]=updates[k]; });
+  travelFlushEditors(); // persists this card and any other open editor before the full rebuild
   renderTravel();
   toast('Tournament saved');
 }
 function travelDeleteEvent(id){
   if(!window.confirm('Delete this tournament? All signups, teams, rides, and paid status for it will be removed.')) return;
+  travelFlushEditors();
   fbSet('travel/'+id, null);
   if(D.travel) delete D.travel[id];
   renderTravel();
@@ -9991,12 +10020,14 @@ function travelDeleteEvent(id){
 }
 // ---- Itemized cost lines --------------------------------------------------
 function travelAddCost(id){
+  travelFlushEditors();
   var lid=gi('tc'); var rec={label:'New line', amount:0};
   fbSet('travel/'+id+'/costs/'+lid, rec);
   var ev=(D.travel||{})[id]; if(ev){ if(!ev.costs)ev.costs={}; ev.costs[lid]=rec; }
   renderTravel();
 }
 function travelSaveCost(id, lid){
+  travelFlushEditors();
   var le=document.getElementById('tv-cost-label-'+id+'-'+lid);
   var ae=document.getElementById('tv-cost-amt-'+id+'-'+lid);
   var amt=ae?parseFloat(ae.value):0; if(!isFinite(amt))amt=0;
@@ -10006,12 +10037,14 @@ function travelSaveCost(id, lid){
   renderTravel();
 }
 function travelRemoveCost(id, lid){
+  travelFlushEditors();
   fbSet('travel/'+id+'/costs/'+lid, null);
   var ev=(D.travel||{})[id]; if(ev&&ev.costs) delete ev.costs[lid];
   renderTravel();
 }
 // ---- Announce (reuse exec messaging) -------------------------------------
 function travelAnnounce(id){
+  travelFlushEditors(); // so the announcement uses the latest typed name, dates, and link even if unsaved
   var ev=(D.travel||{})[id]; if(!ev) return;
   var members=travelScopeMembers(ev.scope);
   if(!members.length){ toast('No members in the selected squads to announce to.'); return; }
@@ -10035,6 +10068,7 @@ function travelAnnounce(id){
 }
 // ---- Per-event paid toggle (exec-set; separate from club dues) ------------
 function travelTogglePaid(id, mid){
+  travelFlushEditors();
   var ev=(D.travel||{})[id]; if(!ev) return;
   if(!ev.paid) ev.paid={};
   if(travelIsPaid(id,mid)){ fbSet('travel/'+id+'/paid/'+mid, null); delete ev.paid[mid]; }
