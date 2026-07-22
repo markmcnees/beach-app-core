@@ -982,6 +982,15 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
         <button class="login-numpad-btn backspace" onclick="pinBack()">⌫</button>
       </div>
       <div class="login-error" id="pin-error"></div>
+      ${SC.emailLogin?`
+      <!-- Per-exec sign-in (account-login schools only). Sits beside the shared
+           PIN pad, which stays untouched so nobody is locked out mid season. -->
+      <div style="display:flex;align-items:center;gap:10px;margin:14px 0 10px;color:var(--gray);font-size:11px;"><span style="flex:1;height:1px;background:var(--gray-lighter);"></span>or sign in as yourself<span style="flex:1;height:1px;background:var(--gray-lighter);"></span></div>
+      <input type="email" style="width:100%;padding:12px 14px;border:2px solid var(--gray-lighter);border-radius:8px;font-family:'Barlow',sans-serif;font-size:15px;" id="exec-login-email" placeholder="you@fsu.edu" autocomplete="email" autocapitalize="none" spellcheck="false">
+      <input type="password" style="width:100%;padding:12px 14px;border:2px solid var(--gray-lighter);border-radius:8px;font-family:'Barlow',sans-serif;font-size:15px;margin-top:8px;" id="exec-login-pw" placeholder="Password" autocomplete="current-password">
+      <div class="login-error" id="exec-login-error"></div>
+      <button class="login-btn" id="exec-login-btn" onclick="execLoginEmail()">Sign In as Exec</button>
+      `:''}
     </div>
     <div class="login-section" id="login-player">
       ${SC.emailLogin?`
@@ -1395,6 +1404,9 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
     <div class="tab-content" id="tab-settings">
 <div class="card"><div class="card-title"><span class="bar"></span> Player Roster</div>
       <p style="font-size:12px;color:var(--gray);margin-bottom:12px;">Assign pair levels. Changes sync in real time.</p><div id="roster-list"></div></div>
+  <!-- Exec Access (per-exec logins): rendered by renderExecManagement, which
+       no-ops for schools without account logins (SC.emailLogin false). -->
+  <div id="exec-mgmt-card"></div>
   </div>
   ${SC.tiersEnabled?'':'<div class="tab-content" id="tab-practice"></div>'}
   ${SC.tiersEnabled?'':`<div class="tab-content" id="tab-hspractice"><div class="card" style="text-align:center;padding:34px 20px;">
@@ -2323,6 +2335,112 @@ async function changeCoachPin(){
   }catch(e){
     if(statusEl)statusEl.textContent='Could not reach the server. Try again.';
   }
+}
+
+// ---- Exec access management (per-exec logins) -----------------------------
+// Settings card on the club Roster tab (tab-settings). Reads the school's exec
+// list from the worker (/auth/exec-list) with the current coach session and,
+// for the OWNER, offers add / remove / transfer via /auth/exec-manage. All
+// authorization is enforced worker-side (the list lives under the deny-all
+// coach pins node); this UI only hides controls that would be refused anyway.
+// Renders nothing for schools without account logins (SC.emailLogin false), so
+// HS configs are untouched. The owner row has no remove button by design:
+// ownership leaves via Make Owner (transfer), never by deleting the owner.
+async function renderExecManagement(){
+  const box=document.getElementById('exec-mgmt-card'); if(!box)return;
+  if(!SC.emailLogin){box.innerHTML='';return;}
+  let session=null; try{session=JSON.parse(sessionStorage.getItem('csCoachSession'));}catch(e){}
+  const token=session&&session.token;
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const shell=inner=>'<div class="card"><div class="card-title"><span class="bar"></span> 🧑‍💼 Exec Access</div>'+inner+'</div>';
+  if(!token){box.innerHTML='';return;}
+  box.innerHTML=shell('<div style="font-size:13px;color:var(--gray);">Loading exec list...</div>');
+  let j=null;
+  try{
+    const r=await fetch(AUTH_WORKER+'/auth/exec-list',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dbRoot:DB_ROOT,token:token})});
+    j=await r.json().catch(()=>null);
+  }catch(e){}
+  const boxNow=document.getElementById('exec-mgmt-card'); if(!boxNow)return;
+  if(!j||j.ok!==true){
+    boxNow.innerHTML=shell('<div style="font-size:13px;color:var(--gray);">Could not load the exec list.'+((j&&j.code==='forbidden')?' Your session may have expired; log in again.':'')+'</div>');
+    return;
+  }
+  const execs=j.execs||[];
+  const myId=(session&&session.accountId)||null;
+  const mine=myId?execs.find(e=>e.accountId===myId):null;
+  // Owner status comes from the FRESH list, not the stored session role, so a
+  // transfer that happened elsewhere is reflected on the next render.
+  const amOwner=!!(mine&&mine.role==='owner');
+  const listed=new Set(execs.map(e=>e.accountId));
+  let rows=execs.map(e=>{
+    const roleBadge=e.role==='owner'
+      ?'<span class="tier-badge" style="background:#082A4F;color:#fff;">Owner</span>'
+      :'<span class="tier-badge badge-exec">Exec</span>';
+    let controls='';
+    if(amOwner&&e.role!=='owner'){
+      const idq=esc(e.accountId).replace(/'/g,"\\'");
+      const nmq=esc(e.displayName||e.accountId).replace(/'/g,"\\'");
+      controls='<button class="btn btn-small btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="execManage(\'transfer\',\''+idq+'\',\''+nmq+'\')">Make Owner</button>'
+        +' <button class="btn btn-small btn-danger" style="padding:3px 10px;font-size:11px;" onclick="execManage(\'remove\',\''+idq+'\',\''+nmq+'\')">Remove</button>';
+    }
+    return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--gray-lighter);flex-wrap:wrap;">'
+      +'<span style="flex:1;font-weight:600;font-size:14px;">'+esc(e.displayName||e.accountId)+(e.accountId===myId?' <span style="font-size:11px;color:var(--gray);font-weight:400;">(you)</span>':'')+'</span>'
+      +roleBadge+(controls?' '+controls:'')
+      +'</div>';
+  }).join('');
+  if(!execs.length)rows='<div style="font-size:13px;color:var(--gray);padding:6px 0;">No execs yet. Contact CourtSense to seed the owner.</div>';
+  let footer='';
+  if(amOwner){
+    // Roster picker: only members whose club record carries a CourtSense accountId
+    // are addable, since the account is what an exec signs in with. Members with
+    // no account are shown disabled with the reason, never offered.
+    const withAcct=D.players.filter(p=>p&&p.active!==false&&p.accountId&&!listed.has(p.accountId));
+    const withoutAcct=D.players.filter(p=>p&&p.active!==false&&!p.accountId);
+    const opts=['<option value="">Add an exec from the roster...</option>']
+      .concat(withAcct.map(p=>'<option value="'+esc(p.accountId)+'">'+esc(((p.firstName||'')+' '+(p.lastName||'')).trim())+'</option>'))
+      .concat(withoutAcct.map(p=>'<option value="" disabled>'+esc(((p.firstName||'')+' '+(p.lastName||'')).trim())+' (no CourtSense account)</option>'))
+      .join('');
+    footer='<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">'
+      +'<select class="form-select" id="exec-add-pick" style="flex:1;min-width:200px;">'+opts+'</select>'
+      +'<button class="btn btn-small" style="background:#082A4F;color:#fff;border:none;" onclick="execAddSelected()">Add Exec</button>'
+      +'</div>'
+      +'<div style="font-size:11px;color:var(--gray);margin-top:6px;">Execs sign in with their own email and password. Make Owner hands ownership off; you stay on as an exec.</div>';
+  }else{
+    footer='<div style="font-size:12px;color:var(--gray);margin-top:8px;">'
+      +(myId?'Only the owner can change this list.':'Sign in with your exec account to manage this list.')
+      +'</div>';
+  }
+  boxNow.innerHTML=shell('<p style="font-size:12px;color:var(--gray);margin-bottom:10px;">Who can sign in to exec mode with their own account. The shared PIN keeps working during the transition.</p>'+rows+footer);
+}
+async function execManage(action,target,name){
+  if(action==='remove'&&!confirm('Remove '+(name||'this exec')+' from exec access?'))return;
+  if(action==='transfer'&&!confirm('Make '+(name||'this exec')+' the owner? You stay on as an exec but lose owner controls.'))return;
+  let session=null; try{session=JSON.parse(sessionStorage.getItem('csCoachSession'));}catch(e){}
+  const token=session&&session.token;
+  if(!token){toast('Session expired, log in again');return;}
+  let j=null;
+  try{
+    const r=await fetch(AUTH_WORKER+'/auth/exec-manage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dbRoot:DB_ROOT,token:token,action:action,targetAccountId:target})});
+    j=await r.json().catch(()=>null);
+  }catch(e){}
+  if(j&&j.ok===true){
+    toast(action==='add'?'Exec added':action==='remove'?'Exec removed':'Ownership transferred');
+  }else{
+    const code=j&&j.code;
+    toast(code==='forbidden'?'Only the owner can do that'
+      :code==='no_account'?'That member has no CourtSense account'
+      :code==='already_listed'?'Already on the exec list'
+      :code==='not_listed'?'Not on the exec list'
+      :code==='rate_limited'?'Too many changes at once. Try again in a few minutes.'
+      :'Could not update the exec list');
+  }
+  renderExecManagement();
+}
+function execAddSelected(){
+  const sel=document.getElementById('exec-add-pick');
+  const id=sel?sel.value:'';
+  if(!id){toast('Pick a member with a CourtSense account');return;}
+  execManage('add',id,'');
 }
 
 const COURTS=[1,2,3,4,5,6,7,8],CL={1:'PG 1',2:'PG 2',3:'PG 3',4:'PG 4',5:'PG 5',6:'Exhib',7:'Exhib',8:'Exhib'};
@@ -3700,7 +3818,7 @@ function refreshTab(id){
     case'scrimmage':renderExtMatches('scrimmage');break;
     case'goals':renderCoachGoals();break;
     case'scouts':renderScouts();break;
-    case'settings':renderRoster();break;
+    case'settings':renderRoster();renderExecManagement();break;
     case'broadcast':renderExecBroadcast();break;
     case'inbox':renderExecInbox();break;
     case'communicate':renderHsCommunicate();break;
@@ -3994,7 +4112,10 @@ function loginAsCoach(){
   document.getElementById('app-wrapper').style.display='block';
   document.getElementById('coach-content').style.display='block';
   document.getElementById('player-portal').style.display='none';
-  document.getElementById('header-username').textContent=COACH_LABEL;
+  // Per-exec sessions carry the exec's name (stored at exec login); the shared-PIN
+  // path has none and keeps the generic label. Covers fresh logins and restores.
+  let _execSess=null; try{_execSess=JSON.parse(sessionStorage.getItem('csCoachSession'));}catch(e){}
+  document.getElementById('header-username').textContent=(_execSess&&_execSess.execName)?_execSess.execName:COACH_LABEL;
   document.querySelector('.tabs').style.display='flex';
   refreshCurrent();
   // Club only: the Broadcast tab is active on entry but the statically-active pane is
@@ -4087,6 +4208,51 @@ async function playerLoginEmail(){
   document.querySelector('.tabs').style.display='none';
   document.getElementById('header-username').textContent=rec.firstName+' '+rec.lastName;
   renderPlayerPortal();
+}
+// Exec email + password login (SC.emailLogin schools only). Verifies the CourtSense
+// account against the school's exec list SERVER-SIDE via /auth/exec-session and, on
+// success, stores the SAME csCoachSession shape the PIN path stores (token, dbRoot,
+// expiresAt) plus additive identity fields (accountId, role, execName), so session
+// restore, PIN change, and every /hs/* consumer work unchanged. Fetch and error
+// conventions mirror playerLoginEmail and the PIN pad.
+let _execLoginBusy=false;
+async function execLoginEmail(){
+  if(_execLoginBusy)return;
+  const emailEl=document.getElementById('exec-login-email');
+  const pwEl=document.getElementById('exec-login-pw');
+  const errEl=document.getElementById('exec-login-error');
+  const email=(emailEl?emailEl.value:'').trim().toLowerCase();
+  const pw=pwEl?pwEl.value:'';
+  if(!email){if(errEl)errEl.textContent='Enter your email';return;}
+  if(!pw){if(errEl)errEl.textContent='Enter your password';return;}
+  _execLoginBusy=true;
+  const btn=document.getElementById('exec-login-btn');
+  if(btn)btn.disabled=true;
+  if(errEl)errEl.textContent='Checking...';
+  let j=null, netErr=false;
+  try{
+    const r=await fetch(AUTH_WORKER+'/auth/exec-session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dbRoot:DB_ROOT,email:email,password:pw})});
+    j=await r.json().catch(()=>null);
+  }catch(e){netErr=true;}
+  const done=()=>{_execLoginBusy=false;if(btn)btn.disabled=false;};
+  if(netErr){if(errEl)errEl.textContent='Could not reach the server. Try again.';done();return;}
+  if(!j||j.ok!==true){
+    if(errEl)errEl.textContent=
+      (j&&j.code==='rate_limited')?'Too many attempts. Try again in a few minutes.'
+      :(j&&j.code==='not_exec')?"This account is not on the school's exec list."
+      :'Incorrect email or password';
+    done();return;
+  }
+  // Name the session from the club roster when the account is on it; the header and
+  // the Exec Access card read this. Not being on the roster is fine (the exec list
+  // is the authority), so an off-roster exec just keeps the generic label.
+  const rec=D.players.find(p=>p.accountId===j.accountId);
+  const execName=rec?((rec.firstName||'')+' '+(rec.lastName||'')).trim():'';
+  sessionStorage.setItem('csCoachSession',JSON.stringify({token:j.token,dbRoot:DB_ROOT,expiresAt:j.expiresAt,accountId:j.accountId,role:j.role,execName:execName}));
+  if(errEl)errEl.textContent='';
+  if(pwEl)pwEl.value='';
+  done();
+  loginAsCoach();
 }
 function logout(){
   currentRole=null;currentPlayerId=null;pinEntry='';
