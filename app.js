@@ -1671,20 +1671,23 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
     <div class="card" style="border-top:3px solid var(--blue);">
       <div class="card-title" style="color:var(--blue);"><span class="bar" style="background:var(--blue);"></span> &#x1F4E7; Email Notifications</div>
       <div style="padding:4px;">
-        <div style="font-size:12px;color:var(--gray);margin-bottom:10px;">Get notified about assignments, coach feedback, and game results.</div>
+        <div style="font-size:12px;color:var(--gray);margin-bottom:10px;">${SC.tiersEnabled?'Where club emails reach you. Club communications are on unless you turn them off.':'Get notified about assignments, coach feedback, and game results.'}</div>
         <input type="email" id="pp-email-addr" placeholder="your@email.com" style="width:100%;box-sizing:border-box;padding:10px 12px;border:2px solid var(--gray-lighter);border-radius:8px;font-family:'Barlow',sans-serif;font-size:14px;margin-bottom:12px;">
         <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">
+          ${SC.tiersEnabled?`<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+            <input type="checkbox" id="pp-notif-club" checked style="width:16px;height:16px;accent-color:var(--blue);"> Club communications: messages from the ${COACH_LABEL} team, tryout invites, placement, dues, travel, and schedule changes
+          </label>`:''}
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
-            <input type="checkbox" id="pp-notif-assign" style="width:16px;height:16px;accent-color:var(--blue);"> Court assignments &amp; lineup updates
+            <input type="checkbox" id="pp-notif-assign" checked style="width:16px;height:16px;accent-color:var(--blue);"> Court assignments &amp; lineup updates
           </label>
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
-            <input type="checkbox" id="pp-notif-plan" style="width:16px;height:16px;accent-color:var(--blue);"> Training plan approved by coach
+            <input type="checkbox" id="pp-notif-plan" checked style="width:16px;height:16px;accent-color:var(--blue);"> Training plan approved by ${SC.tiersEnabled?'the '+COACH_LABEL+' team':'coach'}
           </label>
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
-            <input type="checkbox" id="pp-notif-cnote" style="width:16px;height:16px;accent-color:var(--blue);"> New coach notes for me
+            <input type="checkbox" id="pp-notif-cnote" checked style="width:16px;height:16px;accent-color:var(--blue);"> ${SC.tiersEnabled?COACH_LABEL+' notes (nothing currently emails this at the club)':'New coach notes for me'}
           </label>
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
-            <input type="checkbox" id="pp-notif-score" style="width:16px;height:16px;accent-color:var(--blue);"> Game results posted
+            <input type="checkbox" id="pp-notif-score" checked style="width:16px;height:16px;accent-color:var(--blue);"> Game results posted
           </label>
         </div>
         <button class="btn btn-blue btn-small" onclick="saveEmailPrefs(); loadEmailPrefs(currentPlayerId);" style="width:100%;">Save Preferences</button>
@@ -1846,6 +1849,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       </div>
       <div style="border-top:1px solid var(--gray-lighter);padding-top:16px;">
         <div style="font-family:'Bebas Neue';font-size:16px;letter-spacing:1px;color:var(--gray);margin-bottom:8px;">📝 ${COACH_LABEL} Notes</div>
+        <div style="font-size:11px;color:var(--gray);margin-bottom:8px;line-height:1.5;">Saved notes are not emailed, but the member can read them in their portal under ${COACH_LABEL} Notes.</div>
         <input type="date" id="cpm-note-date" class="form-input" style="width:100%;padding:8px;font-size:13px;margin-bottom:6px;">
         <textarea id="cpm-note-text" class="form-input" placeholder="Add a note..." rows="3" style="width:100%;padding:8px;font-size:13px;resize:vertical;margin-bottom:6px;"></textarea>
         <button class="btn btn-blue btn-small" style="width:100%;" onclick="coachAddNote()">Save Note</button>
@@ -7512,8 +7516,14 @@ function loadEmailPrefs(pid){
   db.ref(SC.dbRoots.passwords+'/'+pid+'/emailPrefs').once('value',function(snap){
     const prefs=snap.val()||{};
     const el=document.getElementById('pp-email-addr');if(el)el.value=prefs.email||'';
+    // Every preference renders absent-means-ON, matching the worker's send
+    // rule (only an explicit false suppresses). The old truthiness check drew
+    // never-saved members as all-unchecked, so their first Save wrote explicit
+    // false for all four and silently muted things they never chose to mute.
     const m={'pp-notif-assign':'notifAssign','pp-notif-plan':'notifPlan','pp-notif-cnote':'notifCnote','pp-notif-score':'notifScore'};
-    Object.entries(m).forEach(function(_ref){const elId=_ref[0],key=_ref[1];const e=document.getElementById(elId);if(e)e.checked=!!prefs[key];});
+    Object.entries(m).forEach(function(_ref){const elId=_ref[0],key=_ref[1];const e=document.getElementById(elId);if(e)e.checked=prefs[key]!==false;});
+    const clubEl=document.getElementById('pp-notif-club');
+    if(clubEl)clubEl.checked=prefs.notifClub!==false;
   });
 }
 
@@ -7529,6 +7539,10 @@ function saveEmailPrefs(){
     notifScore:!!(document.getElementById('pp-notif-score')?document.getElementById('pp-notif-score').checked:false),
     updatedAt:td()
   };
+  // Club checkbox exists only on club portals; only write the field when it is
+  // on screen, so an HS save never stamps notifClub at all.
+  const _clubEl=document.getElementById('pp-notif-club');
+  if(_clubEl)prefs.notifClub=!!_clubEl.checked;
   if(db)db.ref(SC.dbRoots.passwords+'/'+pid+'/emailPrefs').set(prefs);
   toast('Email preferences saved!');
   const savedEl=document.getElementById('pp-email-saved');
@@ -9065,7 +9079,10 @@ function execSendMessage(memberIds, text){
     if(!D.threads[mid].messages)D.threads[mid].messages={};
     D.threads[mid].messages[msgId]=msg; D.threads[mid].updatedAt=now; D.threads[mid].lastReadExec=now;
     // The worker template already greets the member by name, so send the body without a greeting.
-    notifyPlayer(mid,'cnote','New message from '+(SC.schoolName||'your club'),text+'\n\nLog in to the app to reply.');
+    // Type 'club': club communications ride their OWN preference (notifClub,
+    // absent means on), so muting coach notes no longer silences messages,
+    // tryout invites, placements, dues reminders, travel, and schedule changes.
+    notifyPlayer(mid,'club','New message from '+(SC.schoolName||'your club'),text+'\n\nLog in to the app to reply.');
   });
   toast(memberIds.length>1?('Message sent to '+memberIds.length+' members'):'Message sent');
 }
