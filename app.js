@@ -968,7 +968,22 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       <button class="login-toggle-btn" onclick="switchLogin('player')">Player</button>
     </div>
     <div class="login-section active" id="login-coach">
-      <div style="font-family:'Bebas Neue';font-size:14px;letter-spacing:1.5px;color:var(--charcoal);margin-bottom:8px;">Enter ${COACH_LABEL} PIN</div>
+      ${SC.emailLogin?`
+      <!-- Per-exec sign-in first (account-login schools only): signing in as
+           yourself is the primary path. The shared PIN pad below still works
+           exactly as before, revealed by the small link. -->
+      <div style="font-family:'Bebas Neue';font-size:14px;letter-spacing:1.5px;color:var(--charcoal);margin-bottom:8px;">Sign In With Your Email</div>
+      <input type="email" style="width:100%;padding:12px 14px;border:2px solid var(--gray-lighter);border-radius:8px;font-family:'Barlow',sans-serif;font-size:15px;" id="exec-login-email" placeholder="you@fsu.edu" autocomplete="email" autocapitalize="none" spellcheck="false">
+      <input type="password" style="width:100%;padding:12px 14px;border:2px solid var(--gray-lighter);border-radius:8px;font-family:'Barlow',sans-serif;font-size:15px;margin-top:8px;" id="exec-login-pw" placeholder="Password" autocomplete="current-password">
+      <div class="login-error" id="exec-login-error"></div>
+      <button class="login-btn" id="exec-login-btn" onclick="execLoginEmail()">Sign In as Exec</button>
+      <button type="button" id="pin-alt-link" onclick="showSharedPinPad()" style="display:block;width:100%;background:none;border:none;color:var(--gray);font-family:'Barlow',sans-serif;font-size:13px;font-weight:600;padding:12px 8px 2px;cursor:pointer;text-decoration:underline;">Use the shared PIN instead</button>
+      `:''}
+      <!-- Shared PIN pad. For account-login schools it starts hidden behind the
+           link above; for everyone else it is the primary and only path, shown
+           exactly as before (the wrapper div is style-neutral). -->
+      <div id="pin-pad-wrap"${SC.emailLogin?' style="display:none;"':''}>
+      <div style="font-family:'Bebas Neue';font-size:14px;letter-spacing:1.5px;color:var(--charcoal);margin-bottom:8px;${SC.emailLogin?'margin-top:12px;':''}">Enter ${COACH_LABEL} PIN</div>
       <div class="login-pin-dots" id="pin-dots">
         <div class="login-pin-dot"></div><div class="login-pin-dot"></div>
         <div class="login-pin-dot"></div><div class="login-pin-dot"></div>
@@ -988,15 +1003,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
         <button class="login-numpad-btn backspace" onclick="pinBack()">⌫</button>
       </div>
       <div class="login-error" id="pin-error"></div>
-      ${SC.emailLogin?`
-      <!-- Per-exec sign-in (account-login schools only). Sits beside the shared
-           PIN pad, which stays untouched so nobody is locked out mid season. -->
-      <div style="display:flex;align-items:center;gap:10px;margin:14px 0 10px;color:var(--gray);font-size:11px;"><span style="flex:1;height:1px;background:var(--gray-lighter);"></span>or sign in as yourself<span style="flex:1;height:1px;background:var(--gray-lighter);"></span></div>
-      <input type="email" style="width:100%;padding:12px 14px;border:2px solid var(--gray-lighter);border-radius:8px;font-family:'Barlow',sans-serif;font-size:15px;" id="exec-login-email" placeholder="you@fsu.edu" autocomplete="email" autocapitalize="none" spellcheck="false">
-      <input type="password" style="width:100%;padding:12px 14px;border:2px solid var(--gray-lighter);border-radius:8px;font-family:'Barlow',sans-serif;font-size:15px;margin-top:8px;" id="exec-login-pw" placeholder="Password" autocomplete="current-password">
-      <div class="login-error" id="exec-login-error"></div>
-      <button class="login-btn" id="exec-login-btn" onclick="execLoginEmail()">Sign In as Exec</button>
-      `:''}
+      </div>
     </div>
     <div class="login-section" id="login-player">
       ${SC.emailLogin?`
@@ -4110,6 +4117,14 @@ async function pinPress(n){
   }
 }
 function pinBack(){pinEntry=pinEntry.slice(0,-1);updatePinDots();document.getElementById('pin-error').textContent='';}
+// Reveal the shared PIN pad on account-login schools, where the per-exec email
+// sign-in is primary and the pad starts hidden behind a small link. One-way per
+// visit: once revealed it stays until the overlay is rebuilt. Verification,
+// sessions, and error handling are untouched; this only toggles visibility.
+function showSharedPinPad(){
+  const w=document.getElementById('pin-pad-wrap'); if(w)w.style.display='';
+  const l=document.getElementById('pin-alt-link'); if(l)l.style.display='none';
+}
 function updatePinDots(){document.querySelectorAll('.login-pin-dot').forEach((d,i)=>{d.classList.toggle('filled',i<pinEntry.length);});}
 
 function loginAsCoach(){
