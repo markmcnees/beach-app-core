@@ -3276,6 +3276,7 @@ let playersTierFilter='all', playersGenderFilter='all';
 function setPlayersTierFilter(v,btn){ playersTierFilter=v; if(v==='all')playersGenderFilter='all'; renderPlayers(); }
 function setPlayersGenderFilter(v,btn){ playersGenderFilter=v; renderPlayers(); }
 function renderPlayers(){
+  csRankWarm(renderPlayers); // account ratings for the CS rank pills
   // Club (Grass Club) shows a tier filter (and a gender sub-filter when a tier is picked) instead of the stat-view pills,
   // and uses the combined stat view. Non-club configs are untouched and keep their stat-view pills.
   if(SC.tiersEnabled){
@@ -3343,7 +3344,7 @@ function renderPlayers(){
   const tbody=document.querySelector('#players-table tbody');
   const pNameCell=(p)=>{
     // Exec-side CS ranking pill, club only and only when the player has a rank. Never shown player-side.
-    const rk=(SC.tiersEnabled&&p.csRank)?` <span class="cs-rank">${p.csRank}</span>`:'';
+    const rk=csRankSpan(p);
     return currentRole==='coach'?`<button class="player-name" style="background:none;border:none;padding:0;cursor:pointer;text-decoration:underline dotted;color:var(--red);font-family:inherit;font-size:inherit;font-weight:700;text-align:left;-webkit-tap-highlight-color:transparent;" onclick="coachOpenPlayer('${p.id}')">${p.firstName||''} ${(p.lastName||'').charAt(0)}.${rk}</button>`:`<span class="player-name">${p.firstName||''} ${(p.lastName||'').charAt(0)}.${rk}</span>`;
   };
   if(pType==='queens'){
@@ -3749,6 +3750,7 @@ function _cmpLast(a,b){
   return la.localeCompare(lb);
 }
 function renderRoster(){
+  csRankWarm(renderRoster); // account ratings for the CS rank pills; re-renders once when they load
   let sorted=[...D.players].sort((a,b)=>_cmpCourt(a,b)||CO[a.classYear]-CO[b.classYear]||_cmpLast(a,b));
   // Tier filter (Grass Club only). Applied before court grouping; default 'all' shows everyone.
   if(rosterTierFilter!=='all'){
@@ -3764,7 +3766,7 @@ function renderRoster(){
     html+=`<div style="font-family:'Bebas Neue';font-size:12px;letter-spacing:1.5px;color:var(--red);margin:12px 0 6px;padding-top:8px;${last!==null?'border-top:2px solid var(--gray-lighter);':''}">
       ${courtBadge(p.court,'PG')}</div>`;last=p.court;}
     html+=`<div class="roster-item" id="ritem-${p.id}"><span class="class-badge class-${p.classYear}">${p.classYear}</span>${' '+playerBadge(p)}
-      <span class="roster-name" id="rname-${p.id}">${SC.tiersEnabled&&currentRole==='coach'?`<button class="player-name" style="background:none;border:none;padding:0;cursor:pointer;text-decoration:underline dotted;color:var(--red);font-family:inherit;font-size:inherit;font-weight:700;text-align:left;-webkit-tap-highlight-color:transparent;" onclick="coachOpenPlayer('${p.id}')">${p.firstName} ${p.lastName}</button>`:`${p.firstName} ${p.lastName}`}${SC.tiersEnabled&&p.csRank?` <span class="cs-rank">${p.csRank}</span>`:''}</span>
+      <span class="roster-name" id="rname-${p.id}">${SC.tiersEnabled&&currentRole==='coach'?`<button class="player-name" style="background:none;border:none;padding:0;cursor:pointer;text-decoration:underline dotted;color:var(--red);font-family:inherit;font-size:inherit;font-weight:700;text-align:left;-webkit-tap-highlight-color:transparent;" onclick="coachOpenPlayer('${p.id}')">${p.firstName} ${p.lastName}</button>`:`${p.firstName} ${p.lastName}`}${csRankSpan(p)}</span>
       ${!SC.tiersEnabled?`<input type="number" min="0" max="99" placeholder="#" title="Jersey #" value="${p.jersey||''}" style="width:52px;padding:4px 6px;border:1px solid var(--gray-lighter);border-radius:6px;font-family:'Bebas Neue',sans-serif;font-size:15px;text-align:center;color:var(--charcoal);" onchange="updJersey('${p.id}',this.value)">`:''}
       <select class="court-select" onchange="updCt('${p.id}',this.value)">${COURTS.map(c=>`<option value="${c}" ${p.court===c?'selected':''}>PG ${c}</option>`).join('')}</select>
       <button class="btn btn-small" onclick="editPlayerName('${p.id}')" style="padding:4px 8px;font-size:10px;background:var(--blue);color:var(--white);">✎</button>
@@ -9566,6 +9568,7 @@ function pgMovePlayerTier(pid,newTier){
   renderPracticeGroups(); // coachSetTier re-renders the roster but not this view, so repaint it here
 }
 function renderPracticeGroups(){
+  csRankWarm(renderPracticeGroups); // account ratings for the CS rank pills
   const pane=document.getElementById('tab-practicegroups');
   if(!pane)return;
   const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -9597,7 +9600,7 @@ function renderPracticeGroups(){
       </div>`:'';
       return `<div style="padding:5px 0;border-bottom:1px solid var(--gray-lighter);font-size:13px;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
-          <span style="color:var(--charcoal);">${esc(x.p.firstName+' '+x.p.lastName)}${SC.tiersEnabled&&x.p.csRank?` <span class="cs-rank">${x.p.csRank}</span>`:''}</span>
+          <span style="color:var(--charcoal);">${esc(x.p.firstName+' '+x.p.lastName)}${csRankSpan(x.p)}</span>
           <span style="color:var(--gray);font-size:12px;">${x.avg>0?x.avg.toFixed(1):'-'}</span>
         </div>
         ${ctrls}
@@ -10760,6 +10763,70 @@ function renderClubLife(){
   if(typeof renderMemberPartnerPosts==='function') renderMemberPartnerPosts();
 }
 
+// ---- Shared community players cache ---------------------------------------
+// The ONE way the club reads the community players node
+// (tally_kotb_pickup/players). Generalized from the partner posts card's
+// fetch (which now goes through here too) so the CS rank resolver below does
+// not add a second read path. Same 60s TTL the partner card used. Read only.
+var _communityPlayers=null;        // { ts, players }
+var _communityPlayersPromise=null; // in-flight fetch, deduped across callers
+function communityPlayersNow(){
+  return (_communityPlayers&&(Date.now()-_communityPlayers.ts<60000))?_communityPlayers.players:null;
+}
+function ensureCommunityPlayers(){
+  var cached=communityPlayersNow();
+  if(cached) return Promise.resolve(cached);
+  if(_communityPlayersPromise) return _communityPlayersPromise;
+  if(!db) return Promise.resolve(null);
+  _communityPlayersPromise=db.ref('tally_kotb_pickup/players').once('value').then(function(s){
+    _communityPlayers={ts:Date.now(), players:s.val()||{}};
+    _communityPlayersPromise=null;
+    return _communityPlayers.players;
+  }).catch(function(e){
+    _communityPlayersPromise=null;
+    console.warn('community players read failed', e);
+    return null;
+  });
+  return _communityPlayersPromise;
+}
+
+// ---- Platform rating (CS rank) resolver -----------------------------------
+// Stage two: the club DISPLAYS the platform rating that lives on the member's
+// CourtSense account (tally_kotb_pickup/players/{accountId}.rating, mirrored
+// there whenever a rated game is saved anywhere on the platform). Resolution:
+//   1. the account rating, via the accountId on the club roster record
+//   2. the TruVolley-derived seed the signup already wrote to the roster
+//      record's rating field (READ only; this reuses the existing conversion
+//      instead of writing a second one)
+//   3. legacy csRank (only demo seed data ever carried it; real records never
+//      did, so real clubs never hit this branch)
+//   4. 1500, the platform baseline for a brand-new player
+// Read only in this stage: the club writes no ratings anywhere.
+function csRankFor(p){
+  if(!SC.tiersEnabled||!p) return null;
+  var players=communityPlayersNow();
+  if(players&&p.accountId){
+    var a=players[p.accountId];
+    if(a&&typeof a.rating==='number') return Math.round(a.rating);
+  }
+  if(typeof p.rating==='number') return Math.round(p.rating);
+  if(p.csRank!=null&&p.csRank!==0) return p.csRank;
+  return 1500;
+}
+// The rendered pill, one expression for the template call sites. Empty for HS
+// configs (csRankFor returns null when tiers are off), so HS output is unchanged.
+function csRankSpan(p){
+  var r=csRankFor(p);
+  return r!=null?' <span class="cs-rank">'+r+'</span>':'';
+}
+// Cold-cache kick for the synchronous render sites: draw with what we have now
+// (seed or baseline), fetch the account ratings, and re-render the caller once
+// when they land. ensureCommunityPlayers dedupes concurrent kicks.
+function csRankWarm(rerender){
+  if(!SC.tiersEnabled||!db||communityPlayersNow()) return;
+  ensureCommunityPlayers().then(function(pl){ if(pl&&typeof rerender==='function') rerender(); });
+}
+
 // ---- Tournament partner posts (Grass Club) --------------------------------
 // Read-only Club Life card listing open tournament partner posts from the pickup app
 // (tally_kotb_pickup/invites, postType 'partner') that this member is eligible for, club-scoped
@@ -10818,11 +10885,14 @@ function renderMemberPartnerPosts(){
   var cached=_ppPartnerCache&&(Date.now()-_ppPartnerCache.ts<60000)?_ppPartnerCache:null;
   if(!cached){
     box.innerHTML=shell('<div style="font-size:13px;color:var(--gray);padding:6px 0;">Loading partner posts...</div>');
+    // Players come through the shared community cache (ensureCommunityPlayers),
+    // the single read path the CS rank resolver also uses; only the invites
+    // read is this card's own.
     Promise.all([
       db.ref('tally_kotb_pickup/invites').once('value'),
-      db.ref('tally_kotb_pickup/players').once('value')
-    ]).then(function(snaps){
-      _ppPartnerCache={ ts:Date.now(), invites:snaps[0].val()||{}, players:snaps[1].val()||{} };
+      ensureCommunityPlayers()
+    ]).then(function(res){
+      _ppPartnerCache={ ts:Date.now(), invites:res[0].val()||{}, players:res[1]||{} };
       // Re-render only if the card is still on screen (member may have switched tabs).
       if(document.getElementById('pp-partner')) renderMemberPartnerPosts();
     }).catch(function(e){
@@ -13034,6 +13104,7 @@ function hideAthleteCard(){
 }
 
 function renderAthleteCard(pid){
+  csRankWarm(function(){ renderAthleteCard(pid); }); // account rating for the header; safe re-render, every block null-checks its container
   var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});};
   var BN="font-family:'Bebas Neue',sans-serif", BODY="font-family:'Barlow',sans-serif";
   var RED=SC.colors.primary, DARK=SC.colors.primaryDeeper, GOLD=SC.colors.gold||'#d4a843';
@@ -13046,7 +13117,7 @@ function renderAthleteCard(pid){
   if(hdr){
     var name=((rp.firstName||'')+' '+(rp.lastName||'')).trim()||pN(pid);
     var glance=athleteGlanceLine(pid);
-    var rating=(rp.csRank!=null&&rp.csRank!==0)?rp.csRank:null; // csRank lives on the roster record; omit when absent or unassessed (0)
+    var rating=csRankFor(rp); // platform rating from the account, seed or 1500 fallback (see csRankFor)
     hdr.innerHTML=
       '<div style="display:flex;flex-direction:column;align-items:center;text-align:center;padding:6px 0 14px;">'
       +'<div style="margin-bottom:10px;">'+avatarHtml(person,96)+'</div>'
