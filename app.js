@@ -1501,6 +1501,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
     ${!SC.clubPortalLite?'<button class="pp-tab-btn" onclick="switchPPTab(\'learn\',this)">🎓 Learn</button>':''}
     ${SC.chatEnabled?'<button class="pp-tab-btn" onclick="switchPPTab(\'chat\',this)">💬 Club Chat</button>':''}
     ${SC.tiersEnabled?'<button class="pp-tab-btn" onclick="switchPPTab(\'messages\',this)">✉️ Messages <span id="pp-msg-unread" style="color:var(--red);font-weight:700;"></span></button>':''}
+    ${SC.tiersEnabled?'<button class="pp-tab-btn" onclick="switchPPTab(\'travel\',this)">🚌 Travel</button>':''}
     ${SC.pickupEnabled?'<button class="pp-tab-btn" onclick="window.open(\'https://courtsense.app/pickup/\',\'_blank\')">🏖️ Pickup</button>':''}
   </div>
 
@@ -1691,6 +1692,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
   </div>
   ${SC.chatEnabled?'<div class="pp-panel" id="pp-panel-chat"></div>':''}
   ${SC.tiersEnabled?'<div class="pp-panel" id="pp-panel-messages"></div>':''}
+  ${SC.tiersEnabled?'<div class="pp-panel" id="pp-panel-travel"></div>':''}
 
 </div><!-- end player-portal -->
 
@@ -1724,6 +1726,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
     </div>
     <div style="padding:16px 20px;display:flex;flex-direction:column;gap:20px;">
       <div style="border-top:1px solid var(--gray-lighter);padding-top:16px;"><div style="font-family:'Bebas Neue';font-size:16px;letter-spacing:1px;color:var(--gray);margin-bottom:8px;">📊 Team Rankings</div><div id="cpm-rankings"></div></div>
+      ${SC.tiersEnabled?`<div id="cpm-standing-block" style="border-top:1px solid var(--gray-lighter);padding-top:16px;"></div>`:''}
       <div id="cpm-identity" style="border-top:1px solid var(--gray-lighter);padding-top:16px;">
         <div style="font-family:'Bebas Neue';font-size:16px;letter-spacing:1px;color:var(--gray);margin-bottom:8px;">🪪 Player Identity</div>
         <div id="cpm-id-summary" style="font-size:12px;color:var(--gray);margin-bottom:8px;"></div>
@@ -2329,7 +2332,7 @@ const DEF_M=[
   {id:'m09',date:'2026-02-06',court:2,team1:['p15','p04'],team2:['p05','p06'],score1:21,score2:15}
 ];
 
-let D={players:[],matches:[],planned:[],gamedays:[],scrimmages:[],schedule:[],standings:{},goals:{},assignments:{},duals:[],opponents:{},liveScoring:{},quizScores:{},tierRequests:{},broadcasts:{},threads:{},tryoutSessions:{},tryoutAttendance:{},dues:{},practiceSchedule:{},travel:{}};
+let D={players:[],matches:[],planned:[],gamedays:[],scrimmages:[],schedule:[],standings:{},goals:{},assignments:{},duals:[],opponents:{},liveScoring:{},quizScores:{},tierRequests:{},broadcasts:{},threads:{},tryoutSessions:{},tryoutAttendance:{},dues:{},practiceSchedule:{},travel:{},standing:{}};
 // Active competitive season. Config leaf at DB_ROOT/config/currentSeasonId; defaults to the current year, overwritten by the init read below if a stored value exists. Result creates are stamped with this via fbSetResult.
 let _currentSeasonId=(new Date()).getFullYear().toString();
 let profilesData={}; // from leon_queens node for AI context
@@ -2496,10 +2499,27 @@ function listenData(){if(!db)return;
   // Travel tab live, but never while an exec is mid-edit (any tv-* field focused).
   db.ref(DB_ROOT+'/travel').on('value',s=>{
     D.travel=s.val()||{};
+    if(currentRole==='player'){
+      // Member Travel panel re-renders live (a teammate's invite/accept/withdraw shows up),
+      // but never while the member is mid-edit (any mtv-* control focused, e.g. the seats box).
+      const tp=document.getElementById('pp-panel-travel');
+      const ae=document.activeElement; if(ae&&ae.id&&ae.id.indexOf('mtv-')===0)return;
+      if(tp&&tp.classList.contains('active')&&typeof renderMemberTravel==='function')renderMemberTravel();
+      return;
+    }
     if(currentRole!=='coach')return;
     const pane=document.getElementById('tab-travel'); if(!pane)return;
     const ae=document.activeElement; if(ae&&ae.id&&ae.id.indexOf('tv-')===0)return;
     if(typeof renderTravel==='function')renderTravel();
+  });
+  // Good standing (club). Exec-set at standing/{memberId}; absent = good standing. A member reads only
+  // their own (shown in their Travel panel); the exec sees any member's in the coach player modal.
+  db.ref(DB_ROOT+'/standing').on('value',s=>{
+    D.standing=s.val()||{};
+    if(currentRole==='player'){
+      const tp=document.getElementById('pp-panel-travel');
+      if(tp&&tp.classList.contains('active')&&typeof renderMemberTravel==='function')renderMemberTravel();
+    }
   });
   db.ref(SC.dbRoots.profiles).on('value',s=>{
     profilesData=s.val()||{};
@@ -4831,6 +4851,12 @@ function coachOpenPlayer(pid){
         ['','exec','faculty'].map(v=>`<option value="${v}" ${v===curLead?'selected':''}>${LEADER_LABELS[v]}</option>`).join('')+
         `</select>`;
       document.getElementById('cpm-meta').innerHTML+=leaderHtml;
+    }
+    // Good-standing control (exec/coach role only). Not-in-good-standing carries a short note the
+    // member sees and blocks them from joining travel; clearing it returns them to good standing.
+    if(currentRole==='coach'){
+      const sb=document.getElementById('cpm-standing-block');
+      if(sb) sb.innerHTML=standingEditorHtml(pid);
     }
   }
   else{
@@ -8489,6 +8515,7 @@ function switchPPTab(tab,btn){
   if(tab==='learn'){if(btn)btn.classList.add('active');document.getElementById('pp-panel-learn').classList.add('active');renderPPQuizHistory();return;}
   if(tab==='chat'){if(btn)btn.classList.add('active');document.getElementById('pp-panel-chat').classList.add('active');renderClubChat();return;}
   if(tab==='messages'){if(btn)btn.classList.add('active');document.getElementById('pp-panel-messages').classList.add('active');renderMemberMessages();return;}
+  if(tab==='travel'){if(btn)btn.classList.add('active');document.getElementById('pp-panel-travel').classList.add('active');renderMemberTravel();return;}
   if(btn)btn.classList.add('active');
   document.getElementById('pp-panel-'+tab).classList.add('active');
   if(tab==='live')renderPlayerLiveScoring();
@@ -10122,6 +10149,335 @@ function renderTravel(){
     </div>
     ${eventsHtml}
   </div>`;
+}
+
+// ============================================================
+// Travel tournaments, member side (Grass Club). A member in an invited squad joins, forms a team or
+// marks themselves a free agent, offers or claims a ride, requests lodging, and can withdraw. Every
+// action writes the exact shapes the exec dashboard already reads (participants/teams under
+// travel/{eventId}), so the two sides stay in sync with no new node and no rules change. Members
+// cannot send email (that path is exec-only), so a teammate is "told" through the shared record:
+// a pending invite shows in the invitee's own panel, and a withdrawal shows teammates an incomplete
+// team. After the deadline members can see everything but can no longer join or change arrangements.
+// ------------------------------------------------------------
+function mtvEv(id){ return (D.travel||{})[id]; }
+function mtvInScope(ev, tier){
+  var tiers = ev.scope==='gold'?['gold']:ev.scope==='garnet'?['garnet']:['gold','garnet'];
+  return tiers.indexOf(tier)>=0;
+}
+function mtvDeadlinePassed(ev){ return !!(ev&&ev.deadline && td()>ev.deadline); }
+function mtvStandingBad(mid){ var st=(D.standing||{})[mid]; return !!(st&&st.good===false); }
+// Mutation guard: no changes once the deadline is past. Returns true when the member may still act.
+function mtvGuard(ev){
+  if(!ev) return false;
+  if(mtvDeadlinePassed(ev)){ toast('The signup deadline for this tournament has passed.'); return false; }
+  return true;
+}
+// ---- write helpers (fbSet + local mirror so the UI updates before the echo) ----
+function mtvWritePart(id,mid,rec){
+  fbSet('travel/'+id+'/participants/'+mid, rec);
+  var ev=mtvEv(id); if(ev){ if(!ev.participants)ev.participants={}; if(rec===null)delete ev.participants[mid]; else ev.participants[mid]=rec; }
+}
+function mtvSetPartField(id,mid,field,val){
+  fbSet('travel/'+id+'/participants/'+mid+'/'+field, val);
+  var ev=mtvEv(id); if(ev&&ev.participants&&ev.participants[mid]){ if(val===null)delete ev.participants[mid][field]; else ev.participants[mid][field]=val; }
+}
+function mtvWriteTeam(id,tid,rec){
+  fbSet('travel/'+id+'/teams/'+tid, rec);
+  var ev=mtvEv(id); if(ev){ if(!ev.teams)ev.teams={}; if(rec===null)delete ev.teams[tid]; else ev.teams[tid]=rec; }
+}
+function mtvSetTeamMember(id,tid,mid,val){
+  fbSet('travel/'+id+'/teams/'+tid+'/members/'+mid, val);
+  var ev=mtvEv(id); if(ev&&ev.teams&&ev.teams[tid]){ if(!ev.teams[tid].members)ev.teams[tid].members={}; if(val===null)delete ev.teams[tid].members[mid]; else ev.teams[tid].members[mid]=val; }
+}
+// Remove me from a team; if no accepted member is left, the team dissolves.
+function mtvRemoveMeFromTeam(id,tid){
+  var ev=mtvEv(id); var t=ev&&ev.teams&&ev.teams[tid]; if(!t) return;
+  mtvSetTeamMember(id,tid,currentPlayerId,null);
+  var mem=((mtvEv(id).teams||{})[tid]||{}).members||{};
+  var anyAccepted=Object.keys(mem).some(function(k){ return mem[k]==='accepted'; });
+  if(!anyAccepted) mtvWriteTeam(id,tid,null);
+}
+// ---- member actions ----
+function mtvJoin(id){
+  var ev=mtvEv(id); if(!mtvGuard(ev)) return;
+  if(mtvStandingBad(currentPlayerId)){ var st=(D.standing||{})[currentPlayerId]; toast('You are not in good standing. '+((st&&st.note)||'Talk to an exec.')); return; }
+  mtvWritePart(id,currentPlayerId,{status:'in',freeAgent:false,teamId:null,canDrive:false,seats:0,rideWith:null,lodging:false,at:Date.now()});
+  toast('You are in. Form a team or mark yourself a free agent.');
+  renderMemberTravel();
+}
+function mtvDecline(id){
+  var ev=mtvEv(id); if(!mtvGuard(ev)) return;
+  mtvWritePart(id,currentPlayerId,{status:'declined',at:Date.now()});
+  renderMemberTravel();
+}
+function mtvFormTeam(id){
+  var ev=mtvEv(id); if(!mtvGuard(ev)) return;
+  var fmtEl=document.getElementById('mtv-fmt-'+id); var fmt=fmtEl?fmtEl.value:'';
+  if(!fmt){ toast('Pick a format first.'); return; }
+  var size=TRAVEL_FORMAT_SIZE[fmt]||0;
+  var invited=[]; var parts=(ev.participants||{});
+  Object.keys(parts).forEach(function(mid){ var cb=document.getElementById('mtv-inv-'+id+'-'+mid); if(cb&&cb.checked) invited.push(mid); });
+  if(1+invited.length>size){ toast('That is more players than a '+TRAVEL_FORMAT_LABEL[fmt]+' team holds ('+size+').'); return; }
+  var tid=gi('tvt');
+  var members={}; members[currentPlayerId]='accepted'; invited.forEach(function(mid){ members[mid]='pending'; });
+  mtvWriteTeam(id,tid,{format:fmt,createdBy:currentPlayerId,members:members,createdAt:Date.now()});
+  mtvSetPartField(id,currentPlayerId,'teamId',tid);
+  mtvSetPartField(id,currentPlayerId,'freeAgent',false);
+  toast(invited.length?'Team created. Invites stay pending until each player confirms.':'Team created. Invite players to fill it.');
+  renderMemberTravel();
+}
+function mtvInvite(id,tid,mid){
+  var ev=mtvEv(id); if(!mtvGuard(ev)) return;
+  var t=(ev.teams||{})[tid]; if(!t) return;
+  var size=TRAVEL_FORMAT_SIZE[t.format]||0;
+  if(Object.keys(t.members||{}).length>=size){ toast('This team is already full.'); return; }
+  mtvSetTeamMember(id,tid,mid,'pending');
+  renderMemberTravel();
+}
+function mtvCancelInvite(id,tid,mid){
+  if(!mtvGuard(mtvEv(id))) return;
+  mtvSetTeamMember(id,tid,mid,null);
+  renderMemberTravel();
+}
+function mtvAcceptInvite(id,tid){
+  var ev=mtvEv(id); if(!mtvGuard(ev)) return;
+  if(mtvStandingBad(currentPlayerId)){ var st=(D.standing||{})[currentPlayerId]; toast('You are not in good standing. '+((st&&st.note)||'Talk to an exec.')); return; }
+  var part=(ev.participants||{})[currentPlayerId];
+  if(part&&part.teamId&&part.teamId!==tid) mtvRemoveMeFromTeam(id,part.teamId);
+  if(!part||part.status!=='in') mtvWritePart(id,currentPlayerId,{status:'in',freeAgent:false,teamId:tid,canDrive:false,seats:0,rideWith:null,lodging:false,at:Date.now()});
+  else { mtvSetPartField(id,currentPlayerId,'teamId',tid); mtvSetPartField(id,currentPlayerId,'freeAgent',false); }
+  mtvSetTeamMember(id,tid,currentPlayerId,'accepted');
+  toast('You joined the team.');
+  renderMemberTravel();
+}
+function mtvDeclineInvite(id,tid){
+  if(!mtvGuard(mtvEv(id))) return;
+  mtvSetTeamMember(id,tid,currentPlayerId,null);
+  renderMemberTravel();
+}
+function mtvLeaveTeam(id){
+  var ev=mtvEv(id); if(!mtvGuard(ev)) return;
+  var part=(ev.participants||{})[currentPlayerId]; var tid=part&&part.teamId; if(!tid) return;
+  mtvRemoveMeFromTeam(id,tid);
+  mtvSetPartField(id,currentPlayerId,'teamId',null);
+  toast('You left the team. Your teammates can see it is no longer complete.');
+  renderMemberTravel();
+}
+function mtvSetFreeAgent(id,on){
+  var ev=mtvEv(id); if(!mtvGuard(ev)) return;
+  mtvSetPartField(id,currentPlayerId,'freeAgent',!!on);
+  renderMemberTravel();
+}
+function mtvSaveDriving(id){
+  var ev=mtvEv(id); if(!mtvGuard(ev)) return;
+  var drv=document.getElementById('mtv-drive-'+id); var canDrive=!!(drv&&drv.checked);
+  var seatsEl=document.getElementById('mtv-seats-'+id);
+  var seats=canDrive?Math.max(0,parseInt((seatsEl&&seatsEl.value)||'0',10)||0):0;
+  if(canDrive) mtvSetPartField(id,currentPlayerId,'rideWith',null); // a driver does not also ride with someone
+  mtvSetPartField(id,currentPlayerId,'canDrive',canDrive);
+  mtvSetPartField(id,currentPlayerId,'seats',seats);
+  if(!canDrive){ // no longer driving: release anyone who had claimed a seat from me
+    var parts=(mtvEv(id).participants)||{};
+    Object.keys(parts).forEach(function(x){ if(parts[x].rideWith===currentPlayerId) mtvSetPartField(id,x,'rideWith',null); });
+  }
+  toast('Ride info saved.');
+  renderMemberTravel();
+}
+function mtvClaimSeat(id,driverId){
+  var ev=mtvEv(id); if(!mtvGuard(ev)) return;
+  var parts=(ev.participants||{}); var driver=parts[driverId];
+  if(!driver||!driver.canDrive){ toast('That driver is not offering a ride right now.'); return; }
+  var seats=driver.seats||0;
+  var claimed=Object.keys(parts).filter(function(x){ return parts[x].rideWith===driverId; }).length;
+  if(claimed>=seats){ toast('That car is full.'); return; }
+  mtvSetPartField(id,currentPlayerId,'canDrive',false);
+  mtvSetPartField(id,currentPlayerId,'seats',0);
+  mtvSetPartField(id,currentPlayerId,'rideWith',driverId);
+  renderMemberTravel();
+}
+function mtvReleaseSeat(id){
+  if(!mtvGuard(mtvEv(id))) return;
+  mtvSetPartField(id,currentPlayerId,'rideWith',null);
+  renderMemberTravel();
+}
+function mtvSetLodging(id,on){
+  var ev=mtvEv(id); if(!mtvGuard(ev)) return;
+  if(!ev.lodgingOffered) return;
+  mtvSetPartField(id,currentPlayerId,'lodging',!!on);
+  renderMemberTravel();
+}
+function mtvWithdraw(id){
+  var ev=mtvEv(id); if(!mtvGuard(ev)) return;
+  if(!window.confirm('Withdraw from this tournament? This frees your seat and lodging and removes you from your team.')) return;
+  var part=(ev.participants||{})[currentPlayerId]||{};
+  if(part.teamId) mtvRemoveMeFromTeam(id,part.teamId);           // removes me; teammates now see an incomplete team
+  var parts=(mtvEv(id).participants)||{};
+  Object.keys(parts).forEach(function(x){ if(parts[x].rideWith===currentPlayerId) mtvSetPartField(id,x,'rideWith',null); }); // free my riders
+  mtvWritePart(id,currentPlayerId,null);                          // removes me from GOING, frees my claimed seat and lodging
+  toast('You have withdrawn from this tournament.');
+  renderMemberTravel();
+}
+function renderMemberTravel(){
+  var pane=document.getElementById('pp-panel-travel'); if(!pane) return;
+  var esc=function(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]); }); };
+  var nm=function(mid){ var p=gP(mid); return p?((p.firstName||'')+' '+(p.lastName||'')).trim():String(mid); };
+  var me=currentPlayerId; var meP=gP(me);
+  if(!meP){ pane.innerHTML='<div class="card"><div style="font-size:13px;color:var(--gray);padding:8px;">Travel is not available right now.</div></div>'; return; }
+  var myTier=meP.tier;
+  var st=(D.standing||{})[me]; var bad=!!(st&&st.good===false);
+  var standingBanner=bad?('<div class="card" style="border:2px solid var(--red);margin-bottom:12px;"><div style="font-family:\'Bebas Neue\';font-size:14px;letter-spacing:1px;color:var(--red);margin-bottom:4px;">Not in good standing</div><div style="font-size:13px;color:var(--charcoal);line-height:1.5;">'+esc((st&&st.note)||'')+'</div><div style="font-size:12px;color:var(--gray);margin-top:6px;">You cannot join a travel tournament until this is resolved.</div></div>'):'';
+  var events=travelEvents().filter(function(ev){ return ev.announcedAt && mtvInScope(ev,myTier); });
+  if(!events.length){
+    pane.innerHTML='<div class="card"><div class="card-title"><span class="bar"></span> 🚌 Travel Tournaments</div>'+standingBanner+'<div style="font-size:13px;color:var(--gray);padding:6px 0;">No travel tournaments for your squad yet. When an exec announces one, it shows up here.</div></div>';
+    return;
+  }
+  var H=function(t){ return '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:12px;letter-spacing:1px;color:var(--charcoal);margin:10px 0 4px;">'+t+'</div>'; };
+  var cards=events.map(function(ev){
+    var id=ev.id; var parts=ev.participants||{}; var teams=ev.teams||{};
+    var mine=parts[me]; var joined=!!(mine&&mine.status==='in');
+    var declined=!!(mine&&mine.status==='declined');
+    var locked=mtvDeadlinePassed(ev);
+    var total=travelCostTotal(ev);
+    var going=Object.keys(parts).filter(function(x){ return parts[x].status==='in'; });
+    // header
+    var when=ev.startDate?tsReadableDate(ev.startDate):'';
+    if(ev.endDate&&ev.endDate!==ev.startDate) when+=(when?' to ':'')+tsReadableDate(ev.endDate);
+    var costRows=Object.keys(ev.costs||{}).map(function(lid){ var c=ev.costs[lid]||{}; return '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--charcoal);padding:1px 0;"><span>'+esc(c.label||'')+'</span><span>$'+esc(c.amount!=null?c.amount:0)+'</span></div>'; }).join('');
+    var header='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:18px;letter-spacing:1px;color:var(--charcoal);">'+esc(ev.name||'Tournament')+'</div>'
+      +(ev.location?'<div style="font-size:13px;color:var(--charcoal);">'+esc(ev.location)+'</div>':'')
+      +(when.trim()?'<div style="font-size:13px;color:var(--charcoal);">'+esc(when.trim())+'</div>':'')
+      +(ev.deadline?'<div style="font-size:12px;color:'+(locked?'var(--red)':'var(--gray)')+';">Sign up by '+esc(tsReadableDate(ev.deadline))+(locked?' (closed)':'')+'</div>':'')
+      +(ev.regUrl?'<div style="font-size:12px;margin-top:2px;"><a href="'+esc(ev.regUrl)+'" target="_blank" rel="noopener" style="color:#082A4F;">Registration link</a></div>':'')
+      +(costRows?('<div style="border-top:1px solid var(--gray-lighter);margin-top:6px;padding-top:4px;">'+costRows+'<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:var(--charcoal);margin-top:2px;"><span>Total per player</span><span>$'+esc(total)+'</span></div></div>'):'');
+    // my action area
+    var body='';
+    if(locked && !joined){
+      body='<div style="font-size:12px;color:var(--gray);margin-top:8px;">Signups are closed. '+(declined?'You declined this one.':'You did not sign up.')+'</div>';
+    } else if(!joined){
+      if(bad){
+        body='<div style="font-size:12px;color:var(--red);margin-top:8px;">Resolve your standing above to join.</div>';
+      } else {
+        body='<div style="display:flex;gap:8px;margin-top:10px;">'
+          +'<button class="btn btn-small" style="flex:1;background:#082A4F;color:#fff;border:none;padding:7px;font-size:12px;" onclick="mtvJoin(\''+id+'\')">Join</button>'
+          +'<button class="btn btn-small btn-secondary" style="flex:1;padding:7px;font-size:12px;" onclick="mtvDecline(\''+id+'\')">Decline</button>'
+          +'</div>'+(declined?'<div style="font-size:11px;color:var(--gray);margin-top:4px;">You declined. You can still join before the deadline.</div>':'');
+      }
+    } else {
+      // joined: team, ride, lodging, withdraw
+      var myTeamId=mine.teamId; var myTeam=myTeamId?teams[myTeamId]:null;
+      // incoming invites (pending on a team I did not accept)
+      var invites=Object.keys(teams).filter(function(tid){ return (teams[tid].members||{})[me]==='pending'; });
+      var inviteHtml=invites.map(function(tid){
+        var t=teams[tid]; var mates=Object.keys(t.members||{}).map(function(x){ return esc(nm(x))+((t.members[x]==='pending')?' (pending)':''); }).join(', ');
+        return '<div style="border:1px solid var(--gray-lighter);border-radius:8px;padding:8px;margin-bottom:6px;font-size:12px;">'
+          +'<div style="color:var(--charcoal);margin-bottom:6px;">'+esc(nm(t.createdBy))+' invited you to a '+esc(TRAVEL_FORMAT_LABEL[t.format]||t.format||'')+' team ('+mates+').</div>'
+          +(locked?'<div style="font-size:11px;color:var(--gray);">Signups are closed.</div>':'<div style="display:flex;gap:6px;"><button class="btn btn-small" style="background:#217F7F;color:#fff;border:none;padding:4px 10px;font-size:11px;" onclick="mtvAcceptInvite(\''+id+'\',\''+tid+'\')">Accept</button><button class="btn btn-small btn-secondary" style="padding:4px 10px;font-size:11px;" onclick="mtvDeclineInvite(\''+id+'\',\''+tid+'\')">Decline</button></div>')
+          +'</div>';
+      }).join('');
+      // team block
+      var teamHtml='';
+      if(myTeam){
+        var size=TRAVEL_FORMAT_SIZE[myTeam.format]||0; var complete=travelTeamComplete(myTeam);
+        var memRows=Object.keys(myTeam.members||{}).map(function(x){
+          var pend=myTeam.members[x]==='pending';
+          var canCancel=(myTeam.createdBy===me)&&pend&&!locked;
+          return '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--charcoal);padding:2px 0;"><span>'+esc(nm(x))+(pend?' <span style="color:var(--gray);">(pending)</span>':'')+(x===myTeam.createdBy?' <span style="color:var(--gray);">(captain)</span>':'')+'</span>'+(canCancel?'<button class="btn btn-small btn-secondary" style="padding:1px 8px;font-size:10px;" onclick="mtvCancelInvite(\''+id+'\',\''+myTeamId+'\',\''+x+'\')">Cancel</button>':'')+'</div>';
+        }).join('');
+        // captain can invite more until full
+        var addHtml='';
+        if(myTeam.createdBy===me && !locked && Object.keys(myTeam.members||{}).length<size){
+          var avail=going.filter(function(x){ return x!==me && !Object.keys(teams).some(function(tid){ return (teams[tid].members||{})[x]==='accepted'; }) && !(myTeam.members||{})[x]; });
+          addHtml=avail.length?('<div style="margin-top:6px;">'+avail.map(function(x){ return '<button class="btn btn-small btn-secondary" style="padding:3px 9px;font-size:11px;margin:0 4px 4px 0;" onclick="mtvInvite(\''+id+'\',\''+myTeamId+'\',\''+x+'\')">+ '+esc(nm(x))+'</button>'; }).join('')+'</div>'):'<div style="font-size:11px;color:var(--gray);margin-top:4px;">No one else is available to invite yet.</div>';
+        }
+        teamHtml='<div style="border:1px solid var(--gray-lighter);border-radius:8px;padding:8px;">'
+          +'<div style="font-size:12px;color:var(--charcoal);margin-bottom:4px;">'+esc(TRAVEL_FORMAT_LABEL[myTeam.format]||myTeam.format||'Team')+' team &middot; <span style="color:'+(complete?'#217F7F':'var(--red)')+';font-weight:700;">'+(complete?'complete':'incomplete ('+Object.keys(myTeam.members||{}).length+'/'+size+')')+'</span></div>'
+          +memRows+addHtml
+          +(locked?'':'<div style="margin-top:6px;"><button class="btn btn-small btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="mtvLeaveTeam(\''+id+'\')">Leave team</button></div>');
+      } else if(!locked){
+        // form a team or free agent
+        var fmtOpts=Object.keys(TRAVEL_FORMAT_SIZE).filter(function(f){ return ev.formats&&ev.formats[f]; });
+        if(!fmtOpts.length) fmtOpts=Object.keys(TRAVEL_FORMAT_SIZE);
+        var avail2=going.filter(function(x){ return x!==me && !Object.keys(teams).some(function(tid){ return (teams[tid].members||{})[x]==='accepted'; }); });
+        teamHtml='<div style="border:1px dashed var(--gray-lighter);border-radius:8px;padding:8px;">'
+          +'<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;font-size:12px;color:var(--charcoal);"><span>Form a team:</span><select id="mtv-fmt-'+id+'" class="form-select" style="padding:4px 8px;font-size:12px;">'+fmtOpts.map(function(f){ return '<option value="'+f+'">'+esc(TRAVEL_FORMAT_LABEL[f])+' ('+TRAVEL_FORMAT_SIZE[f]+')</option>'; }).join('')+'</select></div>'
+          +(avail2.length?('<div style="font-size:11px;color:var(--gray);margin-bottom:4px;">Invite teammates (they confirm before the team counts):</div><div style="margin-bottom:6px;">'+avail2.map(function(x){ return '<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;margin:0 10px 4px 0;"><input type="checkbox" id="mtv-inv-'+id+'-'+x+'"> '+esc(nm(x))+'</label>'; }).join('')+'</div>'):'<div style="font-size:11px;color:var(--gray);margin-bottom:6px;">No teammates have joined yet. You can create the team and invite them once they do.</div>')
+          +'<button class="btn btn-small" style="background:#082A4F;color:#fff;border:none;padding:5px 12px;font-size:11px;" onclick="mtvFormTeam(\''+id+'\')">Create team</button>'
+          +'<div style="border-top:1px solid var(--gray-lighter);margin-top:8px;padding-top:8px;font-size:12px;color:var(--charcoal);">'
+          +(mine.freeAgent?'You are listed as a free agent looking for a team. <button class="btn btn-small btn-secondary" style="padding:2px 8px;font-size:10px;margin-left:4px;" onclick="mtvSetFreeAgent(\''+id+'\',false)">Remove</button>':'<button class="btn btn-small btn-secondary" style="padding:4px 10px;font-size:11px;" onclick="mtvSetFreeAgent(\''+id+'\',true)">I am a free agent</button>')
+          +'</div></div>';
+      } else {
+        teamHtml='<div style="font-size:12px;color:var(--gray);">You are not on a team.</div>';
+      }
+      // rides
+      var rideHtml='';
+      var iAmRider=!!mine.rideWith;
+      if(iAmRider){
+        rideHtml='<div style="font-size:12px;color:var(--charcoal);">Riding with '+esc(nm(mine.rideWith))+'. '+(locked?'':'<button class="btn btn-small btn-secondary" style="padding:2px 8px;font-size:10px;margin-left:4px;" onclick="mtvReleaseSeat(\''+id+'\')">Release seat</button>')+'</div>';
+      } else {
+        var drivers=going.filter(function(x){ return x!==me && parts[x].canDrive && (parts[x].seats||0)>0; });
+        var driverList=drivers.map(function(x){
+          var open=Math.max(0,(parts[x].seats||0)-going.filter(function(y){ return parts[y].rideWith===x; }).length);
+          return '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--charcoal);padding:2px 0;"><span>'+esc(nm(x))+' &middot; '+open+' seat'+(open===1?'':'s')+' open</span>'+((open>0&&!locked&&!mine.canDrive)?'<button class="btn btn-small btn-secondary" style="padding:2px 8px;font-size:10px;" onclick="mtvClaimSeat(\''+id+'\',\''+x+'\')">Claim seat</button>':'')+'</div>';
+        }).join('');
+        rideHtml='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;font-size:12px;color:var(--charcoal);">'
+          +'<label style="display:inline-flex;align-items:center;gap:4px;"><input type="checkbox" id="mtv-drive-'+id+'" '+(mine.canDrive?'checked':'')+' '+(locked?'disabled':'')+'> I can drive</label>'
+          +'<span>Seats <input type="number" id="mtv-seats-'+id+'" min="0" step="1" value="'+esc(mine.seats||0)+'" '+(locked?'disabled':'')+' style="width:56px;padding:3px 6px;font-size:12px;border:1px solid var(--gray-lighter);border-radius:6px;"></span>'
+          +(locked?'':'<button class="btn btn-small btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="mtvSaveDriving(\''+id+'\')">Save</button>')
+          +'</div>'
+          +(driverList?('<div style="border-top:1px solid var(--gray-lighter);padding-top:4px;">'+driverList+'</div>'):'<div style="font-size:11px;color:var(--gray);">No one is offering a ride yet.</div>');
+      }
+      // lodging
+      var lodgingHtml=ev.lodgingOffered?('<label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--charcoal);"><input type="checkbox" '+(mine.lodging?'checked':'')+' '+(locked?'disabled':'')+' onchange="mtvSetLodging(\''+id+'\',this.checked)"> Request lodging</label>'):'<div style="font-size:12px;color:var(--gray);">Lodging is not offered for this tournament.</div>';
+      body='<div style="margin-top:10px;">'
+        +'<div style="font-size:12px;color:#217F7F;font-weight:700;margin-bottom:4px;">You are going.</div>'
+        +(inviteHtml?H('TEAM INVITES')+inviteHtml:'')
+        +H('YOUR TEAM')+teamHtml
+        +H('RIDE')+rideHtml
+        +H('LODGING')+lodgingHtml
+        +(locked?'<div style="font-size:11px;color:var(--gray);margin-top:8px;">Signups are closed. You can still see everything but can no longer make changes.</div>':'<div style="margin-top:10px;"><button class="btn btn-small btn-danger" style="padding:4px 12px;font-size:11px;" onclick="mtvWithdraw(\''+id+'\')">Withdraw</button></div>')
+        +'</div>';
+    }
+    // roster visibility (everyone going, free agents) so members can coordinate
+    var freeAgents=going.filter(function(x){ return parts[x].freeAgent&&!parts[x].teamId; });
+    var roster=H('WHO IS GOING ('+going.length+')')+'<div style="font-size:12px;color:var(--charcoal);">'+(going.length?going.map(function(x){ return esc(nm(x)); }).join(', '):'<span style="color:var(--gray);">No one yet.</span>')+'</div>'
+      +H('FREE AGENTS')+'<div style="font-size:12px;color:var(--charcoal);">'+(freeAgents.length?freeAgents.map(function(x){ return esc(nm(x)); }).join(', '):'<span style="color:var(--gray);">None.</span>')+'</div>';
+    return '<div style="border:1px solid var(--gray-lighter);border-radius:10px;padding:12px;margin-bottom:12px;">'+header+body+'<div style="border-top:1px solid var(--gray-lighter);margin-top:10px;padding-top:2px;">'+roster+'</div></div>';
+  }).join('');
+  pane.innerHTML='<div class="card"><div class="card-title"><span class="bar"></span> 🚌 Travel Tournaments</div>'+standingBanner+cards+'</div>';
+}
+
+// ---- Good standing (Grass Club) ------------------------------------------
+// Exec marks a member not in good standing with a note; the member sees it and cannot join travel.
+// Clearing returns them to good standing. Stored at standing/{memberId}, a sub-key of the *_matches
+// node the live rule already governs (no new node, no rules change). Absent = good standing.
+function standingEditorHtml(pid){
+  var esc=function(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]); }); };
+  var st=(D.standing||{})[pid]; var bad=!!(st&&st.good===false); var note=bad?(st.note||''):'';
+  return '<div style="font-family:\'Bebas Neue\';font-size:16px;letter-spacing:1px;color:var(--gray);margin-bottom:8px;">🏅 Good Standing</div>'
+    +'<div id="cpm-standing-status" style="font-size:13px;font-weight:700;margin-bottom:8px;color:'+(bad?'var(--red)':'#217F7F')+';">'+(bad?'Not in good standing':'In good standing')+'</div>'
+    +'<input type="text" id="cpm-standing-note" class="form-input" placeholder="What the member needs to do (e.g. pay dues, return gear)" value="'+esc(note)+'" style="width:100%;box-sizing:border-box;padding:8px;font-size:13px;margin-bottom:8px;">'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;">'
+    +'<button class="btn btn-small btn-danger" style="padding:5px 12px;font-size:11px;" onclick="coachSetStanding(\''+pid+'\')">Mark not in good standing</button>'
+    +'<button class="btn btn-small btn-secondary" style="padding:5px 12px;font-size:11px;" onclick="coachClearStanding(\''+pid+'\')">Clear (good standing)</button>'
+    +'</div>'
+    +'<div style="font-size:11px;color:var(--gray);margin-top:6px;">A member not in good standing cannot join a travel tournament and sees this note. No other member sees it.</div>';
+}
+function coachSetStanding(pid){
+  var noteEl=document.getElementById('cpm-standing-note');
+  var note=noteEl?noteEl.value.trim():'';
+  if(!note){ toast('Add a short note saying what the member needs to do.'); return; }
+  var rec={good:false,note:note,at:Date.now()};
+  fbSet('standing/'+pid, rec);
+  if(!D.standing)D.standing={}; D.standing[pid]=rec;
+  var sb=document.getElementById('cpm-standing-block'); if(sb) sb.innerHTML=standingEditorHtml(pid);
+  toast('Marked not in good standing.');
+}
+function coachClearStanding(pid){
+  fbSet('standing/'+pid, null);
+  if(D.standing)delete D.standing[pid];
+  var sb=document.getElementById('cpm-standing-block'); if(sb) sb.innerHTML=standingEditorHtml(pid);
+  toast('Cleared. Member is in good standing.');
 }
 
 // ---- Weekly practice schedule (Grass Club) -------------------------------
