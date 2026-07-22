@@ -1478,31 +1478,40 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
 </div>
 <!-- PLAYER PORTAL (shown when logged in as player) -->
 <div class="player-portal" id="player-portal">
-  <!-- Header -->
+  <!-- Header. Club shows only the member name here; the tier request and practice card move into the
+       tabs, and the space above the tabs holds only a pinned announcement. HS is unchanged. -->
   <div class="card">
     <div class="pp-name" id="pp-name"></div>
     <div class="pp-meta" id="pp-meta"></div>
-    <div id="pp-tier-request"></div>
-    <div id="pp-practice"></div>
+    ${!SC.tiersEnabled?'<div id="pp-tier-request"></div><div id="pp-practice"></div>':''}
   </div>
 
-  <!-- Notification banner -->
+  ${SC.tiersEnabled
+    ? `<!-- Pinned announcement (club): one exec-pinned message, empty when nothing is pinned -->
+  <div id="pp-pinned"></div>`
+    : `<!-- Notification banner -->
   <div id="pp-notif-banner"></div>
 
   <!-- Team announcements (coach broadcasts, read-only) -->
-  <div id="pp-broadcasts"></div>
+  <div id="pp-broadcasts"></div>`}
 
-  <!-- Tab bar: My Stats | Live Score Entry | My Matches -->
+  <!-- Tab bar. Club: My Info | Club Life | Messages | Live Scoring | Pickup. HS: original set. -->
   <div class="pp-tab-bar">
+    ${SC.tiersEnabled ? `
+    <button class="pp-tab-btn active" onclick="switchPPTab('stats',this)">📋 My Info</button>
+    <button class="pp-tab-btn" onclick="switchPPTab('clublife',this)">🏖️ Club Life</button>
+    <button class="pp-tab-btn" onclick="switchPPTab('messages',this)">✉️ Messages <span id="pp-msg-unread" style="color:var(--red);font-weight:700;"></span></button>
+    <button class="pp-tab-btn" onclick="switchPPTab('live',this)">🏐 Live Scoring</button>
+    ${SC.pickupEnabled?`<button class="pp-tab-btn" onclick="window.open('https://courtsense.app/pickup/','_blank')">🏖️ Pickup</button>`:''}
+    ` : `
     <button class="pp-tab-btn active" onclick="switchPPTab('stats',this)">📊 My Stats</button>
     <button class="pp-tab-btn" onclick="switchPPTab('live',this)">🏐 Live Score Entry</button>
-    ${!SC.clubPortalLite?'<button class="pp-tab-btn" onclick="switchPPTab(\'scouts\',this)">🕵️ Scouts</button>':''}
-    ${!SC.clubPortalLite?'<button class="pp-tab-btn" onclick="switchPPTab(\'matches\',this)">📋 My Matches</button>':''}
-    ${!SC.clubPortalLite?'<button class="pp-tab-btn" onclick="switchPPTab(\'learn\',this)">🎓 Learn</button>':''}
-    ${SC.chatEnabled?'<button class="pp-tab-btn" onclick="switchPPTab(\'chat\',this)">💬 Club Chat</button>':''}
-    ${SC.tiersEnabled?'<button class="pp-tab-btn" onclick="switchPPTab(\'messages\',this)">✉️ Messages <span id="pp-msg-unread" style="color:var(--red);font-weight:700;"></span></button>':''}
-    ${SC.tiersEnabled?'<button class="pp-tab-btn" onclick="switchPPTab(\'travel\',this)">🚌 Travel</button>':''}
-    ${SC.pickupEnabled?'<button class="pp-tab-btn" onclick="window.open(\'https://courtsense.app/pickup/\',\'_blank\')">🏖️ Pickup</button>':''}
+    ${!SC.clubPortalLite?`<button class="pp-tab-btn" onclick="switchPPTab('scouts',this)">🕵️ Scouts</button>`:''}
+    ${!SC.clubPortalLite?`<button class="pp-tab-btn" onclick="switchPPTab('matches',this)">📋 My Matches</button>`:''}
+    ${!SC.clubPortalLite?`<button class="pp-tab-btn" onclick="switchPPTab('learn',this)">🎓 Learn</button>`:''}
+    ${SC.chatEnabled?`<button class="pp-tab-btn" onclick="switchPPTab('chat',this)">💬 Club Chat</button>`:''}
+    ${SC.pickupEnabled?`<button class="pp-tab-btn" onclick="window.open('https://courtsense.app/pickup/','_blank')">🏖️ Pickup</button>`:''}
+    `}
   </div>
 
   <!-- ══ MY STATS PANEL ══ -->
@@ -1620,6 +1629,9 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       </div>
     </div>`}
 
+    <!-- Tier request (club only): the member's own placement request, sits directly above email settings -->
+    ${SC.tiersEnabled?'<div id="pp-tier-request"></div>':''}
+
     <!-- Email Notifications -->
     <div class="card" style="border-top:3px solid var(--blue);">
       <div class="card-title" style="color:var(--blue);"><span class="bar" style="background:var(--blue);"></span> &#x1F4E7; Email Notifications</div>
@@ -1690,9 +1702,14 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       </div>
     </div>
   </div>
-  ${SC.chatEnabled?'<div class="pp-panel" id="pp-panel-chat"></div>':''}
+  ${(SC.chatEnabled && !SC.tiersEnabled)?'<div class="pp-panel" id="pp-panel-chat"></div>':''}
+  ${SC.tiersEnabled?`<!-- ══ CLUB LIFE PANEL (group-facing: practice schedule, club chat, travel) ══ -->
+  <div class="pp-panel" id="pp-panel-clublife">
+    <div id="pp-practice"></div>
+    ${SC.chatEnabled?'<div id="pp-panel-chat"></div>':''}
+    <div id="pp-panel-travel"></div>
+  </div>`:''}
   ${SC.tiersEnabled?'<div class="pp-panel" id="pp-panel-messages"></div>':''}
-  ${SC.tiersEnabled?'<div class="pp-panel" id="pp-panel-travel"></div>':''}
 
 </div><!-- end player-portal -->
 
@@ -2332,7 +2349,7 @@ const DEF_M=[
   {id:'m09',date:'2026-02-06',court:2,team1:['p15','p04'],team2:['p05','p06'],score1:21,score2:15}
 ];
 
-let D={players:[],matches:[],planned:[],gamedays:[],scrimmages:[],schedule:[],standings:{},goals:{},assignments:{},duals:[],opponents:{},liveScoring:{},quizScores:{},tierRequests:{},broadcasts:{},threads:{},tryoutSessions:{},tryoutAttendance:{},dues:{},practiceSchedule:{},travel:{},standing:{}};
+let D={players:[],matches:[],planned:[],gamedays:[],scrimmages:[],schedule:[],standings:{},goals:{},assignments:{},duals:[],opponents:{},liveScoring:{},quizScores:{},tierRequests:{},broadcasts:{},threads:{},tryoutSessions:{},tryoutAttendance:{},dues:{},practiceSchedule:{},travel:{},standing:{},pinned:null};
 // Active competitive season. Config leaf at DB_ROOT/config/currentSeasonId; defaults to the current year, overwritten by the init read below if a stored value exists. Result creates are stamped with this via fbSetResult.
 let _currentSeasonId=(new Date()).getFullYear().toString();
 let profilesData={}; // from leon_queens node for AI context
@@ -2500,11 +2517,11 @@ function listenData(){if(!db)return;
   db.ref(DB_ROOT+'/travel').on('value',s=>{
     D.travel=s.val()||{};
     if(currentRole==='player'){
-      // Member Travel panel re-renders live (a teammate's invite/accept/withdraw shows up),
+      // Travel now lives inside the Club Life tab, so re-render live when that tab is showing,
       // but never while the member is mid-edit (any mtv-* control focused, e.g. the seats box).
-      const tp=document.getElementById('pp-panel-travel');
+      const cl=document.getElementById('pp-panel-clublife');
       const ae=document.activeElement; if(ae&&ae.id&&ae.id.indexOf('mtv-')===0)return;
-      if(tp&&tp.classList.contains('active')&&typeof renderMemberTravel==='function')renderMemberTravel();
+      if(cl&&cl.classList.contains('active')&&typeof renderMemberTravel==='function')renderMemberTravel();
       return;
     }
     if(currentRole!=='coach')return;
@@ -2517,9 +2534,16 @@ function listenData(){if(!db)return;
   db.ref(DB_ROOT+'/standing').on('value',s=>{
     D.standing=s.val()||{};
     if(currentRole==='player'){
-      const tp=document.getElementById('pp-panel-travel');
-      if(tp&&tp.classList.contains('active')&&typeof renderMemberTravel==='function')renderMemberTravel();
+      const cl=document.getElementById('pp-panel-clublife');
+      if(cl&&cl.classList.contains('active')&&typeof renderMemberTravel==='function')renderMemberTravel();
     }
+  });
+  // Pinned announcement (club). One exec-pinned message at DB_ROOT/pinned; absent = nothing pinned.
+  // Shows above the tabs on every member portal; the exec pins/unpins it from the Broadcast tab.
+  db.ref(DB_ROOT+'/pinned').on('value',s=>{
+    D.pinned=s.val()||null;
+    if(currentRole==='player'){ if(typeof renderPlayerPinned==='function')renderPlayerPinned(); }
+    if(currentRole==='coach'){ const t=document.querySelector('.tab.active'); if(t&&t.dataset.tab==='broadcast'&&typeof renderExecBroadcast==='function')renderExecBroadcast(); }
   });
   db.ref(SC.dbRoots.profiles).on('value',s=>{
     profilesData=s.val()||{};
@@ -4148,6 +4172,7 @@ function renderPlayerPortal(){
   const pid=currentPlayerId;
   processPendingTryout(); // record a pending door check-in once the member is logged in
   renderPlayerBroadcasts();
+  if(SC.tiersEnabled&&typeof renderPlayerPinned==='function')renderPlayerPinned();
   if(SC.tiersEnabled&&typeof updateMemberMsgBadge==='function')updateMemberMsgBadge();
 
   document.getElementById('pp-name').textContent=p.firstName+' '+p.lastName;
@@ -8515,6 +8540,7 @@ function switchPPTab(tab,btn){
   if(tab==='learn'){if(btn)btn.classList.add('active');document.getElementById('pp-panel-learn').classList.add('active');renderPPQuizHistory();return;}
   if(tab==='chat'){if(btn)btn.classList.add('active');document.getElementById('pp-panel-chat').classList.add('active');renderClubChat();return;}
   if(tab==='messages'){if(btn)btn.classList.add('active');document.getElementById('pp-panel-messages').classList.add('active');renderMemberMessages();return;}
+  if(tab==='clublife'){if(btn)btn.classList.add('active');document.getElementById('pp-panel-clublife').classList.add('active');renderClubLife();return;}
   if(tab==='travel'){if(btn)btn.classList.add('active');document.getElementById('pp-panel-travel').classList.add('active');renderMemberTravel();return;}
   if(btn)btn.classList.add('active');
   document.getElementById('pp-panel-'+tab).classList.add('active');
@@ -8730,13 +8756,40 @@ function renderExecBroadcast(){
       return `<div style="padding:6px 0;border-bottom:1px solid var(--gray-lighter);font-size:13px;"><span style="font-weight:700;color:var(--charcoal);">${esc(who)}</span> <span style="color:var(--black);white-space:pre-wrap;">${esc(m.text)}</span></div>`;
     }).join('');
   }
-  pane.innerHTML=`<div class="card"><div class="card-title"><span class="bar"></span> 📣 Broadcast</div>
+  const pin=D.pinned;
+  const pinnedCard=`<div class="card" style="margin-bottom:12px;border-top:3px solid var(--gold);">
+    <div class="card-title"><span class="bar" style="background:var(--gold);"></span> 📌 Pinned Announcement</div>
+    <p style="font-size:12px;color:var(--gray);margin-bottom:8px;line-height:1.5;">Pin one announcement to the top of every member's portal. Pinning replaces whatever is pinned now. Unpin to clear it. Only one at a time.</p>
+    ${(pin&&pin.text)?`<div style="font-size:12px;color:var(--charcoal);white-space:pre-wrap;background:var(--gray-lighter);border-radius:8px;padding:8px 10px;margin-bottom:8px;"><span style="color:var(--gray);font-size:11px;">Currently pinned:</span><br>${esc(pin.text)}</div>`:'<div style="font-size:12px;color:var(--gray);margin-bottom:8px;">Nothing is pinned right now.</div>'}
+    <textarea id="pin-text" maxlength="400" placeholder="Pinned announcement" style="width:100%;border:1px solid var(--gray-lighter);border-radius:8px;padding:10px 12px;font-family:inherit;font-size:14px;resize:vertical;min-height:52px;box-sizing:border-box;">${(pin&&pin.text)?esc(pin.text):''}</textarea>
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+      <button class="btn btn-primary btn-small" onclick="execSetPinned()">Pin to member portals</button>
+      ${(pin&&pin.text)?'<button class="btn btn-secondary btn-small" onclick="execClearPinned()">Unpin</button>':''}
+    </div>
+  </div>`;
+  pane.innerHTML=pinnedCard+`<div class="card"><div class="card-title"><span class="bar"></span> 📣 Broadcast</div>
     <p style="font-size:12px;color:var(--gray);margin-bottom:12px;line-height:1.5;">Post to a club channel as the Exec voice. These posts show as Exec with the Exec badge, with no personal name attached.</p>
     ${toggle}
     <div style="margin-bottom:12px;">${recent}</div>
     <textarea id="bc-text" maxlength="2000" placeholder="Broadcast a message to ${esc(broadcastChannel)}" style="width:100%;border:1px solid var(--gray-lighter);border-radius:8px;padding:10px 12px;font-family:inherit;font-size:14px;resize:vertical;min-height:64px;box-sizing:border-box;"></textarea>
     <button class="btn btn-primary btn-small" style="margin-top:8px;" onclick="postExecBroadcast()">Broadcast as Exec</button>
   </div>`;
+}
+// Pin one announcement to the top of every member portal, replacing any current pin. Stored at
+// DB_ROOT/pinned (a sub-key of the live *_matches node; no new node, no rules change).
+function execSetPinned(){
+  const ta=document.getElementById('pin-text'); if(!ta)return;
+  const text=(ta.value||'').trim();
+  if(!text){ toast('Type an announcement to pin, or use Unpin to clear it.'); return; }
+  const rec={text:text,at:Date.now()};
+  fbSet('pinned',rec); D.pinned=rec;
+  toast('Pinned to member portals.');
+  renderExecBroadcast();
+}
+function execClearPinned(){
+  fbSet('pinned',null); D.pinned=null;
+  toast('Unpinned.');
+  renderExecBroadcast();
 }
 // Post an exec-voice broadcast into the selected channel. Identical shape to the 5d as-Exec post: authorRole 'exec', no authorId.
 function postExecBroadcast(){
@@ -8976,6 +9029,18 @@ function sendHsBroadcast(){
   }).catch(()=>setStatus('Posted in the app, but the email could not be sent. Try again to send the email.',false));
 }
 // Player-facing: read-only team announcements (audience all or players).
+// Pinned announcement, member side (club). One message pinned by an exec, shown above the tabs.
+// Empty when nothing is pinned. Read-only for the member.
+function renderPlayerPinned(){
+  const el=document.getElementById('pp-pinned'); if(!el)return;
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const pin=D.pinned;
+  if(!pin||!pin.text){ el.innerHTML=''; return; }
+  el.innerHTML='<div class="card" style="border-top:3px solid var(--gold);margin-bottom:14px;">'
+    +'<div style="font-family:\'Bebas Neue\';font-size:13px;letter-spacing:1px;color:var(--charcoal);margin-bottom:6px;">📌 Pinned</div>'
+    +'<div style="font-size:14px;color:var(--charcoal);white-space:pre-wrap;line-height:1.5;">'+esc(pin.text)+'</div>'
+    +'</div>';
+}
 function renderPlayerBroadcasts(){
   const el=document.getElementById('pp-broadcasts'); if(!el)return;
   const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -10479,6 +10544,16 @@ function renderMemberTravel(){
     return '<div style="border:1px solid var(--gray-lighter);border-radius:10px;padding:12px;margin-bottom:12px;">'+header+body+'<div style="border-top:1px solid var(--gray-lighter);margin-top:10px;padding-top:2px;">'+roster+'</div></div>';
   }).join('');
   pane.innerHTML='<div class="card"><div class="card-title"><span class="bar"></span> 🚌 Travel Tournaments</div>'+standingBanner+cards+'</div>';
+}
+
+// Club Life panel: the group-facing tab. Renders the member's practice-schedule card, then club chat,
+// then travel, into the containers nested in pp-panel-clublife. Each renderer targets its own id, so
+// nesting them under one tab does not change how they draw.
+function renderClubLife(){
+  var p=gP(currentPlayerId);
+  var pr=document.getElementById('pp-practice'); if(pr&&p) pr.innerHTML=memberPracticeHtml(p);
+  if(SC.chatEnabled && typeof renderClubChat==='function') renderClubChat();
+  if(typeof renderMemberTravel==='function') renderMemberTravel();
 }
 
 // ---- Good standing (Grass Club) ------------------------------------------
