@@ -1587,11 +1587,12 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       <div id="pp-notes"></div>
     </div>
 
-    <!-- Rankings -->
-    <div class="card"><div class="card-title"><span class="bar"></span> My Team Rankings</div>
+    <!-- Rankings. Club build: skill ranking is exec only and never shown to the general membership, so
+         the club omits this card. High schools keep it. -->
+    ${!SC.tiersEnabled?`<div class="card"><div class="card-title"><span class="bar"></span> My Team Rankings</div>
       <p style="font-size:12px;color:var(--gray);margin-bottom:12px;">How you stack up against your teammates</p>
       <div id="pp-rankings"></div>
-    </div>
+    </div>`:''}
 
     <!-- Skills -->
     <div class="card"><div class="card-title"><span class="bar"></span> My Skills</div>
@@ -4225,7 +4226,11 @@ function renderPlayerPortal(){
     </div>
     <div style="grid-column:1/-1;font-size:10px;color:var(--gray);text-align:center;margin-top:6px;letter-spacing:0.5px;">${ppStatView==="exhibition"?"EXHIBITION MATCHES (CT 6+)":"OFFICIAL DUAL MATCHES (CT 1-5)"}</div>`;
 
-  // ===== TEAM RANKINGS =====
+  // ===== TEAM RANKINGS (member-facing) =====
+  // Club build: skill ranking is exec only, never shown to the general membership, so the whole
+  // section is skipped for the club (its pp-rankings card is not rendered). High schools still show it.
+  // The exec-side ranking (cpm-rankings, coach player modal) is a separate render path, unaffected.
+  if(!SC.tiersEnabled){
   // Build stats for all players
   const allPlayers=D.players.filter(pl=>pl.id);
   const rankings=[];
@@ -4414,6 +4419,7 @@ function renderPlayerPortal(){
   });
 
   document.getElementById('pp-rankings').innerHTML=rHTML||'<div style="color:var(--gray);font-size:13px;text-align:center;padding:16px;"><div style="font-size:28px;margin-bottom:8px;">📊</div>Rankings will appear here as match data is recorded.</div>';
+  } // end !SC.tiersEnabled team rankings
 
   // Queens matches
   const myQ=D.matches.filter(m=>(m.team1||[]).includes(pid)||(m.team2||[]).includes(pid))
