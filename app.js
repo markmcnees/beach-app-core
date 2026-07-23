@@ -1,6 +1,11 @@
 const SC=window.SCHOOL_CONFIG;
 // User-facing label for the privileged role. Config-driven via SC.coachLabel, defaulting to Coach so every existing school is unchanged. Display only; the internal role string stays 'coach'.
 const COACH_LABEL = (SC && SC.coachLabel) ? SC.coachLabel : 'Coach';
+// Label for the roster leadership marker (leadership:'exec'), which grants chat
+// and channel permissions ONLY. Deliberately distinct from the word "Exec",
+// which stays reserved for the exec sign-in list role and the club voice badge,
+// so the two authority systems can never be confused on screen again.
+const LEADER_LABEL='Club Leader';
 // User-facing sign-off for AI generated plans. Config-driven via SC.coachSignoff, defaulting to Coach Mark so every existing school is unchanged.
 const COACH_SIGNOFF = (SC && SC.coachSignoff) ? SC.coachSignoff : 'Coach Mark';
 // School's own name for AI prompts/labels that must not hardcode one school.
@@ -2406,6 +2411,20 @@ async function renderExecManagement(){
       +'</div>';
   }).join('');
   if(!execs.length)rows='<div style="font-size:13px;color:var(--gray);padding:6px 0;">No execs yet. Contact CourtSense to seed the owner.</div>';
+  // Divergence display: roster members holding chat leadership who are NOT on
+  // the exec sign-in list, so the two authority systems can be seen side by
+  // side instead of being discovered at the login screen. Faculty advisors are
+  // intentionally excluded: their marker never implied sign-in access. Read
+  // only: built from the roster already in memory and the list just fetched.
+  const chatOnly=D.players.filter(p=>p&&p.active!==false&&p.leadership==='exec'&&(!p.accountId||!listed.has(p.accountId)));
+  let divergence='';
+  if(chatOnly.length){
+    divergence='<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--gray-lighter);">'
+      +'<div style="font-size:11px;font-weight:700;letter-spacing:0.5px;color:var(--gray);text-transform:uppercase;margin-bottom:4px;">'+esc(LEADER_LABEL)+'s without exec sign-in</div>'
+      +chatOnly.map(p=>'<div style="font-size:13px;color:var(--charcoal);padding:3px 0;">'+esc(((p.firstName||'')+' '+(p.lastName||'')).trim())+' <span style="font-size:11px;color:var(--gray);">chat leadership only</span></div>').join('')
+      +(amOwner?'<div style="font-size:11px;color:var(--gray);margin-top:4px;">Add them above to grant sign-in access.</div>':'')
+      +'</div>';
+  }
   let footer='';
   if(amOwner){
     // Roster picker: only members whose club record carries a CourtSense accountId
@@ -2424,10 +2443,10 @@ async function renderExecManagement(){
       +'<div style="font-size:11px;color:var(--gray);margin-top:6px;">Execs sign in with their own email and password. Make Owner hands ownership off; you stay on as an exec.</div>';
   }else{
     footer='<div style="font-size:12px;color:var(--gray);margin-top:8px;">'
-      +(myId?'Only the owner can change this list.':'Sign in with your exec account to manage this list.')
+      +(myId?'Only the owner can change this list.':'You are signed in with the shared PIN, which cannot manage this list. Log out and sign in with your exec email and password to add or remove execs.')
       +'</div>';
   }
-  boxNow.innerHTML=shell('<p style="font-size:12px;color:var(--gray);margin-bottom:10px;">Who can sign in to exec mode with their own account. The shared PIN keeps working during the transition.</p>'+rows+footer);
+  boxNow.innerHTML=shell('<p style="font-size:12px;color:var(--gray);margin-bottom:10px;">Who can sign in to exec mode with their own account. The shared PIN keeps working during the transition.</p>'+rows+divergence+footer);
 }
 async function execManage(action,target,name){
   if(action==='remove'&&!confirm('Remove '+(name||'this exec')+' from exec access?'))return;
@@ -3731,7 +3750,7 @@ function coachSetLeadership(pid,newVal){
   const val=newVal||null;
   p.leadership=val;
   fbSet('players/'+pid,{...p,leadership:val});
-  const LEADER_LABELS={'':'None',exec:'Exec',faculty:'Faculty Advisor'};
+  const LEADER_LABELS={'':'None',exec:LEADER_LABEL,faculty:'Faculty Advisor'};
   const b=document.getElementById('cpm-leader-badge');
   if(b)b.textContent=LEADER_LABELS[val||''];
   toast('Leadership set: '+LEADER_LABELS[val||'']);
@@ -3751,7 +3770,7 @@ function playerBadge(p){
   const t=p.tier||'unassigned';
   const L={unassigned:'Unassigned',gold:'Gold',garnet:'Garnet',roster:'Roster',development:'Development'};
   const tierSpan='<span class="tier-badge tier-'+t+'">'+L[t]+'</span>';
-  if(SC.tiersEnabled && p.leadership==='exec')    return '<span class="tier-badge badge-exec">Exec</span> '+tierSpan;
+  if(SC.tiersEnabled && p.leadership==='exec')    return '<span class="tier-badge badge-exec">'+LEADER_LABEL+'</span> '+tierSpan;
   if(SC.tiersEnabled && p.leadership==='faculty') return '<span class="tier-badge badge-faculty">Faculty Advisor</span> '+tierSpan;
   return tierSpan;
 }
@@ -5096,12 +5115,14 @@ function coachOpenPlayer(pid){
     document.getElementById('cpm-meta').innerHTML+=tierHtml;
     // Leadership marker control (Grass Club only, coach role only). Sets p.leadership = exec | faculty | none. The chat layers read this later.
     if(currentRole==='coach'){
-      const LEADER_LABELS={'':'None',exec:'Exec',faculty:'Faculty Advisor'};
+      const LEADER_LABELS={'':'None',exec:LEADER_LABEL,faculty:'Faculty Advisor'};
       const curLead=p.leadership||'';
       let leaderHtml=` <span id="cpm-leader-badge" style="font-size:11px;font-weight:700;color:var(--gray);margin-left:4px;">${LEADER_LABELS[curLead]}</span>`;
       leaderHtml+=`<select class="tier-select" onchange="coachSetLeadership('${pid}',this.value)">`+
         ['','exec','faculty'].map(v=>`<option value="${v}" ${v===curLead?'selected':''}>${LEADER_LABELS[v]}</option>`).join('')+
         `</select>`;
+      // Clarifier: this control is chat authority only, not exec sign-in access.
+      leaderHtml+=`<div style="font-size:11px;color:var(--gray);margin-top:6px;">${LEADER_LABEL} sets chat and channel permissions. It does not grant exec sign-in. To let someone sign in to exec mode, add them under Exec Access on the Roster tab.</div>`;
       document.getElementById('cpm-meta').innerHTML+=leaderHtml;
     }
     // Good-standing control (exec/coach role only). Not-in-good-standing carries a short note the
