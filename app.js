@@ -8855,8 +8855,11 @@ function renderClubChat(){
   const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   // Layer 5d author rendering: an exec-voice item (authorRole 'exec', no authorId) shows as Exec with the Exec badge; otherwise resolve the person via gP. Applies to posts and comments.
   const EXEC_BADGE='<span class="tier-badge badge-exec">Exec</span>';
-  const authorName=o=>{ if(o&&o.authorRole==='exec')return 'Exec'; const a=gP(o&&o.authorId); return a?a.firstName+' '+a.lastName:'Player'; };
-  const authorBadge=o=>{ if(o&&o.authorRole==='exec')return EXEC_BADGE; return playerBadge(gP(o&&o.authorId)); };
+  // Anonymous comments (allclub only) carry anon:true and no authorId/authorName, so they resolve to an explicit
+  // Anonymous label with no badge and no avatar. This is deliberately distinct from the 'Player' fallback below,
+  // which means "named author whose player record is missing", not "author withheld".
+  const authorName=o=>{ if(o&&o.anon===true)return 'Anonymous'; if(o&&o.authorRole==='exec')return 'Exec'; const a=gP(o&&o.authorId); return a?a.firstName+' '+a.lastName:'Player'; };
+  const authorBadge=o=>{ if(o&&o.anon===true)return ''; if(o&&o.authorRole==='exec')return EXEC_BADGE; return playerBadge(gP(o&&o.authorId)); };
   const msgs=(D.chat&&D.chat[activeChatChannel])||{};
   const rows=Object.keys(msgs)
     .map(id=>({id,m:msgs[id]}))
@@ -8874,26 +8877,40 @@ function renderClubChat(){
       const del=canDelPost?`<button class="btn btn-danger btn-small" style="margin-top:6px;padding:3px 8px;font-size:10px;" onclick="delClubChat('${id}')">Delete</button>`:'';
       // Comments (Layer 4): flat list nested under the post, oldest first, read from the post node's comments child.
       const cmts=m.comments||{};
+      // Sort by createdAt then by comment key. Anonymous comment timestamps are floored to the hour, so ties are
+      // common by design; the key tiebreak keeps the render order stable without exposing true posting sequence
+      // (anonymous keys are random, not time-ordered).
       const crows=Object.keys(cmts)
         .map(cid=>({cid,c:cmts[cid]}))
         .filter(x=>x.c&&typeof x.c==='object')
-        .sort((a,b)=>(a.c.createdAt||0)-(b.c.createdAt||0));
+        .sort((a,b)=>((a.c.createdAt||0)-(b.c.createdAt||0))||(a.cid<b.cid?-1:a.cid>b.cid?1:0));
       const commentsHtml=crows.map(({cid,c})=>{
         const cname=authorName(c);
         const cbadge=authorBadge(c);
+        const canon=c.anon===true;
         const cwhen=c.createdAt?new Date(c.createdAt).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
-        const cdel=c.authorId===currentPlayerId?`<button class="btn btn-danger btn-small" style="margin-top:4px;padding:2px 7px;font-size:10px;" onclick="delClubComment('${id}','${cid}')">Delete</button>`:'';
+        // Exec-voice delete rights extend to comments so leadership can moderate. The button markup is identical in
+        // both cases so nothing in the rendered comment signals who holds exec-delete rights.
+        const cdel=((!canon&&c.authorId===currentPlayerId)||isCurrentLeader())?`<button class="btn btn-danger btn-small" style="margin-top:4px;padding:2px 7px;font-size:10px;" onclick="delClubComment('${id}','${cid}')">Delete</button>`:'';
         return `<div style="padding:6px 0 6px 14px;border-left:2px solid var(--gray-lighter);margin-top:6px;">
           <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;">
-            <span style="font-weight:700;color:var(--charcoal);font-size:13px;">${esc(cname)} ${cbadge}</span>
+            <span style="${canon?'font-style:italic;font-weight:600;color:var(--gray);':'font-weight:700;color:var(--charcoal);'}font-size:13px;">${esc(cname)} ${cbadge}</span>
             <span style="font-size:10px;color:var(--gray);white-space:nowrap;">${cwhen}</span>
           </div>
           <div style="font-size:13px;color:var(--black);white-space:pre-wrap;word-break:break-word;margin-top:2px;">${esc(c.text)}</div>
           ${cdel}
         </div>`;
       }).join('');
+      // Per-comment anonymity opt-in. Shown only where anonymous commenting is available (school flag on, allclub
+      // channel). Deliberately holds NO persisted state: the checkbox is fresh markup with no checked attribute, and
+      // renderClubChat replaces the panel's innerHTML on every open/close, channel switch, and post, so it is always
+      // rebuilt unchecked. Do not back this with a module-level variable, that is what would let a previous
+      // comment's choice silently carry into the next one.
+      const anonToggle=anonCommentsAvailable()?`<label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:12px;color:var(--gray);"><input type="checkbox" id="cc-anon-${id}"> Post anonymously</label>
+        <div style="font-size:11px;color:var(--gray);margin-top:3px;line-height:1.4;">Your name is not saved with this comment, so execs cannot tell who wrote it. On a quiet thread people may still be able to guess from what you say.</div>`:'';
       const composerHtml=openCommentPostId===id?`<div style="margin-top:8px;padding-left:14px;">
         <textarea id="cc-comment-text-${id}" maxlength="2000" placeholder="Add a comment" style="width:100%;border:1px solid var(--gray-lighter);border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13px;resize:vertical;min-height:48px;box-sizing:border-box;"></textarea>
+        ${anonToggle}
         <button class="btn btn-primary btn-small" style="margin-top:6px;padding:3px 10px;font-size:10px;" onclick="postClubComment('${id}')">Post Comment</button>
       </div>`:'';
       return `<div style="padding:8px 0;border-bottom:1px solid var(--gray-lighter);">
@@ -8960,6 +8977,26 @@ function delClubChat(id){
   if(D.chat&&D.chat[activeChatChannel])delete D.chat[activeChatChannel][id];
   renderClubChat();
 }
+// ── ANONYMOUS COMMENTS (Grass Club, allclub channel only) ───────────────────
+// Enabled per school by SC.anonCommentsEnabled; absent means false, so every other school is unaffected.
+// An anonymous comment key must carry no time signal, otherwise the key itself would order comments and leak
+// posting sequence back under the hour-floored timestamp. crypto.getRandomValues only, never gi()/Date.now().
+function anonCommentKey(){
+  const b=new Uint8Array(16);
+  crypto.getRandomValues(b);
+  let s='';
+  for(let i=0;i<b.length;i++)s+=b[i].toString(36).padStart(2,'0');
+  return 'cmt'+s;
+}
+// Courtesy limits only. The comments path is world-writable, so anyone can bypass these with the console or a
+// direct Firebase write. They exist to blunt accidental floods and runaway pastes in the normal UI. They are NOT
+// a security control and must not be relied on as one.
+const ANON_COMMENT_SESSION_MAX=10;
+const ANON_COMMENT_MAX_LEN=1000;
+let _anonCommentCount=0;
+// Where anonymous commenting is OFFERED: school flag on, allclub channel. This only controls whether the opt-in
+// checkbox renders. Whether a given comment is actually anonymous is decided per comment by that checkbox.
+function anonCommentsAvailable(){ return !!SC.anonCommentsEnabled && activeChatChannel==='allclub'; }
 // Post a comment under a club-chat post. Writes to the nested comments child and mirrors in memory for the demo.
 // Keeps the composer open on that post after posting (openCommentPostId unchanged).
 function postClubComment(postId){
@@ -8969,19 +9006,39 @@ function postClubComment(postId){
   if(!ta)return;
   const text=(ta.value||'').trim();
   if(!text)return;
-  const cid=gi('cmt');
-  const c={authorId:currentPlayerId,text:text,createdAt:Date.now()};
+  // Per-comment opt-in: anonymity requires the school flag, the allclub channel, AND this post's checkbox ticked.
+  // Unchecked falls through to the named path below, which is unchanged from before anonymous comments existed.
+  const anonEl=document.getElementById('cc-anon-'+postId);
+  const anon=anonCommentsAvailable() && !!(anonEl && anonEl.checked);
+  let cid,c;
+  if(anon){
+    if(_anonCommentCount>=ANON_COMMENT_SESSION_MAX){toast('You have reached the anonymous comment limit for this session.');return;}
+    if(text.length>ANON_COMMENT_MAX_LEN){toast('Anonymous comments are limited to '+ANON_COMMENT_MAX_LEN+' characters.');return;}
+    cid=anonCommentKey();
+    // ANONYMITY CONTRACT for this write. The stored record carries no authorId and no authorName, the key is random,
+    // and createdAt is floored to the hour so a comment cannot be correlated to a session by its exact timestamp.
+    // WARNING: do not add any side-effect write triggered by an anonymous comment. A notification, an unread marker,
+    // a comment counter, a lastActive touch, or anything else stamped with the actor or the real time would
+    // re-attach identity to this record and break anonymity, no matter how clean the record below stays.
+    c={anon:true,text:text,createdAt:Math.floor(Date.now()/3600000)*3600000};
+    _anonCommentCount++;
+  }else{
+    cid=gi('cmt');
+    c={authorId:currentPlayerId,text:text,createdAt:Date.now()};
+  }
   fbSet('chat/'+activeChatChannel+'/'+postId+'/comments/'+cid,c);
   if(!D.chat[activeChatChannel][postId].comments)D.chat[activeChatChannel][postId].comments={};
   D.chat[activeChatChannel][postId].comments[cid]=c;
   renderClubChat();
 }
-// Delete a comment. Author can delete their own only this layer; broader moderation comes with the rules layer.
+// Delete a comment. The author can delete their own named comment; club leadership can delete any comment, which is
+// what makes anonymous comments moderatable. An anonymous comment has no authorId, so it is never self-deletable.
 function delClubComment(postId,commentId){
   const post=(D.chat&&D.chat[activeChatChannel])?D.chat[activeChatChannel][postId]:null;
   const c=(post&&post.comments)?post.comments[commentId]:null;
   if(!c)return;
-  if(c.authorId!==currentPlayerId){toast('You can only delete your own comments.');return;}
+  const canDel=(c.anon!==true&&c.authorId===currentPlayerId)||isCurrentLeader();
+  if(!canDel){toast('You can only delete your own comments.');return;}
   if(!confirm('Delete this comment?'))return;
   fbRemove('chat/'+activeChatChannel+'/'+postId+'/comments/'+commentId);
   if(post&&post.comments)delete post.comments[commentId];
