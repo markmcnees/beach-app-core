@@ -8888,7 +8888,12 @@ function renderClubChat(){
         const cname=authorName(c);
         const cbadge=authorBadge(c);
         const canon=c.anon===true;
-        const cwhen=c.createdAt?new Date(c.createdAt).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+        // Anonymous comments render date-only. Their createdAt is floored to the hour, so showing a clock time would
+        // display a coarsened value as if it were precise. Same options as the named formatter minus hour/minute, so
+        // the two read alike in the same slot. Named comments keep the full date and time below, unchanged.
+        const cwhen=c.createdAt?(canon
+          ?new Date(c.createdAt).toLocaleDateString([],{month:'short',day:'numeric'})
+          :new Date(c.createdAt).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})):'';
         // Exec-voice delete rights extend to comments so leadership can moderate. The button markup is identical in
         // both cases so nothing in the rendered comment signals who holds exec-delete rights.
         const cdel=((!canon&&c.authorId===currentPlayerId)||isCurrentLeader())?`<button class="btn btn-danger btn-small" style="margin-top:4px;padding:2px 7px;font-size:10px;" onclick="delClubComment('${id}','${cid}')">Delete</button>`:'';
@@ -9015,8 +9020,13 @@ function postClubComment(postId){
     if(_anonCommentCount>=ANON_COMMENT_SESSION_MAX){toast('You have reached the anonymous comment limit for this session.');return;}
     if(text.length>ANON_COMMENT_MAX_LEN){toast('Anonymous comments are limited to '+ANON_COMMENT_MAX_LEN+' characters.');return;}
     cid=anonCommentKey();
-    // ANONYMITY CONTRACT for this write. The stored record carries no authorId and no authorName, the key is random,
-    // and createdAt is floored to the hour so a comment cannot be correlated to a session by its exact timestamp.
+    // ANONYMITY CONTRACT for this write. The stored record carries no authorId and no authorName, and the key is random.
+    // createdAt is floored to the hour because precise timing correlates against other timestamped writes in the tree:
+    // a millisecond-exact comment can be lined up against a nearby rating, RSVP, or profile write and pinned to
+    // whoever made it, and sub-second timing is the sharpest signal for doing that. An hour-wide bucket does not line
+    // up that cleanly. This is one mitigation, not a guarantee: the comment's position in the thread still leaks an
+    // approximate posting window, and a quiet thread narrows that window further. The rendered stamp is date-only for
+    // anonymous comments, so the coarsened value is never displayed as if it were a precise time.
     // WARNING: do not add any side-effect write triggered by an anonymous comment. A notification, an unread marker,
     // a comment counter, a lastActive touch, or anything else stamped with the actor or the real time would
     // re-attach identity to this record and break anonymity, no matter how clean the record below stays.
