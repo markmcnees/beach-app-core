@@ -10347,6 +10347,34 @@ function travelTeamComplete(team){
   var mem=team.members||{}; var keys=Object.keys(mem);
   return size>0 && keys.length===size && keys.every(function(k){ return mem[k]==='accepted'; });
 }
+// ---- Custom team names ----------------------------------------------------
+// A team may carry an optional captain-set name. The field is OMITTED when blank rather than written
+// as an empty string, so "absent" is the single meaning of unnamed and every render falls back to the
+// derived format label a team has always shown. Nothing below changes what an unnamed team looks like.
+var TRAVEL_TEAM_NAME_MAX=40;
+// The stored name, trimmed, or '' when the team is unnamed. Tolerates a non-string written by hand.
+function travelTeamName(t){ return (t&&typeof t.name==='string')?t.name.trim():''; }
+// The derived label a team has always rendered: the format word, or 'Team' when format is missing.
+function travelTeamFormatLabel(t){ return TRAVEL_FORMAT_LABEL[t&&t.format]||(t&&t.format)||'Team'; }
+// Display label: custom name when set, otherwise the derived label, byte-identical to the old output.
+function travelTeamLabel(t){ return travelTeamName(t)||travelTeamFormatLabel(t); }
+// Advisory duplicate check. Uniqueness CANNOT be enforced client-side: travel records live under the
+// world-writable *_matches node, so two captains can race to the same name and anyone can write a
+// duplicate directly from the console. This only powers a non-blocking warning. It must never gate a
+// write, and callers are expected to save regardless of what it returns.
+function travelTeamNameTaken(evId,tid,name){
+  var n=String(name||'').trim().toLowerCase();
+  if(!n) return false;
+  var teams=travelTeams(evId);
+  return Object.keys(teams).some(function(k){ return k!==tid && travelTeamName(teams[k]).toLowerCase()===n; });
+}
+// Build the record for a name write. Writes the full object in one fbSet (never clear-then-update),
+// and drops the key entirely when the new name is blank so clearing a name restores unnamed state.
+function travelTeamWithName(t,name){
+  var rec=Object.assign({},t);
+  if(name) rec.name=name; else delete rec.name;
+  return rec;
+}
 // Members an event is announced to, by squad scope (same tier scoping as the chat channels).
 function travelScopeMembers(scope){
   var tiers = scope==='gold'?['gold']:scope==='garnet'?['garnet']:['gold','garnet'];
@@ -10403,6 +10431,19 @@ function travelSaveDetails(id){
   travelFlushEditors(); // persists this card and any other open editor before the full rebuild
   renderTravel();
   toast('Tournament saved');
+}
+// Exec sets or clears a team name from the Travel dashboard. Deliberately NOT subject to mtvGuard:
+// the deadline gates member self-service, not exec administration, so an exec can still fix a name
+// after signups close. Writes through the same mtvWriteTeam helper the member path uses.
+function travelRenameTeam(id,tid){
+  var ev=(D.travel||{})[id]; if(!ev) return;
+  var t=(ev.teams||{})[tid]; if(!t) return;
+  var el=document.getElementById('tv-tname-'+id+'-'+tid); if(!el) return;
+  var n=String(el.value||'').trim().slice(0,TRAVEL_TEAM_NAME_MAX);
+  var dup=!!n&&travelTeamNameTaken(id,tid,n);
+  mtvWriteTeam(id,tid,travelTeamWithName(t,n));
+  toast(dup?'Saved. Another team is already using that name.':(n?'Team name saved.':'Team name cleared.'));
+  renderTravel();
 }
 function travelDeleteEvent(id){
   if(!window.confirm('Delete this tournament? All signups, teams, rides, and paid status for it will be removed.')) return;
@@ -10495,7 +10536,13 @@ function renderTravel(){
       const t=teams[tid]||{}; const mem=t.members||{};
       const size=TRAVEL_FORMAT_SIZE[t.format]||0; const complete=travelTeamComplete(t);
       const memList=Object.keys(mem).map(mid=>esc(nm(mid))+(mem[mid]==='pending'?' (pending)':'')).join(', ');
-      return `<div style="font-size:12px;color:var(--charcoal);padding:2px 0;">${esc(TRAVEL_FORMAT_LABEL[t.format]||t.format||'Team')}: ${memList||'empty'} <span style="color:${complete?'#217F7F':'var(--red)'};font-weight:700;">${complete?'complete':'incomplete ('+Object.keys(mem).length+'/'+size+')'}</span></div>`;
+      // Named team leads with its name; unnamed falls back to the derived format label, unchanged.
+      // The member list stays visible either way so the exec can still see who is on the team.
+      return `<div style="font-size:12px;color:var(--charcoal);padding:2px 0;">${esc(travelTeamLabel(t))}: ${memList||'empty'} <span style="color:${complete?'#217F7F':'var(--red)'};font-weight:700;">${complete?'complete':'incomplete ('+Object.keys(mem).length+'/'+size+')'}</span></div>
+      <div style="display:flex;gap:6px;align-items:center;margin:2px 0 6px;">
+        <input class="form-input" id="tv-tname-${esc(id)}-${esc(tid)}" value="${esc(travelTeamName(t))}" maxlength="${TRAVEL_TEAM_NAME_MAX}" placeholder="Team name (optional)" style="flex:1;min-width:0;padding:4px 7px;font-size:11px;">
+        <button class="btn btn-small btn-secondary" style="padding:3px 8px;font-size:10px;" onclick="travelRenameTeam('${esc(id)}','${esc(tid)}')">Save</button>
+      </div>`;
     }).join(''):'<div style="font-size:11px;color:var(--gray);">No teams formed yet.</div>';
     const freeAgents=going.filter(mid=>parts[mid].freeAgent&&!parts[mid].teamId);
     const drivers=going.filter(mid=>parts[mid].canDrive&&(parts[mid].seats||0)>0);
@@ -10517,7 +10564,13 @@ function renderTravel(){
     });
     const unaccountedRows=unaccounted.length?unaccounted.map(mid=>{
       const p=parts[mid]; const gaps=[];
-      if(!(p.teamId&&teams[p.teamId]&&travelTeamComplete(teams[p.teamId]))) gaps.push('no team');
+      // Same gap condition as before (no team OR an incomplete one). Only the wording varies, and it
+      // no longer depends on whether the team happens to be named: on an incomplete team the exec
+      // sees that it is incomplete either way, by name when there is one. A member with no team at
+      // all (or a dangling teamId whose record is gone) still reads exactly 'no team'.
+      const gapTeam=(p.teamId&&teams[p.teamId])?teams[p.teamId]:null;
+      const gapName=gapTeam?travelTeamName(gapTeam):'';
+      if(!(p.teamId&&teams[p.teamId]&&travelTeamComplete(teams[p.teamId]))) gaps.push(gapTeam?(gapName?(esc(gapName)+' incomplete'):'incomplete team'):'no team');
       if(!(p.canDrive||p.rideWith)) gaps.push('no ride');
       if(ev.lodgingOffered&&!p.lodging) gaps.push('no lodging');
       return `<div style="font-size:12px;color:var(--charcoal);padding:2px 0;">${esc(nm(mid))} <span style="color:var(--red);">${gaps.join(', ')}</span></div>`;
@@ -10649,10 +10702,28 @@ function mtvFormTeam(id){
   if(1+invited.length>size){ toast('That is more players than a '+TRAVEL_FORMAT_LABEL[fmt]+' team holds ('+size+').'); return; }
   var tid=gi('tvt');
   var members={}; members[currentPlayerId]='accepted'; invited.forEach(function(mid){ members[mid]='pending'; });
-  mtvWriteTeam(id,tid,{format:fmt,createdBy:currentPlayerId,members:members,createdAt:Date.now()});
+  // Optional custom name. Trimmed and capped; blank leaves the field off the record entirely.
+  var nameEl=document.getElementById('mtv-tname-'+id);
+  var tname=nameEl?String(nameEl.value||'').trim().slice(0,TRAVEL_TEAM_NAME_MAX):'';
+  var dup=!!tname&&travelTeamNameTaken(id,tid,tname); // advisory only, checked before the write
+  mtvWriteTeam(id,tid,travelTeamWithName({format:fmt,createdBy:currentPlayerId,members:members,createdAt:Date.now()},tname));
   mtvSetPartField(id,currentPlayerId,'teamId',tid);
   mtvSetPartField(id,currentPlayerId,'freeAgent',false);
-  toast(invited.length?'Team created. Invites stay pending until each player confirms.':'Team created. Invite players to fill it.');
+  if(dup) toast('Team created. Another team is already using that name.');
+  else toast(invited.length?'Team created. Invites stay pending until each player confirms.':'Team created. Invite players to fill it.');
+  renderMemberTravel();
+}
+// Captain renames their own team. A rename is a member mutation, so mtvGuard blocks it once the
+// signup deadline has passed, exactly like forming a team or changing an invite.
+function mtvRenameTeam(id,tid){
+  var ev=mtvEv(id); if(!mtvGuard(ev)) return;
+  var t=(ev.teams||{})[tid]; if(!t) return;
+  if(t.createdBy!==currentPlayerId){ toast('Only the team captain can change the team name.'); return; }
+  var el=document.getElementById('mtv-tname-edit-'+id); if(!el) return;
+  var n=String(el.value||'').trim().slice(0,TRAVEL_TEAM_NAME_MAX);
+  var dup=!!n&&travelTeamNameTaken(id,tid,n);
+  mtvWriteTeam(id,tid,travelTeamWithName(t,n));
+  toast(dup?'Saved. Another team is already using that name.':(n?'Team name saved.':'Team name cleared.'));
   renderMemberTravel();
 }
 function mtvInvite(id,tid,mid){
@@ -10798,8 +10869,14 @@ function renderMemberTravel(){
       var invites=Object.keys(teams).filter(function(tid){ return (teams[tid].members||{})[me]==='pending'; });
       var inviteHtml=invites.map(function(tid){
         var t=teams[tid]; var mates=Object.keys(t.members||{}).map(function(x){ return esc(nm(x))+((t.members[x]==='pending')?' (pending)':''); }).join(', ');
+        // A named team is announced by name so the invitee sees what they are joining; an unnamed
+        // team keeps the original 'invited you to a Threes team (...)' wording exactly.
+        var tnm=travelTeamName(t);
+        var invLine=tnm
+          ?(esc(nm(t.createdBy))+' invited you to '+esc(tnm)+', a '+esc(TRAVEL_FORMAT_LABEL[t.format]||t.format||'')+' team ('+mates+').')
+          :(esc(nm(t.createdBy))+' invited you to a '+esc(TRAVEL_FORMAT_LABEL[t.format]||t.format||'')+' team ('+mates+').');
         return '<div style="border:1px solid var(--gray-lighter);border-radius:8px;padding:8px;margin-bottom:6px;font-size:12px;">'
-          +'<div style="color:var(--charcoal);margin-bottom:6px;">'+esc(nm(t.createdBy))+' invited you to a '+esc(TRAVEL_FORMAT_LABEL[t.format]||t.format||'')+' team ('+mates+').</div>'
+          +'<div style="color:var(--charcoal);margin-bottom:6px;">'+invLine+'</div>'
           +(locked?'<div style="font-size:11px;color:var(--gray);">Signups are closed.</div>':'<div style="display:flex;gap:6px;"><button class="btn btn-small" style="background:#217F7F;color:#fff;border:none;padding:4px 10px;font-size:11px;" onclick="mtvAcceptInvite(\''+id+'\',\''+tid+'\')">Accept</button><button class="btn btn-small btn-secondary" style="padding:4px 10px;font-size:11px;" onclick="mtvDeclineInvite(\''+id+'\',\''+tid+'\')">Decline</button></div>')
           +'</div>';
       }).join('');
@@ -10818,9 +10895,17 @@ function renderMemberTravel(){
           var avail=going.filter(function(x){ return x!==me && !Object.keys(teams).some(function(tid){ return (teams[tid].members||{})[x]==='accepted'; }) && !(myTeam.members||{})[x]; });
           addHtml=avail.length?('<div style="margin-top:6px;">'+avail.map(function(x){ return '<button class="btn btn-small btn-secondary" style="padding:3px 9px;font-size:11px;margin:0 4px 4px 0;" onclick="mtvInvite(\''+id+'\',\''+myTeamId+'\',\''+x+'\')">+ '+esc(nm(x))+'</button>'; }).join('')+'</div>'):'<div style="font-size:11px;color:var(--gray);margin-top:4px;">No one else is available to invite yet.</div>';
         }
+        // Named team shows its name in place of the derived label; unnamed renders as before.
+        var myName=travelTeamName(myTeam);
+        var myLabel=myName?(esc(myName)+' &middot; '+esc(TRAVEL_FORMAT_LABEL[myTeam.format]||myTeam.format||'Team')):(esc(TRAVEL_FORMAT_LABEL[myTeam.format]||myTeam.format||'Team')+' team');
+        // Captain-only rename, gated exactly like the invite UI below (createdBy===me) and hidden
+        // once the deadline locks the event, since mtvRenameTeam is blocked by mtvGuard anyway.
+        var renameHtml=(myTeam.createdBy===me&&!locked)?('<div style="display:flex;gap:6px;align-items:center;margin:6px 0 2px;">'
+          +'<input class="form-input" id="mtv-tname-edit-'+id+'" value="'+esc(myName)+'" maxlength="'+TRAVEL_TEAM_NAME_MAX+'" placeholder="Team name (optional)" style="flex:1;min-width:0;padding:4px 7px;font-size:11px;">'
+          +'<button class="btn btn-small btn-secondary" style="padding:3px 8px;font-size:10px;" onclick="mtvRenameTeam(\''+id+'\',\''+myTeamId+'\')">Save</button></div>'):'';
         teamHtml='<div style="border:1px solid var(--gray-lighter);border-radius:8px;padding:8px;">'
-          +'<div style="font-size:12px;color:var(--charcoal);margin-bottom:4px;">'+esc(TRAVEL_FORMAT_LABEL[myTeam.format]||myTeam.format||'Team')+' team &middot; <span style="color:'+(complete?'#217F7F':'var(--red)')+';font-weight:700;">'+(complete?'complete':'incomplete ('+Object.keys(myTeam.members||{}).length+'/'+size+')')+'</span></div>'
-          +memRows+addHtml
+          +'<div style="font-size:12px;color:var(--charcoal);margin-bottom:4px;">'+myLabel+' &middot; <span style="color:'+(complete?'#217F7F':'var(--red)')+';font-weight:700;">'+(complete?'complete':'incomplete ('+Object.keys(myTeam.members||{}).length+'/'+size+')')+'</span></div>'
+          +renameHtml+memRows+addHtml
           +(locked?'':'<div style="margin-top:6px;"><button class="btn btn-small btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="mtvLeaveTeam(\''+id+'\')">Leave team</button></div>');
       } else if(!locked){
         // form a team or free agent
@@ -10829,6 +10914,7 @@ function renderMemberTravel(){
         var avail2=going.filter(function(x){ return x!==me && !Object.keys(teams).some(function(tid){ return (teams[tid].members||{})[x]==='accepted'; }); });
         teamHtml='<div style="border:1px dashed var(--gray-lighter);border-radius:8px;padding:8px;">'
           +'<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;font-size:12px;color:var(--charcoal);"><span>Form a team:</span><select id="mtv-fmt-'+id+'" class="form-select" style="padding:4px 8px;font-size:12px;">'+fmtOpts.map(function(f){ return '<option value="'+f+'">'+esc(TRAVEL_FORMAT_LABEL[f])+' ('+TRAVEL_FORMAT_SIZE[f]+')</option>'; }).join('')+'</select></div>'
+          +'<div style="margin-bottom:6px;"><label style="display:block;font-size:11px;color:var(--gray);margin-bottom:2px;">Team name (optional)</label><input class="form-input" id="mtv-tname-'+id+'" maxlength="'+TRAVEL_TEAM_NAME_MAX+'" placeholder="Leave blank to use format and names" style="width:100%;box-sizing:border-box;padding:4px 7px;font-size:12px;"></div>'
           +(avail2.length?('<div style="font-size:11px;color:var(--gray);margin-bottom:4px;">Invite teammates (they confirm before the team counts):</div><div style="margin-bottom:6px;">'+avail2.map(function(x){ return '<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;margin:0 10px 4px 0;"><input type="checkbox" id="mtv-inv-'+id+'-'+x+'"> '+esc(nm(x))+'</label>'; }).join('')+'</div>'):'<div style="font-size:11px;color:var(--gray);margin-bottom:6px;">No teammates have joined yet. You can create the team and invite them once they do.</div>')
           +'<button class="btn btn-small" style="background:#082A4F;color:#fff;border:none;padding:5px 12px;font-size:11px;" onclick="mtvFormTeam(\''+id+'\')">Create team</button>'
           +'<div style="border-top:1px solid var(--gray-lighter);margin-top:8px;padding-top:8px;font-size:12px;color:var(--charcoal);">'
