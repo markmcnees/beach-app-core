@@ -1083,7 +1083,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       <button class="tab" data-tab="inbox">Inbox</button>
       <button class="tab${SC.chatEnabled?'':' active'}" data-tab="settings">Roster</button>
       <button class="tab" data-tab="teamanalysis">Practice</button>
-      <button class="tab" data-tab="players">Kings/Queens</button>
+      <button class="tab" data-tab="players">Stats</button>
       <button class="tab" data-tab="goals">Goals</button>
       <button class="tab" data-tab="practicegroups" style="display:none;">Practice Groups</button>
       <button class="tab" data-tab="dashboard" style="display:none;">Dashboard</button>
@@ -1556,7 +1556,10 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
   <!-- ══ MY STATS PANEL ══ -->
   <div class="pp-panel active" id="pp-panel-stats">
 
-    <button class="btn btn-blue btn-small" style="width:100%;margin-bottom:12px;" onclick="showAthleteCard(currentPlayerId)">View Athlete Card</button>
+    <!-- Athlete Card is a recruiting surface for the HS pillar. Its college-profile sections render as
+         COMING SOON placeholders whenever demoMode is false, which is every club config, so the club
+         would open it to three greyed panels of dashes. Hidden for the club until those sections are real. -->
+    ${!SC.tiersEnabled?`<button class="btn btn-blue btn-small" style="width:100%;margin-bottom:12px;" onclick="showAthleteCard(currentPlayerId)">View Athlete Card</button>`:''}
 
     <!-- Season Summary -->
     ${!SC.clubPortalLite?`<div class="card"><div class="card-title"><span class="bar"></span> My Season Summary</div>
@@ -1812,7 +1815,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
           <input type="tel" id="cpm-p2-phone" class="form-input" placeholder="Parent 2 Phone" style="flex:1;min-width:120px;padding:8px;font-size:13px;">
         </div>` : ''}
         <button class="btn btn-red btn-small" style="width:100%;" onclick="coachSaveIdentity()">Save Identity</button>
-        <button class="btn btn-secondary btn-small" style="width:100%;margin-top:8px;" onclick="showAthleteCard(document.getElementById('coach-player-overlay').dataset.pid)">View Athlete Card</button>
+        ${!SC.tiersEnabled?`<button class="btn btn-secondary btn-small" style="width:100%;margin-top:8px;" onclick="showAthleteCard(document.getElementById('coach-player-overlay').dataset.pid)">View Athlete Card</button>`:''}
       </div>
       ${SC.demoMode?`<div id="cpm-athinfo" style="border-top:1px solid var(--gray-lighter);padding-top:16px;">
         <div style="font-family:'Bebas Neue';font-size:16px;letter-spacing:1px;color:var(--gray);margin-bottom:8px;">🎓 Athlete Info (demo)</div>
@@ -2976,7 +2979,11 @@ function combinedStats(pid, sel){
     qWins:qs.wins,qLosses:qs.losses,qDiff:qs.diff,qGP:qs.gp,
     gdSets:gs.sets,gdDiff:gs.diff,gdK:gs.k,gdB:gs.b,gdA:gs.a,gdSE:gs.se,gdRE:gs.re,gdHE:gs.he,gdDE:gs.de,
     scSets:ss.sets,scDiff:ss.diff,
-    totalDiff:qs.diff+gs.diff+ss.diff,
+    // Total +/- must reconcile against the columns actually on screen. The club table shows only the
+    // match and set +/- columns, with no scrimmage column, so folding scrimmage diff into the total
+    // would print a number the visible columns cannot explain. High schools do show scrimmages
+    // separately, so their total keeps all three. scDiff stays exposed above either way.
+    totalDiff:SC.tiersEnabled?(qs.diff+gs.diff):(qs.diff+gs.diff+ss.diff),
     totalGames:qs.gp+gs.matches+ss.matches
   };
 }
@@ -3345,9 +3352,11 @@ function renderPlayers(){
   }else if(pType==='gameday'||pType==='scrimmage'||pType==='exhibition'){
     cols=[{k:'name',l:'Player'},{k:'court',l:'Pair'},{k:'sets',l:'Sets'},{k:'diff',l:'+/-'},{k:'k',l:'K'},{k:'b',l:'B'},{k:'a',l:'A'},{k:'se',l:'SE'},{k:'re',l:'RE'},{k:'he',l:'HE'},{k:'de',l:'DE'}];
   }else{
-    // Club (SC.tiersEnabled) drops the Pair column from the combined Kings/Queens view; high schools keep it.
+    // Club (SC.tiersEnabled) drops the Pair column from the combined view; high schools keep it.
+    // Club headers also drop the Q and GD prefixes. Those stand for Queens and Game Day, which are
+    // Leon high school concepts with no meaning to a club audience. The HS branch keeps them.
     cols=SC.tiersEnabled
-      ?[{k:'name',l:'Player'},{k:'qrec',l:'Q W-L'},{k:'qdiff',l:'Q +/-'},{k:'gdsets',l:'GD Sets'},{k:'gddiff',l:'GD +/-'},{k:'diff',l:'Total +/-'}]
+      ?[{k:'name',l:'Player'},{k:'qrec',l:'W-L'},{k:'qdiff',l:'+/-'},{k:'gdsets',l:'Sets'},{k:'gddiff',l:'Set +/-'},{k:'diff',l:'Total +/-'}]
       :[{k:'name',l:'Player'},{k:'court',l:'Pair'},{k:'qrec',l:'Q W-L'},{k:'qdiff',l:'Q +/-'},{k:'gdsets',l:'GD Sets'},{k:'gddiff',l:'GD +/-'},{k:'diff',l:'Total +/-'}];
   }
   thead.innerHTML=cols.map(c=>`<th data-psort="${c.k}">${c.l} <span class="sort-arrow"></span></th>`).join('');
@@ -3406,10 +3415,10 @@ function renderPlayers(){
       return`<tr><td>${pNameCell(p)}</td>
         ${SC.tiersEnabled?'':`<td>${courtBadge(p.court)}</td>`}
         <td class="wl-record">${c.qWins}-${c.qLosses}</td>
-        <td class="plus-minus ${pmClass(c.qDiff)}">${c.qGP>0?pmStr(c.qDiff):'—'}</td>
-        <td>${c.gdSets||'—'}</td>
-        <td class="plus-minus ${pmClass(c.gdDiff)}">${c.gdSets>0?pmStr(c.gdDiff):'—'}</td>
-        <td class="plus-minus ${pmClass(c.totalDiff)}" style="font-weight:700;">${c.totalGames>0?pmStr(c.totalDiff):'—'}</td></tr>`;}).join('');
+        <td class="plus-minus ${pmClass(c.qDiff)}">${c.qGP>0?pmStr(c.qDiff):'-'}</td>
+        <td>${c.gdSets||'-'}</td>
+        <td class="plus-minus ${pmClass(c.gdDiff)}">${c.gdSets>0?pmStr(c.gdDiff):'-'}</td>
+        <td class="plus-minus ${pmClass(c.totalDiff)}" style="font-weight:700;">${c.totalGames>0?pmStr(c.totalDiff):'-'}</td></tr>`;}).join('');
   }
   // Update sort arrows
   thead.querySelectorAll('th[data-psort]').forEach(th=>{
@@ -10322,7 +10331,15 @@ function renderAccounting(){
 //       costs:{lineId:{label,amount}}, formats:{twos,threes,fours}, lodgingOffered,
 //       scope:'gold'|'garnet'|'both', announcedAt, createdAt }
 //   travel/{eventId}/participants/{memberId} = { status:'in'|'declined', freeAgent, teamId,
-//       canDrive, seats, rideWith, lodging, at }              [member side, pass 2]
+//       canDrive, seats, rideWith, lodging, lodgingProperty, at }   [member side, pass 2]
+//   travel/{eventId}/properties/{propertyId} = { name, kind:'house'|'hotel', capacity, createdAt }
+//       [exec-managed list of places to stay. capacity 0 or blank means unlimited.]
+//   Lodging is two independent facts. `lodging` (boolean) means "needs a bed" and is the member's own
+//   statement of need. `lodgingProperty` (propertyId or null) means "which bed" and is the pointer at
+//   a specific property, exactly like `rideWith` points at a specific driver. A member can need a bed
+//   and be unplaced (lodging true, lodgingProperty null), which is the state the exec chases. Every
+//   occupancy roll-up (who is in which house, spots left, who is unplaced) is DERIVED at render time
+//   and never stored, so there is no second source of truth to drift.
 //   travel/{eventId}/teams/{teamId} = { format, createdBy, members:{mid:'accepted'|'pending'}, createdAt }  [pass 2]
 //   travel/{eventId}/paid/{memberId} = { paid:true, at }      [exec-set, per event, separate from dues]
 //   standing/{memberId} = { good:false, note, at }            [exec-set; absent = good standing]  [pass 2]
@@ -10374,6 +10391,62 @@ function travelTeamWithName(t,name){
   var rec=Object.assign({},t);
   if(name) rec.name=name; else delete rec.name;
   return rec;
+}
+// ---- Lodging properties ---------------------------------------------------
+// Derived-only helpers. Nothing here writes; occupancy is always recomputed from the participant
+// pointers, mirroring how the ride roll-up counts rideWith rather than storing car rosters.
+var TRAVEL_PROPERTY_NAME_MAX=60;
+var TRAVEL_PROPERTY_KIND_LABEL={house:'House',hotel:'Hotel'};
+function travelProperties(id){ var ev=(D.travel||{})[id]; return (ev&&ev.properties)||{}; }
+function travelPropertyName(p){ return (p&&typeof p.name==='string')?p.name.trim():''; }
+function travelPropertyLabel(p){ return travelPropertyName(p)||'Property'; }
+function travelPropertyKind(p){ return (p&&p.kind==='hotel')?'hotel':'house'; }
+// Capacity 0, blank, negative, or unparseable all mean unlimited. Unlimited is represented as 0.
+function travelPropertyCapacity(p){ var c=parseInt(p&&p.capacity,10); return (isFinite(c)&&c>0)?c:0; }
+// Property ids in a stable display order: oldest first, key as tiebreak.
+function travelPropertyIds(id){
+  var props=travelProperties(id);
+  return Object.keys(props).sort(function(a,b){ return ((props[a].createdAt||0)-(props[b].createdAt||0))||(a<b?-1:a>b?1:0); });
+}
+// Live occupants: members who are GOING and pointed at this property. Never stored.
+function travelPropertyOccupants(id,pid){
+  var parts=travelParticipants(id);
+  return Object.keys(parts).filter(function(mid){ return parts[mid]&&parts[mid].status==='in'&&parts[mid].lodgingProperty===pid; });
+}
+// Spots left, or null when the property is unlimited. Never negative.
+function travelPropertySpotsLeft(id,pid){
+  var cap=travelPropertyCapacity(travelProperties(id)[pid]);
+  if(!cap) return null;
+  return Math.max(0,cap-travelPropertyOccupants(id,pid).length);
+}
+function travelPropertyFull(id,pid){ var left=travelPropertySpotsLeft(id,pid); return left!==null&&left<=0; }
+// Placed means the pointer resolves to a property that still EXISTS. A dangling pointer, left behind
+// if a property were ever removed without cleanup, must read as unplaced everywhere so the member
+// cannot silently disappear from the exec's gap list.
+function travelPropertyPlaced(id,part){
+  var pid=part&&part.lodgingProperty;
+  return !!(pid&&travelProperties(id)[pid]);
+}
+// This member's open lodging gap as a display string, or null when there is none. Single source of
+// truth for BOTH the UNACCOUNTED inclusion filter and the gap text, so a member can never land in that
+// list with no gap shown, and the two can never disagree about which gap it is.
+//
+// There are two distinct gaps and they suppress differently, because the exec's next action differs:
+//
+//   'no lodging'  the member has not said whether they need a bed. Always reported, whether or not any
+//                 property exists. The action is to ask that member, which needs nothing set up first.
+//   'needs a bed' the member asked for lodging but is not placed in a property. Reported only once at
+//                 least one property exists, because until then there is nowhere to place them and the
+//                 action belongs to the event (add a property) rather than to the member. Flagging
+//                 every requester before any property existed would bury the actionable gaps.
+//
+// An unresolvable lodgingProperty counts as unplaced, so a member whose property was deleted out from
+// under them reads as 'needs a bed' and never as placed.
+function travelLodgingGap(id,ev,part){
+  if(!(ev&&ev.lodgingOffered)) return null;
+  if(!part.lodging) return 'no lodging';
+  if(!travelPropertyIds(id).length) return null;
+  return travelPropertyPlaced(id,part)?null:'needs a bed';
 }
 // Members an event is announced to, by squad scope (same tier scoping as the chat channels).
 function travelScopeMembers(scope){
@@ -10477,6 +10550,51 @@ function travelRemoveCost(id, lid){
   var ev=(D.travel||{})[id]; if(ev&&ev.costs) delete ev.costs[lid];
   renderTravel();
 }
+// ---- Lodging properties (exec-managed list) -------------------------------
+// Same shape as the itemized cost lines above: a gi() key, one row per record with its own Save and
+// delete button, and deliberately NOT wired into travelFlushEditors. Per-row Save keeps an unsaved
+// property edit from being swept into an unrelated re-render.
+function travelAddProperty(id){
+  travelFlushEditors();
+  var pid=gi('tvp'); var rec={name:'New property', kind:'house', capacity:0, createdAt:Date.now()};
+  fbSet('travel/'+id+'/properties/'+pid, rec);
+  var ev=(D.travel||{})[id]; if(ev){ if(!ev.properties)ev.properties={}; ev.properties[pid]=rec; }
+  renderTravel();
+}
+function travelSaveProperty(id, pid){
+  travelFlushEditors();
+  var ev=(D.travel||{})[id]; if(!ev) return;
+  var prev=(ev.properties||{})[pid]||{};
+  var ne=document.getElementById('tv-prop-name-'+id+'-'+pid);
+  var ke=document.getElementById('tv-prop-kind-'+id+'-'+pid);
+  var ce=document.getElementById('tv-prop-cap-'+id+'-'+pid);
+  var cap=ce?parseInt(ce.value,10):0; if(!isFinite(cap)||cap<0)cap=0;
+  var rec={ name:(((ne?ne.value.trim():'')||'Property').slice(0,TRAVEL_PROPERTY_NAME_MAX)),
+    kind:(ke&&ke.value==='hotel')?'hotel':'house',
+    capacity:cap,
+    createdAt:prev.createdAt||Date.now() };
+  fbSet('travel/'+id+'/properties/'+pid, rec);
+  if(!ev.properties)ev.properties={}; ev.properties[pid]=rec;
+  renderTravel();
+}
+// Deleting a property must never leave a member pointing at nothing. Clear lodgingProperty on every
+// participant pointed here BEFORE removing the record. This mirrors the driver-drop cleanup in
+// mtvSaveDriving, which releases every rider who had claimed a seat when someone stops driving.
+// Those members keep lodging true, so they stay visible as needing a bed and simply become unplaced.
+function travelRemoveProperty(id, pid){
+  travelFlushEditors();
+  var ev=(D.travel||{})[id]; if(!ev) return;
+  var label=travelPropertyLabel((ev.properties||{})[pid]);
+  var occ=travelPropertyOccupants(id,pid);
+  if(!window.confirm(occ.length
+    ?('Delete "'+label+'"? '+occ.length+' member'+(occ.length===1?'':'s')+' assigned here will become unplaced and will still need a bed.')
+    :('Delete "'+label+'"?'))) return;
+  var parts=(ev.participants)||{};
+  Object.keys(parts).forEach(function(mid){ if(parts[mid]&&parts[mid].lodgingProperty===pid) mtvSetPartField(id,mid,'lodgingProperty',null); });
+  fbSet('travel/'+id+'/properties/'+pid, null);
+  if(ev.properties) delete ev.properties[pid];
+  renderTravel();
+}
 // ---- Announce (reuse exec messaging) -------------------------------------
 function travelAnnounce(id){
   travelFlushEditors(); // so the announcement uses the latest typed name, dates, and link even if unsaved
@@ -10550,7 +10668,43 @@ function renderTravel(){
       const seats=parts[mid].seats||0; const claimed=going.filter(x=>parts[x].rideWith===mid).length;
       return `<div style="font-size:12px;color:var(--charcoal);padding:2px 0;">${esc(nm(mid))}: ${Math.max(0,seats-claimed)} of ${seats} seats open</div>`;
     }).join(''):'<div style="font-size:11px;color:var(--gray);">No drivers yet.</div>';
-    const lodgingList=ev.lodgingOffered?going.filter(mid=>parts[mid].lodging):[];
+    // Lodging: exec-managed property list plus an occupancy roll-up derived entirely at render time.
+    // Nothing about who-is-where is stored; it is recomputed from participant lodgingProperty pointers
+    // every render, the same way the ride roll-up above recomputes seats from rideWith.
+    const props=travelProperties(id);
+    const propIds=travelPropertyIds(id);
+    const propRows=propIds.length?propIds.map(pid=>{
+      const p=props[pid]||{};
+      const assigned=going.filter(mid=>parts[mid].lodgingProperty===pid).length;
+      return `<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;flex-wrap:wrap;">
+        <input class="form-input" id="tv-prop-name-${esc(id)}-${esc(pid)}" value="${esc(travelPropertyName(p))}" maxlength="${TRAVEL_PROPERTY_NAME_MAX}" placeholder="Property name" style="flex:1;min-width:110px;padding:5px 7px;font-size:12px;">
+        <select class="form-select" id="tv-prop-kind-${esc(id)}-${esc(pid)}" style="padding:5px 7px;font-size:12px;">
+          <option value="house"${travelPropertyKind(p)==='house'?' selected':''}>House</option>
+          <option value="hotel"${travelPropertyKind(p)==='hotel'?' selected':''}>Hotel</option>
+        </select>
+        <input class="form-input" id="tv-prop-cap-${esc(id)}-${esc(pid)}" type="number" min="0" step="1" value="${travelPropertyCapacity(p)||''}" placeholder="Cap" style="width:62px;padding:5px 7px;font-size:12px;">
+        <span style="font-size:10px;color:var(--gray);white-space:nowrap;">${assigned} assigned</span>
+        <button class="btn btn-small btn-secondary" style="padding:3px 8px;font-size:10px;" onclick="travelSaveProperty('${esc(id)}','${esc(pid)}')">Save</button>
+        <button class="btn btn-small btn-danger" style="padding:3px 8px;font-size:10px;" onclick="travelRemoveProperty('${esc(id)}','${esc(pid)}')">&times;</button>
+      </div>`;
+    }).join(''):'<div style="font-size:11px;color:var(--gray);padding:2px 0;">No properties yet.</div>';
+    const propRollup=propIds.map(pid=>{
+      const p=props[pid]||{};
+      const occ=going.filter(mid=>parts[mid].lodgingProperty===pid);
+      const cap=travelPropertyCapacity(p);
+      const left=travelPropertySpotsLeft(id,pid);
+      const meta=esc(TRAVEL_PROPERTY_KIND_LABEL[travelPropertyKind(p)])+(cap?(' &middot; '+left+' of '+cap+' spot'+(cap===1?'':'s')+' left'):' &middot; unlimited');
+      return `<div style="font-size:12px;color:var(--charcoal);padding:3px 0;"><b>${esc(travelPropertyLabel(p))}</b> <span style="color:var(--gray);font-size:11px;">${meta}</span><br>${occ.length?occ.map(mid=>esc(nm(mid))).join(', '):'<span style="color:var(--gray);">Empty.</span>'}</div>`;
+    }).join('');
+    // Unplaced: needs a bed but has no pointer, or a pointer that no longer resolves. A dangling
+    // pointer lands here rather than being counted as placed.
+    const unplaced=going.filter(mid=>parts[mid].lodging&&!travelPropertyPlaced(id,parts[mid]));
+    const lodgingBlock=ev.lodgingOffered
+      ? `${propRows}
+        <div style="margin:4px 0 8px;"><button class="btn btn-small btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="travelAddProperty('${esc(id)}')">Add property</button></div>
+        ${propRollup}
+        <div style="font-size:12px;color:var(--charcoal);padding:3px 0;border-top:1px solid var(--gray-lighter);"><b>Unplaced</b> <span style="color:var(--gray);font-size:11px;">needs a bed, no spot claimed</span><br>${unplaced.length?unplaced.map(mid=>esc(nm(mid))).join(', '):'<span style="color:var(--gray);">None.</span>'}</div>`
+      : '<div style="font-size:12px;color:var(--gray);">Lodging not offered.</div>';
     const paidRows=going.length?going.map(mid=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0;font-size:12px;">
         <span style="color:var(--charcoal);">${esc(nm(mid))}</span>
         <button class="btn btn-small ${travelIsPaid(id,mid)?'btn-secondary':'btn-danger'}" style="padding:2px 10px;font-size:10px;" onclick="travelTogglePaid('${esc(id)}','${esc(mid)}')">${travelIsPaid(id,mid)?'Paid':'Owes'}</button>
@@ -10559,8 +10713,10 @@ function renderTravel(){
       const p=parts[mid];
       const onTeam=p.teamId&&teams[p.teamId]&&travelTeamComplete(teams[p.teamId]);
       const hasRide=p.canDrive||p.rideWith;
-      const needsLodging=ev.lodgingOffered&&!p.lodging;
-      return !onTeam || !hasRide || needsLodging;
+      // travelLodgingGap returns the gap string or null, and is shared with the gap-text pass below so
+      // the two can never disagree about whether this member belongs in the list.
+      const lodgingGap=travelLodgingGap(id,ev,p);
+      return !onTeam || !hasRide || !!lodgingGap;
     });
     const unaccountedRows=unaccounted.length?unaccounted.map(mid=>{
       const p=parts[mid]; const gaps=[];
@@ -10572,7 +10728,10 @@ function renderTravel(){
       const gapName=gapTeam?travelTeamName(gapTeam):'';
       if(!(p.teamId&&teams[p.teamId]&&travelTeamComplete(teams[p.teamId]))) gaps.push(gapTeam?(gapName?(esc(gapName)+' incomplete'):'incomplete team'):'no team');
       if(!(p.canDrive||p.rideWith)) gaps.push('no ride');
-      if(ev.lodgingOffered&&!p.lodging) gaps.push('no lodging');
+      // Same call the inclusion filter above made. Push whatever string it returns so the text always
+      // names the gap that put this member in the list.
+      const lodgingGap=travelLodgingGap(id,ev,p);
+      if(lodgingGap) gaps.push(lodgingGap);
       return `<div style="font-size:12px;color:var(--charcoal);padding:2px 0;">${esc(nm(mid))} <span style="color:var(--red);">${gaps.join(', ')}</span></div>`;
     }).join(''):(going.length?'<div style="font-size:11px;color:#217F7F;">Everyone signed up is fully set.</div>':'<div style="font-size:11px;color:var(--gray);">No one signed up yet.</div>');
     const H=t=>`<div style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:1px;color:var(--charcoal);margin:8px 0 4px;">${t}</div>`;
@@ -10617,7 +10776,7 @@ function renderTravel(){
         ${H('TEAMS')}${teamRows}
         ${H('FREE AGENTS')}<div style="font-size:12px;color:var(--charcoal);">${freeAgents.length?freeAgents.map(mid=>esc(nm(mid))).join(', '):'<span style="color:var(--gray);">None.</span>'}</div>
         ${H('RIDES')}${driverRows}
-        ${H('LODGING')}<div style="font-size:12px;color:var(--charcoal);">${ev.lodgingOffered?(lodgingList.length?lodgingList.map(mid=>esc(nm(mid))).join(', '):'<span style="color:var(--gray);">No one has requested lodging.</span>'):'<span style="color:var(--gray);">Lodging not offered.</span>'}</div>
+        ${H('LODGING')}${lodgingBlock}
         ${H('PAID (per event)')}${paidRows}
         <div style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:1px;color:var(--red);margin:8px 0 4px;">UNACCOUNTED</div>${unaccountedRows}
       </div>
@@ -10804,6 +10963,31 @@ function mtvSetLodging(id,on){
   var ev=mtvEv(id); if(!mtvGuard(ev)) return;
   if(!ev.lodgingOffered) return;
   mtvSetPartField(id,currentPlayerId,'lodging',!!on);
+  // Saying you no longer need a bed gives up any spot you were holding. Otherwise a member could keep
+  // occupying a house while showing no lodging need, and the spot would look taken to everyone else.
+  if(!on) mtvSetPartField(id,currentPlayerId,'lodgingProperty',null);
+  renderMemberTravel();
+}
+// Claim a spot in a specific property. Sets both facts together: claiming a bed always implies needing
+// one, so lodging goes true alongside the pointer. Refuses a full property BEFORE any write, mirroring
+// the full-car refusal in mtvClaimSeat.
+function mtvClaimProperty(id,pid){
+  var ev=mtvEv(id); if(!mtvGuard(ev)) return;
+  if(!ev.lodgingOffered) return;
+  var prop=(ev.properties||{})[pid];
+  if(!prop){ toast('That lodging is no longer listed.'); return; }
+  var mine=(ev.participants||{})[currentPlayerId];
+  if(mine&&mine.lodgingProperty===pid) return;
+  if(travelPropertyFull(id,pid)){ toast(travelPropertyLabel(prop)+' is full.'); return; }
+  mtvSetPartField(id,currentPlayerId,'lodging',true);
+  mtvSetPartField(id,currentPlayerId,'lodgingProperty',pid);
+  renderMemberTravel();
+}
+// Release a spot. Clears the pointer but LEAVES lodging true on purpose, so the member stays on the
+// exec's list as needing a bed and simply shows as unplaced.
+function mtvReleaseProperty(id){
+  var ev=mtvEv(id); if(!mtvGuard(ev)) return;
+  mtvSetPartField(id,currentPlayerId,'lodgingProperty',null);
   renderMemberTravel();
 }
 function mtvWithdraw(id){
@@ -10942,7 +11126,46 @@ function renderMemberTravel(){
           +(driverList?('<div style="border-top:1px solid var(--gray-lighter);padding-top:4px;">'+driverList+'</div>'):'<div style="font-size:11px;color:var(--gray);">No one is offering a ride yet.</div>');
       }
       // lodging
-      var lodgingHtml=ev.lodgingOffered?('<label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--charcoal);"><input type="checkbox" '+(mine.lodging?'checked':'')+' '+(locked?'disabled':'')+' onchange="mtvSetLodging(\''+id+'\',this.checked)"> Request lodging</label>'):'<div style="font-size:12px;color:var(--gray);">Lodging is not offered for this tournament.</div>';
+      // One row per property with its own Claim spot button, mirroring the driver list above rather
+      // than using a select, so spots left is visible per option before choosing.
+      //
+      // ROOMMATE VISIBILITY: on the member's OWN property row we list the other members assigned to
+      // that same property. This is a NEW disclosure. Before this, travel showed a member nothing
+      // about anyone else's lodging. It is deliberate: knowing who you are sharing a house with is the
+      // point of the feature, and it parallels how the driver list already exposes who is offering a
+      // ride. It is scoped to the member's own property only, never to the other properties.
+      var lodgingHtml='';
+      if(!ev.lodgingOffered){
+        lodgingHtml='<div style="font-size:12px;color:var(--gray);">Lodging is not offered for this tournament.</div>';
+      } else {
+        var mProps=ev.properties||{};
+        var mPropIds=travelPropertyIds(id);
+        var myProp=(mine.lodgingProperty&&mProps[mine.lodgingProperty])?mine.lodgingProperty:null;
+        var needToggle='<label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--charcoal);"><input type="checkbox" '+(mine.lodging?'checked':'')+' '+(locked?'disabled':'')+' onchange="mtvSetLodging(\''+id+'\',this.checked)"> Request lodging</label>';
+        if(!mPropIds.length){
+          lodgingHtml=needToggle+'<div style="font-size:11px;color:var(--gray);margin-top:4px;">No houses or hotels have been listed for this trip yet. When an exec adds one, you can claim a spot here.</div>';
+        } else {
+          lodgingHtml=needToggle+mPropIds.map(function(pid){
+            var p=mProps[pid]||{};
+            var occ=going.filter(function(x){ return parts[x].lodgingProperty===pid; });
+            var cap=travelPropertyCapacity(p);
+            var left=cap?Math.max(0,cap-occ.length):null;
+            var full=(left!==null&&left<=0);
+            var isMine=(pid===myProp);
+            var meta=esc(TRAVEL_PROPERTY_KIND_LABEL[travelPropertyKind(p)])+(cap?(' &middot; '+left+' spot'+(left===1?'':'s')+' left'):' &middot; unlimited');
+            var mates=isMine?occ.filter(function(x){ return x!==me; }):[];
+            var action='';
+            if(isMine) action=locked?'':'<button class="btn btn-small btn-secondary" style="padding:2px 8px;font-size:10px;white-space:nowrap;" onclick="mtvReleaseProperty(\''+id+'\')">Release spot</button>';
+            else if(full) action='<span style="font-size:10px;color:var(--gray);white-space:nowrap;">Full</span>';
+            else if(!locked&&!myProp) action='<button class="btn btn-small btn-secondary" style="padding:2px 8px;font-size:10px;white-space:nowrap;" onclick="mtvClaimProperty(\''+id+'\',\''+pid+'\')">Claim spot</button>';
+            return '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;font-size:12px;color:var(--charcoal);padding:4px 0;border-top:1px solid var(--gray-lighter);">'
+              +'<span><b>'+esc(travelPropertyLabel(p))+'</b>'+(isMine?' <span style="color:#217F7F;font-weight:700;">your spot</span>':'')
+              +'<br><span style="color:var(--gray);font-size:11px;">'+meta+'</span>'
+              +(isMine?('<br><span style="font-size:11px;">'+(mates.length?('With '+mates.map(function(x){ return esc(nm(x)); }).join(', ')):'No one else here yet.')+'</span>'):'')
+              +'</span>'+action+'</div>';
+          }).join('');
+        }
+      }
       body='<div style="margin-top:10px;">'
         +'<div style="font-size:12px;color:#217F7F;font-weight:700;margin-bottom:4px;">You are going.</div>'
         +(inviteHtml?H('TEAM INVITES')+inviteHtml:'')
