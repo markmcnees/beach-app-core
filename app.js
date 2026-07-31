@@ -10771,23 +10771,24 @@ function renderTravel(){
         <button class="btn btn-small btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="travelAddCost('${esc(id)}')">Add cost line</button>
         <span style="font-size:13px;font-weight:700;color:var(--charcoal);">Total $${total} per player</span>
       </div>
-      <div style="border-top:1px solid var(--gray-lighter);margin-top:10px;padding-top:6px;">
-        ${H('GOING ('+going.length+')')}<div style="font-size:12px;color:var(--charcoal);">${going.length?going.map(mid=>esc(nm(mid))).join(', '):'<span style="color:var(--gray);">No one has joined yet.</span>'}</div>
-        ${H('TEAMS')}${teamRows}
-        ${H('FREE AGENTS')}<div style="font-size:12px;color:var(--charcoal);">${freeAgents.length?freeAgents.map(mid=>esc(nm(mid))).join(', '):'<span style="color:var(--gray);">None.</span>'}</div>
-        ${H('RIDES')}${driverRows}
-        ${H('LODGING')}${lodgingBlock}
-        ${H('PAID (per event)')}${paidRows}
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:1px;color:var(--red);margin:8px 0 4px;">UNACCOUNTED</div>${unaccountedRows}
-      </div>
+    </div>
+    <div style="border:1px solid var(--gray-lighter);border-radius:10px;padding:12px;margin-bottom:22px;">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:1px;color:var(--charcoal);margin-bottom:4px;">Participants and Logistics &middot; ${esc(ev.name||'Tournament')}</div>
+      ${H('GOING ('+going.length+')')}<div style="font-size:12px;color:var(--charcoal);">${going.length?going.map(mid=>esc(nm(mid))).join(', '):'<span style="color:var(--gray);">No one has joined yet.</span>'}</div>
+      ${H('TEAMS')}${teamRows}
+      ${H('FREE AGENTS')}<div style="font-size:12px;color:var(--charcoal);">${freeAgents.length?freeAgents.map(mid=>esc(nm(mid))).join(', '):'<span style="color:var(--gray);">None.</span>'}</div>
+      ${H('RIDES')}${driverRows}
+      ${H('LODGING')}${lodgingBlock}
+      ${H('PAID (per event)')}${paidRows}
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:1px;color:var(--red);margin:8px 0 4px;">UNACCOUNTED</div>${unaccountedRows}
     </div>`;
   }).join(''):'<div style="font-size:12px;color:var(--gray);padding:6px 0;">No tournaments yet. Add one to get started.</div>';
   pane.innerHTML=`<div class="card"><div class="card-title"><span class="bar"></span> 🚌 Travel Tournaments</div>
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
-      <p style="font-size:11px;color:var(--gray);margin:0;flex:1;min-width:180px;">Create tournaments, itemize costs, set formats, and announce to a squad. Members join and form teams in their app.</p>
+    <p style="font-size:11px;color:var(--gray);margin:0 0 10px;">Create tournaments, itemize costs, set formats, and announce to a squad. Members join and form teams in their app.</p>
+    ${eventsHtml}
+    <div style="margin-top:4px;">
       <button class="btn btn-small btn-secondary" style="padding:4px 12px;font-size:11px;white-space:nowrap;" onclick="travelAddEvent()">Add tournament</button>
     </div>
-    ${eventsHtml}
   </div>`;
 }
 
