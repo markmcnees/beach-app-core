@@ -982,6 +982,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       <input type="password" style="width:100%;padding:12px 14px;border:2px solid var(--gray-lighter);border-radius:8px;font-family:'Barlow',sans-serif;font-size:15px;margin-top:8px;" id="exec-login-pw" placeholder="Password" autocomplete="current-password">
       <div class="login-error" id="exec-login-error"></div>
       <button class="login-btn" id="exec-login-btn" onclick="execLoginEmail()">Sign In as Exec</button>
+      <div style="text-align:center;font-family:'Barlow',sans-serif;font-size:13px;color:var(--gray);padding:12px 8px 0;">Forgot password? <a href="/community/reset/" style="color:var(--gray);font-weight:600;text-decoration:underline;">Reset it.</a></div>
       <button type="button" id="pin-alt-link" onclick="showSharedPinPad()" style="display:block;width:100%;background:none;border:none;color:var(--gray);font-family:'Barlow',sans-serif;font-size:13px;font-weight:600;padding:12px 8px 2px;cursor:pointer;text-decoration:underline;">Use the shared PIN instead</button>
       `:''}
       <!-- Shared PIN pad. For account-login schools it starts hidden behind the
@@ -1017,6 +1018,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       <input type="password" style="width:100%;padding:12px 14px;border:2px solid var(--gray-lighter);border-radius:8px;font-family:'Barlow',sans-serif;font-size:15px;margin-top:8px;" id="login-pw" placeholder="Password" autocomplete="current-password">
       <div class="login-error" id="pw-error"></div>
       <button class="login-btn" id="player-login-btn" onclick="playerLoginEmail()">View My Stats</button>
+      <div style="text-align:center;font-family:'Barlow',sans-serif;font-size:13px;color:var(--gray);padding:12px 8px 0;">Forgot password? <a href="/community/reset/" style="color:var(--gray);font-weight:600;text-decoration:underline;">Reset it.</a></div>
       `:`
       <div style="font-family:'Bebas Neue';font-size:14px;letter-spacing:1.5px;color:var(--charcoal);margin-bottom:8px;">Select Your Name</div>
       <div class="login-player-select"><select id="login-player-select"><option value="">— Choose Player —</option></select></div>
