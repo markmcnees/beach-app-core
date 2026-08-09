@@ -4162,6 +4162,12 @@ async function pinPress(n){
     }else if(j&&j.code==='not_set'){
       if(errEl)errEl.textContent='No PIN set for this school. Contact support.';
       pinEntry='';updatePinDots();_pinChecking=false;
+    }else if(j&&j.code==='server_error'){
+      if(errEl)errEl.textContent='Something is wrong on our end, not your password. Try again in a few minutes.';
+      pinEntry='';updatePinDots();_pinChecking=false;
+    }else if(j&&j.code==='rate_limited'){
+      if(errEl)errEl.textContent='Too many attempts. Try again in a few minutes.';
+      pinEntry='';updatePinDots();_pinChecking=false;
     }else{
       if(errEl)errEl.textContent='Incorrect PIN';
       setTimeout(()=>{pinEntry='';updatePinDots();const e2=document.getElementById('pin-error');if(e2)e2.textContent='';_pinChecking=false;},800);
@@ -4261,7 +4267,10 @@ async function playerLoginEmail(){
   const done=()=>{_emailLoginBusy=false;if(btn)btn.disabled=false;};
   if(netErr){if(errEl)errEl.textContent='Could not reach the server. Try again.';done();return;}
   if(!j||j.ok!==true){
-    if(errEl)errEl.textContent=(j&&j.code==='rate_limited')?'Too many attempts. Try again in a few minutes.':'Incorrect email or password';
+    if(errEl)errEl.textContent=
+      (j&&j.code==='rate_limited')?'Too many attempts. Try again in a few minutes.'
+      :(j&&j.code==='server_error')?'Something is wrong on our end, not your password. Try again in a few minutes.'
+      :'Incorrect email or password';
     done();return;
   }
   // Verified. Resolve the club roster record by matching accountId to the account id.
@@ -4312,6 +4321,7 @@ async function execLoginEmail(){
   if(!j||j.ok!==true){
     if(errEl)errEl.textContent=
       (j&&j.code==='rate_limited')?'Too many attempts. Try again in a few minutes.'
+      :(j&&j.code==='server_error')?'Something is wrong on our end, not your password. Try again in a few minutes.'
       :(j&&j.code==='not_exec')?"This account is not on the school's exec list."
       :'Incorrect email or password';
     done();return;
