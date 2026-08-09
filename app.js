@@ -978,7 +978,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
            yourself is the primary path. The shared PIN pad below still works
            exactly as before, revealed by the small link. -->
       <div style="font-family:'Bebas Neue';font-size:14px;letter-spacing:1.5px;color:var(--charcoal);margin-bottom:8px;">Sign In With Your Email</div>
-      <input type="email" style="width:100%;padding:12px 14px;border:2px solid var(--gray-lighter);border-radius:8px;font-family:'Barlow',sans-serif;font-size:15px;" id="exec-login-email" placeholder="you@fsu.edu" autocomplete="email" autocapitalize="none" spellcheck="false">
+      <input type="email" style="width:100%;padding:12px 14px;border:2px solid var(--gray-lighter);border-radius:8px;font-family:'Barlow',sans-serif;font-size:15px;" id="exec-login-email" placeholder="Email you signed up with" autocomplete="email" autocapitalize="none" spellcheck="false">
       <input type="password" style="width:100%;padding:12px 14px;border:2px solid var(--gray-lighter);border-radius:8px;font-family:'Barlow',sans-serif;font-size:15px;margin-top:8px;" id="exec-login-pw" placeholder="Password" autocomplete="current-password">
       <div class="login-error" id="exec-login-error"></div>
       <button class="login-btn" id="exec-login-btn" onclick="execLoginEmail()">Sign In as Exec</button>
@@ -1013,7 +1013,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
     <div class="login-section" id="login-player">
       ${SC.emailLogin?`
       <div style="font-family:'Bebas Neue';font-size:14px;letter-spacing:1.5px;color:var(--charcoal);margin-bottom:8px;">Log In With Your Email</div>
-      <input type="email" style="width:100%;padding:12px 14px;border:2px solid var(--gray-lighter);border-radius:8px;font-family:'Barlow',sans-serif;font-size:15px;" id="login-email" placeholder="you@fsu.edu" autocomplete="email" autocapitalize="none" spellcheck="false">
+      <input type="email" style="width:100%;padding:12px 14px;border:2px solid var(--gray-lighter);border-radius:8px;font-family:'Barlow',sans-serif;font-size:15px;" id="login-email" placeholder="Email you signed up with" autocomplete="email" autocapitalize="none" spellcheck="false">
       <input type="password" style="width:100%;padding:12px 14px;border:2px solid var(--gray-lighter);border-radius:8px;font-family:'Barlow',sans-serif;font-size:15px;margin-top:8px;" id="login-pw" placeholder="Password" autocomplete="current-password">
       <div class="login-error" id="pw-error"></div>
       <button class="login-btn" id="player-login-btn" onclick="playerLoginEmail()">View My Stats</button>
