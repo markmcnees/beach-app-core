@@ -12,11 +12,8 @@ MSG="$1"
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 COURTSENSE_DIR="$REPO_DIR/../courtsense"
 
-# ── 1. Syntax check ─────────────────────────────────────────
-echo "Running syntax check..."
-node --check "$REPO_DIR/app.js"
-
-# ── 2. Get latest tag and bump patch version ─────────────────
+# ── 1. Get latest tag and bump patch version ─────────────────
+# Runs first because the stamp below needs NEW_TAG. Pure git read, no side effects.
 LATEST_TAG=$(git -C "$REPO_DIR" tag --sort=-v:refname | head -1)
 if [ -z "$LATEST_TAG" ]; then
   echo "Error: no existing git tags found"
@@ -33,7 +30,26 @@ NEW_TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
 
 echo "Latest tag: $LATEST_TAG -> New tag: $NEW_TAG"
 
-# ── 3. Commit and push app.js ───────────────────────────────
+# ── 2. Stamp the build version into app.js ───────────────────
+# Rewrites the APP_VERSION constant to the tag just cut. Runs BEFORE the syntax
+# check so a malformed stamp fails the gate, and before the commit so the value
+# is in the committed bytes and in the copy synced to courtsense.
+sed -i -E "s|^const APP_VERSION='[^']*';$|const APP_VERSION='${NEW_TAG#v}';|" "$REPO_DIR/app.js"
+echo "  Stamped APP_VERSION -> ${NEW_TAG#v}"
+
+# Abort if the stamp did not land. sed exits 0 on zero matches, so a renamed or
+# reformatted constant would silently ship a file misreporting its own version,
+# which is the exact defect this stamp exists to remove.
+if ! grep -qF "const APP_VERSION='${NEW_TAG#v}';" "$REPO_DIR/app.js"; then
+  echo "Error: APP_VERSION stamp failed; app.js does not carry ${NEW_TAG#v}"
+  exit 1
+fi
+
+# ── 3. Syntax check ─────────────────────────────────────────
+echo "Running syntax check..."
+node --check "$REPO_DIR/app.js"
+
+# ── 4. Commit and push app.js ───────────────────────────────
 cd "$REPO_DIR"
 if git diff --quiet app.js && git diff --cached --quiet app.js; then
   echo "No changes to app.js, skipping commit"
@@ -45,12 +61,12 @@ fi
 git push
 echo "Pushed to main"
 
-# ── 4. Tag and push ─────────────────────────────────────────
+# ── 5. Tag and push ─────────────────────────────────────────
 git tag "$NEW_TAG"
 git push origin "$NEW_TAG"
 echo "Tagged and pushed $NEW_TAG"
 
-# ── 5. Update courtsense shell repos ────────────────────────
+# ── 6. Update courtsense shell repos ────────────────────────
 if [ ! -d "$COURTSENSE_DIR" ]; then
   echo "Warning: courtsense repo not found at $COURTSENSE_DIR, skipping shell update"
   echo ""
@@ -74,6 +90,15 @@ git pull --rebase origin main
 
 # Copy the source-of-truth app.js into the courtsense repo
 cp "$REPO_DIR/app.js" "$COURTSENSE_DIR/app.js"
+
+# Re-check the stamp on the COPY. The copy is what GitHub Pages serves, so a sync
+# that silently failed or landed on a stale file would leave the served app
+# misreporting its own version. Distinct message from the step 2 check so a bad
+# stamp and a bad sync are tellable apart.
+if ! grep -qF "const APP_VERSION='${NEW_TAG#v}';" "$COURTSENSE_DIR/app.js"; then
+  echo "Error: courtsense copy of app.js does not carry ${NEW_TAG#v}; sync failed"
+  exit 1
+fi
 
 # Also bump any legacy CDN version tags in shell HTML (no-op if none exist)
 while IFS= read -r -d '' file; do
