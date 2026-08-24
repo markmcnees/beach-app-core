@@ -6667,86 +6667,6 @@ function renderManualOppEntry(){
   return h;
 }
 
-// ── OPPONENT INTEL — shared cross-school scouting node ──────────────────────
-// Alias map: normalized variants that should collapse to a canonical school id.
-// Add entries here whenever the scanner or a user picks up an abbreviation or
-// nickname that should file under an existing school.
-const OPPONENT_ID_ALIASES={
-  'leap_bk':'bishop_kelly',
-  'bk':'bishop_kelly',
-  'bishop_k':'bishop_kelly',
-  'wakalla':'wakulla'
-};
-
-// Normalizes a school name to a stable Firebase key.
-// "Chiles HS", "W.T. Chiles", "Chiles High School" → "chiles"
-// "Lincoln HS" → "lincoln_hs", "Rickards High" → "rickards"
-// "Leap BK", "BK", "Bishop K" → "bishop_kelly" (via OPPONENT_ID_ALIASES)
-function normalizeOpponentId(name){
-  if(!name)return'unknown';
-  const id=name
-    .toLowerCase()
-    .replace(/\bw\.?t\.?\b/g,'wt')           // W.T. → wt
-    .replace(/\bhigh school\b/g,'')           // remove "high school"
-    .replace(/\bhigh\b/g,'')                  // remove "high"
-    .replace(/\bh\.?s\.?\b/g,'hs')            // H.S. / HS → hs
-    .replace(/[^a-z0-9]+/g,'_')              // non-alphanum → underscore
-    .replace(/^_+|_+$/g,'')                  // trim leading/trailing underscores
-    .replace(/_+/g,'_')                      // collapse repeated underscores
-    ||'unknown';
-  return OPPONENT_ID_ALIASES[id]||id;
-}
-
-// Writes one appearance record to the shared top-level opponent_intel node.
-// Uses db.ref() directly (not fbSet) so it is NOT scoped to DB_ROOT.
-// Called from confirmOppLineup() after the school-scoped opponents/ write.
-function writeOpponentIntel(date, oppName, oppCourts, alternates, source){
-  if(!db||!oppName||!date)return;
-  const opponentId=normalizeOpponentId(oppName);
-  const reportingSchool=MY_SCHOOL_KEY.replace('_matches',''); // e.g. 'leon_queens'
-  const appearanceId=date.replace(/-/g,'')+'_'+reportingSchool; // e.g. '20250315_leon_queens'
-
-  // Build pairs map keyed by court number
-  const pairs={};
-  (oppCourts||[]).forEach(function(c){
-    if(c.court)pairs[c.court]={p1:c.player1||'',p2:c.player2||''};
-  });
-
-  // Build alternates array (first names only for privacy)
-  const altNames=(alternates||[])
-    .map(function(a){return(a.firstName||a.first||'').trim();})
-    .filter(Boolean);
-
-  // Confidence: scanner reads can have OCR errors; manual is coach-verified
-  const confidence=source==='scanner'?'high':'medium';
-
-  // Write appearance record (fire-and-forget, same pattern as fbSet)
-  db.ref('opponent_intel/'+opponentId+'/appearances/'+appearanceId).set({
-    date:date,
-    reportingSchool:reportingSchool,
-    source:source||'manual',
-    pairs:pairs,
-    alternates:altNames,
-    confidence:confidence,
-    ts:new Date().toISOString()
-  });
-
-  // Upsert meta (lastSeen and seenBy always update; displayName only if not set)
-  var metaRef=db.ref('opponent_intel/'+opponentId+'/meta');
-  metaRef.once('value',function(snap){
-    var existing=snap.val()||{};
-    var seenBy=existing.seenBy||{};
-    seenBy[reportingSchool]=true;
-    metaRef.set({
-      displayName:existing.displayName||oppName,
-      firstSeen:existing.firstSeen||date,
-      lastSeen:date,
-      seenBy:seenBy
-    });
-  });
-}
-// ── END OPPONENT INTEL ────────────────────────────────────────────────────────
-
 function confirmOppLineup(){
   const{count,altCount,starters,alternates,schoolName}=window._caData||{};
   if(!count){toast('No data to save');return;}
@@ -6834,10 +6754,6 @@ function confirmOppLineup(){
     const id=gi('asgn');
     fbSet('assignments/'+id,{id,date,type:'gameday',opponent:opp,courts:[],oppLineup:oppCourts,notes:null,createdAt:new Date().toISOString()});
   }
-
-
-  // Write to shared cross-school opponent intel node
-  writeOpponentIntel(date,opp,oppCourts,(window._caData&&window._caData.alternates)||[],window._caData&&window._caData.source||'manual');
 
   toast('Saved '+oppCourts.length+' courts + '+(altC)+' alternates to Scouts!');
   document.getElementById('ca-result').innerHTML='';
@@ -12853,7 +12769,6 @@ function dhScanOppSave(count,altCount){
       fbSet('opponents/'+schoolKey+'/players/'+pKey,{...ex,firstName:af||aName,lastName:al||'',fullName:aName,jersey:aj||ex.jersey||'',typicalCourt:ex.typicalCourt||null,isAlternate:true,firstSeen:ex.firstSeen||date,lastSeen:date});
     }
   }
-  writeOpponentIntel(date,opp,oppCourts,alts,'scanner');
   // Also save oppLineup to the matching assignment so Live Scoring shows opponent names
   const existingAssign=Object.values(D.assignments||{}).find(a=>a.date===date);
   if(existingAssign){
