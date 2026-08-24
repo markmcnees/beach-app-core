@@ -3395,9 +3395,11 @@ function renderPlayers(){
 
   const tbody=document.querySelector('#players-table tbody');
   const pNameCell=(p)=>{
-    // Exec-side CS ranking pill, club only and only when the player has a rank. Never shown player-side.
-    const rk=csRankSpan(p);
-    return currentRole==='coach'?`<button class="player-name" style="background:none;border:none;padding:0;cursor:pointer;text-decoration:underline dotted;color:var(--red);font-family:inherit;font-size:inherit;font-weight:700;text-align:left;-webkit-tap-highlight-color:transparent;" onclick="coachOpenPlayer('${p.id}')">${p.firstName||''} ${(p.lastName||'').charAt(0)}.${rk}</button>`:`<span class="player-name">${p.firstName||''} ${(p.lastName||'').charAt(0)}.${rk}</span>`;
+    // Exec-side CS ranking pill, club only. Shows the rating when one of csRankFor's
+    // three sources supplies it and Unrated when none does, so the badge is never
+    // silently absent. Computed inside the coach branch, so the guarantee that it is
+    // never shown player-side is enforced here rather than by container visibility.
+    return currentRole==='coach'?`<button class="player-name" style="background:none;border:none;padding:0;cursor:pointer;text-decoration:underline dotted;color:var(--red);font-family:inherit;font-size:inherit;font-weight:700;text-align:left;-webkit-tap-highlight-color:transparent;" onclick="coachOpenPlayer('${p.id}')">${p.firstName||''} ${(p.lastName||'').charAt(0)}.${csRankSpan(p)}</button>`:`<span class="player-name">${p.firstName||''} ${(p.lastName||'').charAt(0)}.</span>`;
   };
   if(pType==='queens'){
     tbody.innerHTML=rows.map(r=>{const p=r.p,s=r.s;
@@ -3818,7 +3820,7 @@ function renderRoster(){
     html+=`<div style="font-family:'Bebas Neue';font-size:12px;letter-spacing:1.5px;color:var(--red);margin:12px 0 6px;padding-top:8px;${last!==null?'border-top:2px solid var(--gray-lighter);':''}">
       ${courtBadge(p.court,'PG')}</div>`;last=p.court;}
     html+=`<div class="roster-item" id="ritem-${p.id}"><span class="class-badge class-${p.classYear}">${p.classYear}</span>${' '+playerBadge(p)}
-      <span class="roster-name" id="rname-${p.id}">${SC.tiersEnabled&&currentRole==='coach'?`<button class="player-name" style="background:none;border:none;padding:0;cursor:pointer;text-decoration:underline dotted;color:var(--red);font-family:inherit;font-size:inherit;font-weight:700;text-align:left;-webkit-tap-highlight-color:transparent;" onclick="coachOpenPlayer('${p.id}')">${p.firstName} ${p.lastName}</button>`:`${p.firstName} ${p.lastName}`}${csRankSpan(p)}</span>
+      <span class="roster-name" id="rname-${p.id}">${SC.tiersEnabled&&currentRole==='coach'?`<button class="player-name" style="background:none;border:none;padding:0;cursor:pointer;text-decoration:underline dotted;color:var(--red);font-family:inherit;font-size:inherit;font-weight:700;text-align:left;-webkit-tap-highlight-color:transparent;" onclick="coachOpenPlayer('${p.id}')">${p.firstName} ${p.lastName}</button>${csRankSpan(p)}`:`${p.firstName} ${p.lastName}`}</span>
       ${!SC.tiersEnabled?`<input type="number" min="0" max="99" placeholder="#" title="Jersey #" value="${p.jersey||''}" style="width:52px;padding:4px 6px;border:1px solid var(--gray-lighter);border-radius:6px;font-family:'Bebas Neue',sans-serif;font-size:15px;text-align:center;color:var(--charcoal);" onchange="updJersey('${p.id}',this.value)">`:''}
       <select class="court-select" onchange="updCt('${p.id}',this.value)">${COURTS.map(c=>`<option value="${c}" ${p.court===c?'selected':''}>PG ${c}</option>`).join('')}</select>
       <button class="btn btn-small" onclick="editPlayerName('${p.id}')" style="padding:4px 8px;font-size:10px;background:var(--blue);color:var(--white);">✎</button>
@@ -11161,7 +11163,9 @@ function ensureCommunityPlayers(){
 //      instead of writing a second one)
 //   3. legacy csRank (only demo seed data ever carried it; real records never
 //      did, so real clubs never hit this branch)
-//   4. 1500, the platform baseline for a brand-new player
+// A number is shown ONLY when one of those three sources supplies one. There is
+// no invented baseline: a member with no rating anywhere resolves to null and
+// displays as Unrated, matching how every other rating surface reads.
 // Read only in this stage: the club writes no ratings anywhere.
 function csRankFor(p){
   if(!SC.tiersEnabled||!p) return null;
@@ -11172,17 +11176,22 @@ function csRankFor(p){
   }
   if(typeof p.rating==='number') return Math.round(p.rating);
   if(p.csRank!=null&&p.csRank!==0) return p.csRank;
-  return 1500;
+  return null;
 }
 // The rendered pill, one expression for the template call sites. Empty for HS
-// configs (csRankFor returns null when tiers are off), so HS output is unchanged.
+// configs (tiers off), so HS output is unchanged. On the club, the pill ALWAYS
+// renders: a number when one of csRankFor's three sources supplies one, the word
+// Unrated when none does. An absent badge and an invented number are both wrong,
+// and the absent one is wrong in the harder-to-notice direction.
 function csRankSpan(p){
+  if(!SC.tiersEnabled||!p) return '';
   var r=csRankFor(p);
-  return r!=null?' <span class="cs-rank">'+r+'</span>':'';
+  return ' <span class="cs-rank">'+(r!=null?r:'Unrated')+'</span>';
 }
 // Cold-cache kick for the synchronous render sites: draw with what we have now
-// (seed or baseline), fetch the account ratings, and re-render the caller once
-// when they land. ensureCommunityPlayers dedupes concurrent kicks.
+// (the roster seed, legacy csRank, or Unrated when neither is there), fetch the
+// account ratings, and re-render the caller once when they land.
+// ensureCommunityPlayers dedupes concurrent kicks.
 function csRankWarm(rerender){
   if(!SC.tiersEnabled||!db||communityPlayersNow()) return;
   ensureCommunityPlayers().then(function(pl){ if(pl&&typeof rerender==='function') rerender(); });
@@ -13495,7 +13504,7 @@ function renderAthleteCard(pid){
   if(hdr){
     var name=((rp.firstName||'')+' '+(rp.lastName||'')).trim()||pN(pid);
     var glance=athleteGlanceLine(pid);
-    var rating=csRankFor(rp); // platform rating from the account, seed or 1500 fallback (see csRankFor)
+    var rating=csRankFor(rp); // platform rating from the account, roster seed or legacy csRank; null when none (see csRankFor)
     hdr.innerHTML=
       '<div style="display:flex;flex-direction:column;align-items:center;text-align:center;padding:6px 0 14px;">'
       +'<div style="margin-bottom:10px;">'+avatarHtml(person,96)+'</div>'
