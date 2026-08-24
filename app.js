@@ -19,6 +19,13 @@ const LOGO_SRC = (SC && SC.logo === 'firebase') ? '' : (SC ? SC.logo : '');
 // Worker base for server-side coach auth (PIN verify, sessions, PIN change). The PIN
 // is never held or compared on the client; these endpoints do it against a bcrypt hash.
 const AUTH_WORKER = 'https://courtsense-email-worker.markmcnees-479.workers.dev';
+// Build stamp, baked in at deploy time. deploy.sh rewrites the line below to the
+// tag it just cut, before the syntax check and before the commit, so the value
+// lives in the committed bytes and in the copy served to every shell. It reports
+// the version of THIS file, not the shell's ?v= cache-buster, so a stale cached
+// app.js still reports its own real version.
+// DO NOT EDIT BY HAND: any manual value is overwritten on the next deploy.
+const APP_VERSION='1.1.147';
 
 // ============================================================
 // DEMO FIXTURE — only consumed when SC.demoMode === true
@@ -958,7 +965,6 @@ body.demo .login-error{margin-top:4px;min-height:14px;}
   // ── Inject HTML body ───────────────────────────────────────
   var venue=SC.homeVenue||'Home';
   document.body.innerHTML=`
-  <meta name="build-version" content="20260314030338">
 </head>
 <body>
 ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — Nothing saves — Refresh to reset</div>' : ''}
@@ -1516,6 +1522,10 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
     <div id="tab-travel"></div>
   </div>`}
 
+  <!-- Build stamp. Sits inside #coach-content but outside every .tab-content, so the
+       tab machinery never hides it and it shows on whichever coach tab is open. Inside
+       #coach-content means players never see it (the player path hides that container). -->
+  <div style="text-align:center;font-size:10px;color:var(--gray);letter-spacing:0.5px;padding:16px 0 6px;">CourtSense ${APP_VERSION}</div>
 </div>
 <!-- PLAYER PORTAL (shown when logged in as player) -->
 <div class="player-portal" id="player-portal">
