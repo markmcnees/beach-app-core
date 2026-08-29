@@ -43,7 +43,7 @@ const AUTH_WORKER = 'https://courtsense-email-worker.markmcnees-479.workers.dev'
 // the version of THIS file, not the shell's ?v= cache-buster, so a stale cached
 // app.js still reports its own real version.
 // DO NOT EDIT BY HAND: any manual value is overwritten on the next deploy.
-const APP_VERSION='1.1.148';
+const APP_VERSION='1.1.149';
 
 // ============================================================
 // DEMO FIXTURE — only consumed when SC.demoMode === true
@@ -5260,11 +5260,22 @@ function coachSaveSkills(){
   const overlay=document.getElementById('coach-player-overlay');
   const pid=overlay?.dataset.pid;if(!pid)return;
   const SKILL_KEYS=['serving','passing','setting','hitting','blocking','defense','courtSense','communication'];
+  // Merge-write, never a whole-object replace. During an assessment clinic several
+  // station observers write individual skill leaves for the same player, and a .set()
+  // here would wipe every station saved since this modal was opened.
+  // Only 1 to 10 counts as a real assessment. A 0, a blank, or anything unparseable is
+  // omitted entirely: 0 means unassessed everywhere else in this app, and .update()
+  // would otherwise write that 0 straight over a real score.
   const skills={};
-  SKILL_KEYS.forEach(k=>{skills[k]=parseInt(document.getElementById('cpm-skill-'+k)?.value)||0;});
-  // Demo mode (db null) persists in-memory to profilesData, mirroring the profiles listener.
-  if(db){db.ref(SC.dbRoots.profiles+'/skills/'+pid).set(skills);}
-  else{profilesData.skills=profilesData.skills||{};profilesData.skills[pid]=skills;}
+  SKILL_KEYS.forEach(k=>{
+    const n=parseInt(document.getElementById('cpm-skill-'+k)?.value,10);
+    if(!isNaN(n)&&n>=1&&n<=10)skills[k]=n;
+  });
+  if(!Object.keys(skills).length){toast('Nothing to save yet. Set at least one skill to 1 or higher.');return;}
+  // Demo mode (db null) persists in-memory to profilesData, mirroring the profiles
+  // listener. Merged, not replaced, so demo behavior matches the live branch.
+  if(db){db.ref(SC.dbRoots.profiles+'/skills/'+pid).update(skills);}
+  else{profilesData.skills=profilesData.skills||{};profilesData.skills[pid]=Object.assign({},profilesData.skills[pid]||{},skills);}
   toast('Skills saved!');
 }
 
@@ -9810,6 +9821,15 @@ function renderQrInto(elId, text){
 function tryoutAttendUrl(sid){
   return location.origin+location.pathname+'?tryout='+encodeURIComponent(sid);
 }
+// The skill-assessment page an exec hands to station observers, resolved to something
+// they can copy and send. SC.assessmentUrl is a shell config key in the same shape as
+// applyUrl: relative is normal, absolute works too, empty or unset means the school has
+// no assessment page and every surface below renders nothing.
+function assessmentLinkUrl(){
+  if(!SC.assessmentUrl) return '';
+  try{ return new URL(SC.assessmentUrl, location.href).href; }
+  catch(e){ return SC.assessmentUrl; }
+}
 // Boot: capture ?tryout=<sid>, hold it, and strip it from the URL (same pattern as ?csadmin).
 var _pendingTryout=null;
 var _tryoutSessionsLoaded=false;
@@ -10168,8 +10188,22 @@ function renderRecruiting(){
       +'<button class="btn btn-small btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="rcSetProspectActive(\''+esc(p.id)+'\',true)">Restore</button>'
       +'</div>';
   }).join('');
+  // Station-observer link. Config-gated the same way applyUrl is, so a school with no
+  // assessmentUrl renders nothing here at all. Visual treatment matches the door-link
+  // block on each session above.
+  var assessHtml='';
+  if(SC.assessmentUrl){
+    var aUrl=assessmentLinkUrl();
+    assessHtml='<div style="border-top:1px dashed var(--gray-lighter);margin-top:4px;padding-top:10px;margin-bottom:12px;">'
+      +'<div style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;letter-spacing:1px;color:var(--charcoal);margin-bottom:2px;">'+esc(SC.assessmentLabel||'Skill Assessment')+'</div>'
+      +(SC.assessmentSubline?'<div style="font-size:11px;color:var(--gray);margin-bottom:4px;">'+esc(SC.assessmentSubline)+'</div>':'')
+      +'<div style="font-size:11px;color:var(--gray);margin-bottom:4px;">Send this link to whoever is running each station. It needs no login, so nobody has to be given '+esc(COACH_LABEL)+' credentials to score a station.</div>'
+      +'<a href="'+esc(aUrl)+'" target="_blank" rel="noopener" style="font-size:11px;color:var(--red);word-break:break-all;">'+esc(aUrl)+'</a>'
+      +'</div>';
+  }
   pane.innerHTML='<div class="card"><div class="card-title"><span class="bar"></span> \u{1F3AF} Recruiting</div>'
     +'<p style="font-size:11px;color:var(--gray);margin-bottom:12px;">Create tryout sessions, invite prospects, and take attendance at the door.</p>'
+    +assessHtml
     +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
     +'<div style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;letter-spacing:1px;color:var(--charcoal);">TRYOUT SESSIONS</div>'
     +'<button class="btn btn-small btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="tsAddSession()">Add session</button>'
@@ -11503,6 +11537,7 @@ function renderTeamAnalysis(){
   // Club renders into tab-teamanalysis; HS renders the same analysis into the Practice destination mount.
   const pane=document.getElementById(SC.tiersEnabled?'tab-teamanalysis':'tab-practice');
   if(!pane)return;
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const tierLabel=t=>t==='gold'?'Gold':'Garnet';
   // HS (no tiers) analyzes the whole roster with no Gold/Garnet picker and a neutral team label; the club path is unchanged.
   const teamHead=SC.tiersEnabled?(tierLabel(analysisTier)+' team'):(analysisTier==='development'?'Development':analysisTier==='roster'?'Roster':(SC.displayName||SC.schoolName||'Your team'));
@@ -11516,7 +11551,9 @@ function renderTeamAnalysis(){
   const a=analyzeTierSkills(analysisTier);
   let body;
   if(!tierDataSufficient(a)){
-    body=`<p style="color:var(--gray);font-size:13px;padding:10px 0;line-height:1.5;">Not enough assessment data yet to analyze this team. Complete more skill assessments first.</p>`;
+    // Config-gated follow-on. Schools with no assessmentUrl keep the original copy exactly.
+    body=`<p style="color:var(--gray);font-size:13px;padding:10px 0;line-height:1.5;">Not enough assessment data yet to analyze this team. Complete more skill assessments first.</p>`
+      +(SC.assessmentUrl?`<p style="font-size:12px;color:var(--gray);line-height:1.5;margin:-4px 0 4px;">Run one at the courts: <a href="${esc(assessmentLinkUrl())}" target="_blank" rel="noopener" style="color:var(--red);font-weight:700;">${esc(SC.assessmentLabel||'Skill Assessment')}</a>. Send that link to whoever is running each station, it needs no login.</p>`:'');
   }else{
     // Weakest assessed first. The lowest few are flagged as the collective weak spots.
     const ranked=[...a.assessedSkills].sort((x,y)=>x.avg-y.avg);
