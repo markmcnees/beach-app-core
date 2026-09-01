@@ -43,7 +43,7 @@ const AUTH_WORKER = 'https://courtsense-email-worker.markmcnees-479.workers.dev'
 // the version of THIS file, not the shell's ?v= cache-buster, so a stale cached
 // app.js still reports its own real version.
 // DO NOT EDIT BY HAND: any manual value is overwritten on the next deploy.
-const APP_VERSION='1.1.149';
+const APP_VERSION='1.1.150';
 
 // ============================================================
 // DEMO FIXTURE — only consumed when SC.demoMode === true
@@ -4976,7 +4976,7 @@ async function generateAIPlan(pid,gid){
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
-        model:'claude-sonnet-4-20250514',
+        model:'claude-sonnet-4-6',
         max_tokens:1000,
         messages:[{role:'user',content:`You are an experienced high school girls beach volleyball coach creating a personalized development plan. Be encouraging but honest. Use beach volleyball terminology only, never indoor volleyball terms.
 
@@ -5786,7 +5786,7 @@ COURT 4: Tara Tide & Marina Mist VS Cora Coral & Shelly Shoal | Exhibition group
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
-        model:'claude-sonnet-4-20250514',
+        model:'claude-sonnet-4-6',
         max_tokens:1000,
         messages:[{role:'user',content:`You are an expert high school beach volleyball coach. Recommend pairings for ${numCourts} courts.
 
@@ -6490,7 +6490,7 @@ Rules:
       const response=await fetch('https://beach-volleyball-ai.markmcnees-479.workers.dev',{
         method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
-          model:'claude-sonnet-4-20250514',max_tokens:2500,
+          model:'claude-sonnet-4-6',max_tokens:2500,
           messages:[{role:'user',content:[
             {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
             {type:'text',text:promptText}
@@ -6846,7 +6846,7 @@ Return JSON array: [{"court":1,"pair":["p01","p02"],"opponent":"Chiles CT1","set
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
-          model:'claude-sonnet-4-20250514',
+          model:'claude-sonnet-4-6',
           max_tokens:1000,
           messages:[{role:'user',content:[
             {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
@@ -11614,7 +11614,7 @@ async function generatePracticePlan(){
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
-        model:'claude-sonnet-4-20250514',
+        model:'claude-sonnet-4-6',
         max_tokens:1000,
         messages:[{role:'user',content:`You are an experienced high school girls beach volleyball coach planning a single team practice session. Be encouraging but honest. Use beach volleyball terminology only, never indoor volleyball terms.
 
@@ -12414,7 +12414,7 @@ function initDualScanner(){
         const response=await fetch('https://beach-volleyball-ai.markmcnees-479.workers.dev',{
           method:'POST',headers:{'Content-Type':'application/json'},
           body:JSON.stringify({
-            model:'claude-sonnet-4-20250514',max_tokens:2000,
+            model:'claude-sonnet-4-6',max_tokens:2000,
             messages:[{role:'user',content:[
               {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
               {type:'text',text:`You are reading a handwritten high school beach volleyball DUAL MATCH scoresheet for SC.schoolName.
@@ -12736,7 +12736,7 @@ function dhScanOppModal(date,opp){
         try{
           const response=await fetch('https://beach-volleyball-ai.markmcnees-479.workers.dev',{
             method:'POST',headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,
+            body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2000,
               messages:[{role:'user',content:[
                 {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
                 {type:'text',text:promptText}
@@ -14019,7 +14019,7 @@ initDualScanner();
         const response=await fetch('https://beach-volleyball-ai.markmcnees-479.workers.dev',{
           method:'POST',headers:{'Content-Type':'application/json'},
           body:JSON.stringify({
-            model:'claude-sonnet-4-20250514',max_tokens:2500,
+            model:'claude-sonnet-4-6',max_tokens:2500,
             messages:[{role:'user',content:[
               {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
               {type:'text',text:`You are reading a handwritten high school beach volleyball SCRIMMAGE scoresheet for SC.schoolName.
@@ -14113,7 +14113,7 @@ function scScanSave(count,date){
         const response=await fetch('https://beach-volleyball-ai.markmcnees-479.workers.dev',{
           method:'POST',headers:{'Content-Type':'application/json'},
           body:JSON.stringify({
-            model:'claude-sonnet-4-20250514',max_tokens:2500,
+            model:'claude-sonnet-4-6',max_tokens:2500,
             messages:[{role:'user',content:[
               {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
               {type:'text',text:`You are reading a handwritten QUEENS (${SCHOOL_NAME} vs ${SCHOOL_NAME} internal) beach volleyball scoresheet.
