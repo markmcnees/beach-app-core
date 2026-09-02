@@ -43,7 +43,7 @@ const AUTH_WORKER = 'https://courtsense-email-worker.markmcnees-479.workers.dev'
 // the version of THIS file, not the shell's ?v= cache-buster, so a stale cached
 // app.js still reports its own real version.
 // DO NOT EDIT BY HAND: any manual value is overwritten on the next deploy.
-const APP_VERSION='1.1.150';
+const APP_VERSION='1.1.151';
 
 // ============================================================
 // DEMO FIXTURE — only consumed when SC.demoMode === true
@@ -2024,6 +2024,34 @@ async function aiProxy(payload){
   });
 }
 
+// ── AI RESPONSE GATE ─────────────────────────────────────────
+// The proxy forwards the upstream Anthropic status and body verbatim, so an HTTP
+// error arrives as perfectly valid JSON with no content key. Reading it without
+// this check yields undefined, the optional chain falls through to the fallback
+// string, and the catch block never runs. A retired model, a revoked key, and a
+// rate limit therefore all rendered as "could not read the photo" and no failure
+// was ever visible. Same guard kotb-app.js and pickup already use.
+//
+// Throws on anything the service could not fulfil so the caller's existing catch
+// handles it. The caller sets its own reached-flag AFTER this returns, which is
+// what separates "service unreachable" from "real answer we could not use".
+async function aiCheck(response){
+  if(!response.ok){
+    let body='';
+    try{ body=await response.text(); }catch(be){ body='(body unavailable)'; }
+    console.error('AI HTTP error',response.status,body.slice(0,500));
+    throw new Error('AI HTTP '+response.status);
+  }
+  const data=await response.json();
+  // A 200 carrying an error envelope. Cheap to check and it keeps a proxy-side
+  // change from reopening the same blind spot.
+  if(data&&(data.type==='error'||data.error!=null)){
+    console.error('AI error body',JSON.stringify(data).slice(0,500));
+    throw new Error('AI error response');
+  }
+  return data;
+}
+
 
 // ============================================================
 // FIREBASE CONFIG
@@ -2924,11 +2952,57 @@ function _demoRemove(path){
   }
   refreshCurrent();
 }
-function fbSet(path,val){if(db)db.ref(DB_ROOT+'/'+path).set(val);else _demoWrite(path,val);}
-function fbRemove(path){if(db)db.ref(DB_ROOT+'/'+path).remove();else _demoRemove(path);}
+// ── FIREBASE WRITE FAILURE REPORTING ─────────────────────────
+// set() and remove() return a promise that rejects on a rules denial, a lost
+// connection, or a path the client cannot write. Discarding that promise made a
+// failed save look exactly like a successful one, because the call sites toast
+// success on the next line either way. Handling it once here covers every call
+// site without touching any of them.
+//
+// Plain-language label for the toast. Walks the path and uses the first segment
+// it recognizes, so it works for a top-level node (assignments/x) and for a
+// nested one (mens/results/x) alike. Unknown paths fall back to the generic
+// wording rather than showing a coach a raw Firebase path.
+const _FB_LABELS={
+  assignments:'the assignment', goals:'the goal', players:'the player',
+  travel:'the trip', gamedays:'the match', matches:'the match',
+  duals:'the dual', scrimmages:'the scrimmage', schedule:'the schedule',
+  opponents:'the scout note', threads:'the message', chat:'the message',
+  broadcasts:'the announcement', pinned:'the pinned message',
+  tryoutSessions:'the tryout session', tryoutAttendance:'attendance',
+  dues:'dues', tier_requests:'the request', standing:'the standing',
+  standings:'standings', practiceSchedule:'the practice schedule',
+  skills:'the assessment', notes:'the note', player_notes:'the note',
+  coach_notes:'the note', live_scoring:'the score', fan_emails:'the signup'
+};
+function _fbLabel(path){
+  const seg=String(path==null?'':path).split('/');
+  for(let i=0;i<seg.length;i++){ if(_FB_LABELS[seg[i]]) return _FB_LABELS[seg[i]]; }
+  return '';
+}
+// The toast element can be absent on a shell that has not finished rendering.
+// Guarded so a reporting failure never becomes a second silent failure, and never
+// turns a handled rejection into an unhandled one.
+function _fbWriteFailed(verb,path,err){
+  console.error('Firebase '+verb+' failed:',DB_ROOT+'/'+path,err);
+  const lbl=_fbLabel(path);
+  try{ toast('Could not '+verb+(lbl?' '+lbl:'')+'. Try again.'); }catch(e){}
+}
+// Both helpers return the promise so a future call site can await it. The rejection
+// is reported and swallowed here: re-throwing would turn all 154 existing
+// fire-and-forget call sites into unhandled rejections.
+function fbSet(path,val){
+  if(!db){_demoWrite(path,val);return;}
+  return db.ref(DB_ROOT+'/'+path).set(val).catch(function(err){_fbWriteFailed('save',path,err);});
+}
+function fbRemove(path){
+  if(!db){_demoRemove(path);return;}
+  return db.ref(DB_ROOT+'/'+path).remove().catch(function(err){_fbWriteFailed('delete',path,err);});
+}
 // Result-create writer: stamps seasonId onto full-object result creates (matches/duals/gamedays/scrimmages/schedule).
 // Preserves an explicit seasonId if the object already carries one. fbSet stays generic for non-result writes.
-function fbSetResult(node,id,obj){fbSet(node+'/'+id,Object.assign({},obj,{seasonId:obj.seasonId||_currentSeasonId}));}
+// Writes through fbSet, so it inherits the failure toast and the returned promise.
+function fbSetResult(node,id,obj){return fbSet(node+'/'+id,Object.assign({},obj,{seasonId:obj.seasonId||_currentSeasonId}));}
 // Active competitive season for read-side filtering. In demo mode the fixtures are the 2026 season regardless of wall-clock year.
 function _activeSeason(){ return SC.demoMode ? '2026' : _currentSeasonId; }
 // A result belongs to the active season if stamped with it. null-tolerant as belt-and-suspenders: live data is fully backfilled, so an unstamped record is only a straggler and should still show in the active season rather than vanish.
@@ -4971,6 +5045,9 @@ async function generateAIPlan(pid,gid){
   const loadingId='ai-loading-'+gid;
   document.getElementById(loadingId).innerHTML='<div class="ai-loading"><div class="spinner"></div><div style="margin-top:8px;">AI is analyzing performance data...</div></div>';
 
+  // Set true only once a usable body is in hand. Before that, a throw means the
+  // service could not be reached; after it, a throw is a real answer we could not use.
+  let aiReached=false;
   try{
     const response=await fetch('https://beach-volleyball-ai.markmcnees-479.workers.dev',{
       method:'POST',
@@ -4996,13 +5073,20 @@ Write a personalized development plan in 4 to 6 paragraphs. Include:
 Speak directly to the player using "you" language. Be motivating but realistic. Reference their actual data points.`}]
       })
     });
-    const data=await response.json();
-    const text=data.content?.map(c=>c.text||'').join('')||'Unable to generate plan. Please try again.';
+    const data=await aiCheck(response);
+    aiReached=true;
+    const text=(data.content?.map(c=>c.text||'').join('')||'').trim();
+    // An empty body is a real answer we cannot use. Saving it would store the
+    // placeholder as the plan and toast success over it.
+    if(!text){
+      document.getElementById(loadingId).innerHTML='<div style="color:var(--loss-red);font-size:13px;">The AI returned an empty plan. Try again.</div>';
+      return;
+    }
     fbSet('goals/'+pid+'/'+gid+'/aiFeedback',{text,generatedAt:td(),status:'draft',editedBy:null,approvedAt:null});
     toast('AI plan generated — review and approve');
   }catch(err){
     console.error('AI error:',err);
-    document.getElementById(loadingId).innerHTML='<div style="color:var(--loss-red);font-size:13px;">Error generating plan. Check connection and try again.</div>';
+    document.getElementById(loadingId).innerHTML='<div style="color:var(--loss-red);font-size:13px;">'+(aiReached?'Could not build the plan. Try again.':'AI service unavailable. Try again in a moment.')+'</div>';
   }
 }
 
@@ -5031,10 +5115,10 @@ function approveGoal(pid,gid){
   toast('Goal feedback approved — player can now see it');
   const _ap=gP(pid);
   const _ag=D.goals?.[pid]?.[gid];
-  notifyPlayer(pid,'plan',
+  reportNotifyMisses([notifyPlayer(pid,'plan',
     'SC.schoolName — Your Training Plan is Ready',
     'Hi '+(_ap?_ap.firstName:'there')+',\n\n'+COACH_LABEL+' has approved your AI training plan for: '+(_ag?_ag.label||_ag.goalType:'your goal')+'.\n\nLog in to the app to view your personalized feedback and next steps.'
-  );
+  )],'the training plan');
 }
 
 function unapproveGoal(pid,gid){
@@ -5760,6 +5844,9 @@ async function generateAIPairings(){
 
   const teamData=buildTeamDataForPairings();
 
+  // Demo never calls the worker, so it starts reached: any throw there is a render
+  // fault, not an outage, and must not claim the AI service is down.
+  let aiReached=!!SC.demoMode;
   try{
     let text;
     if(SC.demoMode){
@@ -5824,8 +5911,16 @@ SUBS: [Remaining players not assigned]
 ANALYSIS: [2-3 sentences explaining overall strategy]`}`}]
       })
     });
-    const data=await response.json();
-    text=data.content?.map(c=>c.text||'').join('')||'Unable to generate pairings.';
+    const data=await aiCheck(response);
+    aiReached=true;
+    text=(data.content?.map(c=>c.text||'').join('')||'').trim();
+    // An empty body is a real answer we cannot use. Rendering the old placeholder
+    // string through the COURT-line parser produced a panel that looked like output.
+    if(!text){
+      container.innerHTML='<div style="color:var(--loss-red);font-size:13px;">The AI returned no pairings. Try again.</div>';
+      btn.disabled=false;
+      return;
+    }
     }
 
     // Parse and display nicely
@@ -5889,7 +5984,7 @@ ANALYSIS: [2-3 sentences explaining overall strategy]`}`}]
     if(hasCourts){editAIPairings();}
   }catch(err){
     console.error('AI pairing error:',err);
-    container.innerHTML='<div style="color:var(--loss-red);font-size:13px;">Error generating pairings. Check connection and try again.</div>';
+    container.innerHTML='<div style="color:var(--loss-red);font-size:13px;">'+(aiReached?'Could not build the pairings. Try again.':'AI service unavailable. Try again in a moment.')+'</div>';
   }
   btn.disabled=false;
 }
@@ -6450,6 +6545,9 @@ document.getElementById('ca-file').addEventListener('change',async function(e){
     result.innerHTML='<div class="ai-loading"><div class="spinner"></div><div style="margin-top:8px;">AI is reading your court assignment sheet...</div></div>';
     const isOpponent=document.getElementById('ca-team').value==='opponent';
     const playerList=D.players.map(p=>p.firstName+' '+p.lastName+' ('+p.id+')').join(', ');
+    // Reached only once a usable body is in hand. Before that a throw is an outage,
+    // and blaming the photo for one is what hid the last failure.
+    let aiReached=false;
     try{
       let promptText;
       if(isOpponent){
@@ -6497,7 +6595,8 @@ Rules:
           ]}]
         })
       });
-      const data=await response.json();
+      const data=await aiCheck(response);
+      aiReached=true;
       const text=data.content?.map(c=>c.text||'').join('')||'';
       // Robust JSON extraction — strip fences, then find outermost { } or [ ]
       let parsed;
@@ -6603,7 +6702,7 @@ Rules:
       }
     }catch(err){
       console.error('CA scan error:',err);
-      result.innerHTML='<div style="color:var(--loss-red);font-size:13px;">Error reading photo. Try a clearer image.</div>';
+      result.innerHTML='<div style="color:var(--loss-red);font-size:13px;">'+(aiReached?'Error reading photo. Try a clearer image.':'AI service unavailable. Try again in a moment.')+'</div>';
     }
   };
   reader.readAsDataURL(file);
@@ -6841,6 +6940,8 @@ Return JSON array: [{"court":1,"team1":["p01","p02"],"team2":["p03","p04"],"scor
 Return JSON array: [{"court":1,"pair":["p01","p02"],"opponent":"Chiles CT1","sets":[{"scoreUs":21,"scoreThem":15},{"scoreUs":21,"scoreThem":18}]}]`;
     }
 
+    // Reached only once a usable body is in hand. Before that a throw is an outage.
+    let aiReached=false;
     try{
       const response=await fetch('https://beach-volleyball-ai.markmcnees-479.workers.dev',{
         method:'POST',
@@ -6863,7 +6964,8 @@ IMPORTANT: Respond with ONLY the JSON array, no other text. If you can't read so
           ]}]
         })
       });
-      const data=await response.json();
+      const data=await aiCheck(response);
+      aiReached=true;
       const text=data.content?.map(c=>c.text||'').join('')||'';
       const clean=text.replace(/```json|```/g,'').trim();
       let parsed;
@@ -6928,7 +7030,7 @@ IMPORTANT: Respond with ONLY the JSON array, no other text. If you can't read so
       window._scanData={parsed,matchType,date,count:parsed.length};
     }catch(err){
       console.error('Scan error:',err);
-      result.innerHTML='<div style="color:var(--loss-red);font-size:13px;">Error reading scoresheet. Try a clearer photo.</div>';
+      result.innerHTML='<div style="color:var(--loss-red);font-size:13px;">'+(aiReached?'Error reading scoresheet. Try a clearer photo.':'AI service unavailable. Try again in a moment.')+'</div>';
     }
   };
   reader.readAsDataURL(file);
@@ -7482,32 +7584,76 @@ function notifyCoaches(subject,body){
 
 // Real server-side email notification to a player. Only a logged-in coach for THIS
 // school can trigger it: we pass the coach session token and the worker resolves the
-// player's on-file email and checks their per-type preference server-side. Fire and
-// forget; never blocks the UI.
-function notifyPlayer(pid,notifType,subject,body){
+// player's on-file email and checks their per-type preference server-side.
+//
+// Resolves to an outcome string so callers can word their toast honestly:
+//   'sent'    the worker delivered it
+//   'queued'  the immediate send failed, the hourly drain will retry it
+//   'muted'   the player turned this notification type off, deliberate
+//   'noemail' no address on file, so nothing could be sent
+//   'failed'  the worker refused or errored
+//   null      no send attempted (no coach session, so a player triggered this)
+// Never throws and never blocks the caller: the old .catch only fired on a network
+// fault, so a worker 500 logged nothing at all and the caller toasted success.
+async function notifyPlayer(pid,notifType,subject,body){
+  let session=null; try{session=JSON.parse(sessionStorage.getItem('csCoachSession'));}catch(e){}
+  if(!session||!session.token||session.dbRoot!==DB_ROOT)return null; // a player cannot send these
   try{
-    let session=null; try{session=JSON.parse(sessionStorage.getItem('csCoachSession'));}catch(e){}
-    if(!session||!session.token||session.dbRoot!==DB_ROOT)return; // a player cannot send these
     // coachLabel lets the worker sign the email with the school's own word (Exec for the club). It
     // is absent for high schools, where the worker falls back to today's "your coach" wording.
-    fetch(AUTH_WORKER+'/hs/notify-player',{
+    const res=await fetch(AUTH_WORKER+'/hs/notify-player',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({dbRoot:DB_ROOT,token:session.token,playerId:pid,notifType:notifType,subject:subject,body:body,coachLabel:SC.coachLabel})
-    }).catch(function(e){console.warn('notifyPlayer failed',e);});
-  }catch(e){console.warn('notifyPlayer failed',e);}
+    });
+    if(!res.ok){
+      let t=''; try{ t=await res.text(); }catch(te){ t='(body unavailable)'; }
+      console.error('notifyPlayer HTTP',res.status,pid,notifType,t.slice(0,300));
+      return 'failed';
+    }
+    let j=null; try{ j=await res.json(); }catch(je){ j=null; }
+    if(!j||j.ok!==true){ console.error('notifyPlayer rejected',pid,notifType,JSON.stringify(j).slice(0,300)); return 'failed'; }
+    if(j.skipped==='pref_off')return 'muted';
+    if(j.skipped==='no_email')return 'noemail';
+    if(j.sent===true)return 'sent';
+    if(j.queued===true)return 'queued';
+    return 'sent';
+  }catch(e){ console.error('notifyPlayer failed',pid,notifType,e); return 'failed'; }
+}
+// Reports only when a notification did not go out. Runs after the sends settle so a
+// save toast is never delayed by the network, and stays silent when everything either
+// sent, queued for retry, or was muted by the player's own preference. A coach who
+// sees nothing here can trust the emails went.
+function reportNotifyMisses(results,label){
+  Promise.allSettled(results).then(function(rs){
+    let attempted=0,missed=0;
+    rs.forEach(function(r){
+      const v=(r.status==='fulfilled')?r.value:'failed';
+      if(v==null)return;
+      attempted++;
+      if(v==='failed'||v==='noemail')missed++;
+    });
+    if(!attempted||!missed)return;
+    // The action itself already reported success in its own toast. This one is only
+    // about delivery, so it never contradicts or rolls back what was saved.
+    if(attempted===1)toast('The player was not emailed about '+label+'.');
+    else if(missed===attempted)toast('No one was emailed about '+label+'.');
+    else toast(missed+' of '+attempted+' were not emailed about '+label+'.');
+  });
 }
 // Notify every player in a saved dual (gameday) lineup that their court assignment is up.
 function notifyLineup(assignData){
   if(!assignData||assignData.type!=='gameday')return;
   const opp=assignData.opponent||'your dual';
   const date=assignData.date||td();
+  const sends=[];
   (assignData.courts||[]).forEach(c=>{
     [c.p1,c.p2].filter(Boolean).forEach(pid=>{
       const p=gP(pid);
-      notifyPlayer(pid,'assign','Your court assignment is posted',
-        'Hi '+(p?p.firstName:'there')+',\n\nYour court assignment for '+opp+' on '+date+' is posted. You are on Court '+c.court+'.\n\nLog in to the app to see the full lineup.');
+      sends.push(notifyPlayer(pid,'assign','Your court assignment is posted',
+        'Hi '+(p?p.firstName:'there')+',\n\nYour court assignment for '+opp+' on '+date+' is posted. You are on Court '+c.court+'.\n\nLog in to the app to see the full lineup.'));
     });
   });
+  reportNotifyMisses(sends,'the lineup');
 }
 
 function loadEmailPrefs(pid){
@@ -8032,11 +8178,13 @@ function closeDual(){
   // Notify every player who played that the dual result is posted.
   const _played=new Set();
   courts.forEach(c=>{[c.p1,c.p2].filter(Boolean).forEach(pid=>_played.add(pid));});
+  const _scoreSends=[];
   _played.forEach(pid=>{
     const p=gP(pid);
-    notifyPlayer(pid,'score','Dual results are posted',
-      'Hi '+(p?p.firstName:'there')+',\n\nThe dual vs '+opponent+' on '+date+' is final: '+resultMsg+'.\n\nLog in to the app for the court-by-court breakdown.');
+    _scoreSends.push(notifyPlayer(pid,'score','Dual results are posted',
+      'Hi '+(p?p.firstName:'there')+',\n\nThe dual vs '+opponent+' on '+date+' is final: '+resultMsg+'.\n\nLog in to the app for the court-by-court breakdown.'));
   });
+  reportNotifyMisses(_scoreSends,'the result');
 
   _dualCloseInProgress=true;
   setTimeout(()=>{
@@ -8756,8 +8904,8 @@ function autoSavePlayerNote(pid){
   const el=document.getElementById('cnpn-'+pid);if(!el)return;
   const val=el.value||null;
   if(db)db.ref(DB_ROOT+'/coach_notes/'+coachNotesDate+'/players/'+pid).set(val);
-  if(val){const p=gP(pid);notifyPlayer(pid,'cnote','New note from your coach',
-    'Hi '+(p?p.firstName:'there')+',\n\nYour coach added a note for '+coachNotesDate+':\n\n'+val+'\n\nLog in to the app to read it.');}
+  if(val){const p=gP(pid);reportNotifyMisses([notifyPlayer(pid,'cnote','New note from your coach',
+    'Hi '+(p?p.firstName:'there')+',\n\nYour coach added a note for '+coachNotesDate+':\n\n'+val+'\n\nLog in to the app to read it.')],'the note');}
 }
 
 function autoSavePairNote(key){
@@ -9135,6 +9283,7 @@ function threadUnreadMember(t){ const lr=(t&&t.lastReadMember)||0; return _threa
 // mark exec-read to now (the exec just wrote), mirror in memory, and email each member.
 function execSendMessage(memberIds, text){
   const now=Date.now();
+  const _clubSends=[];
   memberIds.filter(Boolean).forEach(mid=>{
     const msgId=gi('tm');
     const msg={side:'exec',text:text,createdAt:now};
@@ -9148,9 +9297,12 @@ function execSendMessage(memberIds, text){
     // Type 'club': club communications ride their OWN preference (notifClub,
     // absent means on), so muting coach notes no longer silences messages,
     // tryout invites, placements, dues reminders, travel, and schedule changes.
-    notifyPlayer(mid,'club','New message from '+(SC.schoolName||'your club'),text+'\n\nLog in to the app to reply.');
+    _clubSends.push(notifyPlayer(mid,'club','New message from '+(SC.schoolName||'your club'),text+'\n\nLog in to the app to reply.'));
   });
-  toast(memberIds.length>1?('Message sent to '+memberIds.length+' members'):'Message sent');
+  // Accurate as written: the message is in each member's in-app thread either way.
+  // The email is separate and reports itself below only when it did not go out.
+  toast(memberIds.length>1?('Message posted to '+memberIds.length+' members'):'Message posted');
+  reportNotifyMisses(_clubSends,'the message');
 }
 
 function inboxOpenThread(mid){
@@ -11609,6 +11761,8 @@ async function generatePracticePlan(){
   const out=document.getElementById('ta-plan-output');
   if(out)out.innerHTML='<div class="ai-loading"><div class="spinner"></div><div style="margin-top:8px;">AI is building a practice plan...</div></div>';
   const averagesLine=ranked.map(s=>`${s.label} ${s.avg.toFixed(1)} (${s.assessedCount} assessed)`).join(', ');
+  // Reached only once a usable body is in hand. Before that a throw is an outage.
+  let aiReached=false;
   try{
     const response=await fetch('https://beach-volleyball-ai.markmcnees-479.workers.dev',{
       method:'POST',
@@ -11629,15 +11783,23 @@ IDENTIFIED WEAK SPOTS (lowest averages): ${weakLabels.join(', ')}
 Write a single practice session plan targeting these weak spots. Include a warmup, two or three focused drill blocks aimed at the weak skills with the real averages referenced, a scrimmage focus that rewards the weak skills, and a cooldown. Keep it to a few short paragraphs. Speak to the team as their coach.`}]
       })
     });
-    const data=await response.json();
-    const text=data.content?.map(c=>c.text||'').join('')||'Unable to generate plan. Please try again.';
+    const data=await aiCheck(response);
+    aiReached=true;
+    const text=(data.content?.map(c=>c.text||'').join('')||'').trim();
+    // An empty body is a real answer we cannot use. Rendering the old placeholder
+    // as the plan and toasting success over it is exactly the claim to avoid.
+    if(!text){
+      const o0=document.getElementById('ta-plan-output');
+      if(o0)o0.innerHTML='<div style="color:var(--loss-red);font-size:13px;">The AI returned an empty plan. Try again.</div>';
+      return;
+    }
     analysisPlanText=`<div style="white-space:pre-wrap;font-size:13px;line-height:1.7;color:var(--charcoal);">${text}</div>`;
     renderTeamAnalysis();
     toast('Practice plan generated');
   }catch(err){
     console.error('AI error:',err);
     const o=document.getElementById('ta-plan-output');
-    if(o)o.innerHTML='<div style="color:var(--loss-red);font-size:13px;">Error generating plan. Check connection and try again.</div>';
+    if(o)o.innerHTML='<div style="color:var(--loss-red);font-size:13px;">'+(aiReached?'Could not build the plan. Try again.':'AI service unavailable. Try again in a moment.')+'</div>';
   }
 }
 
@@ -12410,6 +12572,8 @@ function initDualScanner(){
       result.innerHTML='<div class="ai-loading"><div class="spinner"></div><div style="margin-top:8px;">AI is reading your dual scoresheet...</div></div>';
       const date=document.getElementById('dual-scan-date').value||td();
       const playerList=D.players.map(p=>p.firstName+' '+p.lastName+' ('+p.id+')').join(', ');
+      // Reached only once a usable body is in hand. Before that a throw is an outage.
+      let aiReached=false;
       try{
         const response=await fetch('https://beach-volleyball-ai.markmcnees-479.workers.dev',{
           method:'POST',headers:{'Content-Type':'application/json'},
@@ -12444,7 +12608,8 @@ RULES: court 1-5 isExhibition:false, court 6+ isExhibition:true. Include ALL cou
             ]}]
           })
         });
-        const data=await response.json();
+        const data=await aiCheck(response);
+        aiReached=true;
         const text=data.content?.map(c=>c.text||'').join('')||'';
         const clean=text.replace(/\`\`\`json|\`\`\`/g,'').trim();
         let parsed;
@@ -12455,7 +12620,7 @@ RULES: court 1-5 isExhibition:false, court 6+ isExhibition:true. Include ALL cou
         showDualReviewUI(parsed,date,result);
       }catch(err){
         console.error('Dual scan error:',err);
-        result.innerHTML='<div style="color:var(--loss-red);font-size:13px;">Error reading scoresheet. Try a clearer photo.</div>';
+        result.innerHTML='<div style="color:var(--loss-red);font-size:13px;">'+(aiReached?'Error reading scoresheet. Try a clearer photo.':'AI service unavailable. Try again in a moment.')+'</div>';
       }
     };
     reader.readAsDataURL(file);
@@ -12733,6 +12898,8 @@ function dhScanOppModal(date,opp){
         preview.innerHTML=`<img src="${ev.target.result}" style="max-width:100%;border-radius:8px;border:2px solid var(--gray-lighter);margin-bottom:10px;">`;
         result.innerHTML='<div class="ai-loading"><div class="spinner"></div><div style="margin-top:8px;">Reading FHSAA lineup form...</div></div>';
         const promptText=`TASK: Extract data from an FHSAA Beach Volleyball Dual Match Lineup Form image.\n\nOUTPUT: Return ONLY a single JSON object. No explanation, no markdown, no code fences. Just the raw JSON.\n\nJSON FORMAT:\n{"school":"Lincoln HS","starters":[{"court":1,"p1":{"first":"Kenzie","last":"Poppell","jersey":"4"},"p2":{"first":"Londyn","last":"Dickey","jersey":"11"}}],"alternates":[{"first":"Jenny","last":"Heimbach","jersey":"7"}]}\n\nREADING THE FORM:\n- SCHOOL field at top = school name\n- Each row No.1 through No.5 = one court\n- Each row has TWO players: left-side = p1, right-side = p2\n- Columns per player: First Name, Last Name, Jersey No.\n- ALTERNATES table at bottom = alternates array\n- jersey field: jersey number as string or "" if not visible\n\nReturn the JSON object only. Start your response with { and end with }`;
+        // Reached only once a usable body is in hand. Before that a throw is an outage.
+        let aiReached=false;
         try{
           const response=await fetch('https://beach-volleyball-ai.markmcnees-479.workers.dev',{
             method:'POST',headers:{'Content-Type':'application/json'},
@@ -12742,7 +12909,8 @@ function dhScanOppModal(date,opp){
                 {type:'text',text:promptText}
               ]}]})
           });
-          const data=await response.json();
+          const data=await aiCheck(response);
+          aiReached=true;
           const text=data.content?.map(c=>c.text||'').join('')||'';
           let parsed;
           (function(){
@@ -12790,7 +12958,7 @@ function dhScanOppModal(date,opp){
           h+=`<button class="btn btn-primary" style="width:100%;margin-top:4px;" onclick="dhScanOppSave(${starters.length},${alternates.length})">💾 Save to Scouts</button>`;
           result.innerHTML=h;
         }catch(err){
-          result.innerHTML='<div style="color:var(--loss-red);font-size:13px;">Error contacting AI. Check your connection and try again.</div>';
+          result.innerHTML='<div style="color:var(--loss-red);font-size:13px;">'+(aiReached?'Could not read the lineup form. Try again.':'AI service unavailable. Try again in a moment.')+'</div>';
           console.error('dhScanOpp error:',err);
         }
       };
@@ -14015,6 +14183,8 @@ initDualScanner();
       result.innerHTML='<div class="ai-loading"><div class="spinner"></div><div style="margin-top:8px;">AI is reading your scrimmage scoresheet...</div></div>';
       const date=document.getElementById('sc-scan-date').value||td();
       const playerList=D.players.map(p=>p.firstName+' '+p.lastName+' ('+p.id+')').join(', ');
+      // Reached only once a usable body is in hand. Before that a throw is an outage.
+      let aiReached=false;
       try{
         const response=await fetch('https://beach-volleyball-ai.markmcnees-479.workers.dev',{
           method:'POST',headers:{'Content-Type':'application/json'},
@@ -14032,7 +14202,8 @@ Return ONLY valid JSON: {"opponent":"team name or empty","courts":[{"court":1,"p
             ]}]
           })
         });
-        const data=await response.json();
+        const data=await aiCheck(response);
+        aiReached=true;
         const text=data.content?.map(c=>c.text||'').join('')||'';
         let parsed;
         (function(){let c=text.replace(/\`\`\`json|\`\`\`/gi,'').trim();try{parsed=JSON.parse(c);return;}catch(e){}const os=c.indexOf('{'),oe=c.lastIndexOf('}');if(os>=0&&oe>os){try{parsed=JSON.parse(c.slice(os,oe+1));return;}catch(e){}}parsed=null;})();
@@ -14060,7 +14231,7 @@ Return ONLY valid JSON: {"opponent":"team name or empty","courts":[{"court":1,"p
         </div>`;
         result.innerHTML=h;
         e.target.value='';
-      }catch(err){result.innerHTML='<div style="color:var(--loss-red);font-size:13px;">Error reading photo. Try a clearer image.</div>';}
+      }catch(err){console.error('Scrimmage scan error:',err);result.innerHTML='<div style="color:var(--loss-red);font-size:13px;">'+(aiReached?'Error reading photo. Try a clearer image.':'AI service unavailable. Try again in a moment.')+'</div>';}
     };
     reader.readAsDataURL(file);
     e.target.value='';
@@ -14109,6 +14280,8 @@ function scScanSave(count,date){
       result.innerHTML='<div class="ai-loading"><div class="spinner"></div><div style="margin-top:8px;">AI is reading your Queens scoresheet...</div></div>';
       const date=document.getElementById('qs-scan-date').value||td();
       const playerList=D.players.map(p=>p.firstName+' '+p.lastName+' ('+p.id+')').join(', ');
+      // Reached only once a usable body is in hand. Before that a throw is an outage.
+      let aiReached=false;
       try{
         const response=await fetch('https://beach-volleyball-ai.markmcnees-479.workers.dev',{
           method:'POST',headers:{'Content-Type':'application/json'},
@@ -14127,7 +14300,8 @@ Return ONLY valid JSON: {"courts":[{"court":1,"team1":["p01","p02"],"team2":["p0
             ]}]
           })
         });
-        const data=await response.json();
+        const data=await aiCheck(response);
+        aiReached=true;
         const text=data.content?.map(c=>c.text||'').join('')||'';
         let parsed;
         (function(){let c=text.replace(/\`\`\`json|\`\`\`/gi,'').trim();try{parsed=JSON.parse(c);return;}catch(e){}const os=c.indexOf('{'),oe=c.lastIndexOf('}');if(os>=0&&oe>os){try{parsed=JSON.parse(c.slice(os,oe+1));return;}catch(e){}}parsed=null;})();
@@ -14163,7 +14337,7 @@ Return ONLY valid JSON: {"courts":[{"court":1,"team1":["p01","p02"],"team2":["p0
         </div>`;
         result.innerHTML=h;
         e.target.value='';
-      }catch(err){result.innerHTML='<div style="color:var(--loss-red);font-size:13px;">Error reading photo.</div>';}
+      }catch(err){console.error('Queens scan error:',err);result.innerHTML='<div style="color:var(--loss-red);font-size:13px;">'+(aiReached?'Error reading photo.':'AI service unavailable. Try again in a moment.')+'</div>';}
     };
     reader.readAsDataURL(file);
     e.target.value='';
