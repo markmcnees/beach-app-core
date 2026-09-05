@@ -43,7 +43,7 @@ const AUTH_WORKER = 'https://courtsense-email-worker.markmcnees-479.workers.dev'
 // the version of THIS file, not the shell's ?v= cache-buster, so a stale cached
 // app.js still reports its own real version.
 // DO NOT EDIT BY HAND: any manual value is overwritten on the next deploy.
-const APP_VERSION='1.1.151';
+const APP_VERSION='1.1.152';
 
 // ============================================================
 // DEMO FIXTURE — only consumed when SC.demoMode === true
@@ -2988,20 +2988,33 @@ function _fbWriteFailed(verb,path,err){
   const lbl=_fbLabel(path);
   try{ toast('Could not '+verb+(lbl?' '+lbl:'')+'. Try again.'); }catch(e){}
 }
-// Both helpers return the promise so a future call site can await it. The rejection
-// is reported and swallowed here: re-throwing would turn all 154 existing
-// fire-and-forget call sites into unhandled rejections.
+// Both helpers resolve true only on a server-acknowledged write, false on any
+// failure. The promise previously resolved undefined either way, so a caller could
+// not tell a landed write from a failed one. Same contract as kotb-app.js and 4v4.
+//
+// The rejection is reported and swallowed here: re-throwing would turn all 154
+// existing fire-and-forget call sites into unhandled rejections. Callers that need
+// the outcome await and check.
+//
+// The demo branch is the one place this differs from the other two files, and it
+// differs because !db means something different here. In 4v4 and KotB, !db means no
+// connection, so nothing was written and false is the honest answer. Here !db means
+// demo mode, where _demoWrite is the write and it did land, so the honest answer is
+// true. The demo call itself is unchanged: no error handler, no toast, and a throw
+// inside it still propagates synchronously to the caller exactly as before.
 function fbSet(path,val){
-  if(!db){_demoWrite(path,val);return;}
-  return db.ref(DB_ROOT+'/'+path).set(val).catch(function(err){_fbWriteFailed('save',path,err);});
+  if(!db){_demoWrite(path,val);return Promise.resolve(true);}
+  return db.ref(DB_ROOT+'/'+path).set(val).then(function(){ return true; })
+    .catch(function(err){ _fbWriteFailed('save',path,err); return false; });
 }
 function fbRemove(path){
-  if(!db){_demoRemove(path);return;}
-  return db.ref(DB_ROOT+'/'+path).remove().catch(function(err){_fbWriteFailed('delete',path,err);});
+  if(!db){_demoRemove(path);return Promise.resolve(true);}
+  return db.ref(DB_ROOT+'/'+path).remove().then(function(){ return true; })
+    .catch(function(err){ _fbWriteFailed('delete',path,err); return false; });
 }
 // Result-create writer: stamps seasonId onto full-object result creates (matches/duals/gamedays/scrimmages/schedule).
 // Preserves an explicit seasonId if the object already carries one. fbSet stays generic for non-result writes.
-// Writes through fbSet, so it inherits the failure toast and the returned promise.
+// Writes through fbSet, so it inherits the failure toast and the boolean outcome.
 function fbSetResult(node,id,obj){return fbSet(node+'/'+id,Object.assign({},obj,{seasonId:obj.seasonId||_currentSeasonId}));}
 // Active competitive season for read-side filtering. In demo mode the fixtures are the 2026 season regardless of wall-clock year.
 function _activeSeason(){ return SC.demoMode ? '2026' : _currentSeasonId; }
