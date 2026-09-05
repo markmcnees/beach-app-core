@@ -43,7 +43,7 @@ const AUTH_WORKER = 'https://courtsense-email-worker.markmcnees-479.workers.dev'
 // the version of THIS file, not the shell's ?v= cache-buster, so a stale cached
 // app.js still reports its own real version.
 // DO NOT EDIT BY HAND: any manual value is overwritten on the next deploy.
-const APP_VERSION='1.1.152';
+const APP_VERSION='1.1.153';
 
 // ============================================================
 // DEMO FIXTURE — only consumed when SC.demoMode === true
@@ -1468,6 +1468,9 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
   ${SC.tiersEnabled?'':`<div class="tab-content" id="tab-hsimport">
     ${SC.tiersEnabled?'':`<div class="card"><div class="card-title"><span class="bar"></span> Add Player</div>
       <div class="form-row" style="margin-bottom:10px;"><input type="text" class="form-input" id="new-first" placeholder="First Name"><input type="text" class="form-input" id="new-last" placeholder="Last Name"></div>
+      <div class="form-row" style="margin-bottom:4px;flex-wrap:wrap;gap:8px;">
+        <input type="email" class="form-input" id="new-email" placeholder="Player Email (optional)" style="max-width:260px;" autocapitalize="none" spellcheck="false"></div>
+      <div style="font-size:11px;color:var(--gray);margin-bottom:10px;">The player's own address, not a parent's. Leave it blank if you do not have it yet and add it later.</div>
       <div class="form-row" style="margin-bottom:10px;">
         <input type="number" class="form-input" id="new-jersey" placeholder="Jersey #" min="0" max="99" style="max-width:110px;">
         <input type="number" class="form-input" id="new-truvolley" placeholder="TruVolley Rating" step="0.01" min="0" style="max-width:150px;">
@@ -1833,6 +1836,9 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
           <select id="cpm-id-hand" class="form-select" style="flex:1;min-width:100px;padding:8px;font-size:13px;"><option value="">Hand</option><option value="R">Right</option><option value="L">Left</option></select>
           <input type="number" id="cpm-id-truvolley" class="form-input" placeholder="TruVolley Rating" step="0.01" min="0" style="flex:1;min-width:130px;padding:8px;font-size:13px;">
         </div>
+        ${!SC.tiersEnabled ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+          <input type="email" id="cpm-id-email" class="form-input" placeholder="Player Email (optional)" autocapitalize="none" spellcheck="false" style="flex:1;min-width:200px;padding:8px;font-size:13px;">
+        </div>` : ''}
         ${!SC.tiersEnabled ? `<div style="font-family:'Bebas Neue';font-size:13px;letter-spacing:1px;color:var(--gray);margin:4px 0 8px;">Parent Contacts</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
           <input type="text" id="cpm-p1-name" class="form-input" placeholder="Parent 1 Name" style="flex:1;min-width:120px;padding:8px;font-size:13px;">
@@ -3011,6 +3017,51 @@ function fbRemove(path){
   if(!db){_demoRemove(path);return Promise.resolve(true);}
   return db.ref(DB_ROOT+'/'+path).remove().then(function(){ return true; })
     .catch(function(err){ _fbWriteFailed('delete',path,err); return false; });
+}
+// Checked merge-writer for a path OUTSIDE DB_ROOT. fbSet is DB_ROOT scoped, so the
+// profiles and passwords nodes could previously only be reached by a raw db.ref call
+// with no error handling and no outcome. Same contract as fbSet: resolves true only on
+// a server acknowledged write, false on any failure, and never rejects. update() rather
+// than set() so a leaf write never clobbers its siblings.
+//
+// Demo mode writes nothing off DB_ROOT, which is existing behavior (every such call
+// site is already wrapped in if(db)). Resolves true there because nothing failed.
+function fbUpdateAt(path,val){
+  if(!db) return Promise.resolve(true);
+  return db.ref(path).update(val).then(function(){ return true; })
+    .catch(function(err){ _fbWriteFailed('save',path,err); return false; });
+}
+// Shape check only, deliberately loose. A coach typing a roster in a hurry should be
+// stopped by an obvious typo, not by a strict grammar that rejects a real address.
+function _validEmail(s){ return /^\S+@\S+\.\S+$/.test(String(s==null?'':s).trim()); }
+
+// ── LEGACY PLAYER PASSWORD NODE ──────────────────────────────
+// {passwords}/{playerId} has carried two incompatible shapes. The legacy login stores
+// the password as the node VALUE, a bare string. emailPrefs is written as a CHILD of
+// the same node, which turns it into an object. Once that happened the login compared
+// a typed password against an object, never matched, and the player was locked out.
+//
+// The password now lives at its own pw leaf so the two can coexist. Nothing is
+// migrated: the resolver below accepts either shape, and a legacy record is promoted
+// only when something else writes to that node anyway.
+function _storedPw(pid){
+  const rec = passwords ? passwords[pid] : null;
+  if(typeof rec === 'string') return rec;                                   // legacy, node value is the password
+  if(rec && typeof rec === 'object' && typeof rec.pw === 'string') return rec.pw;  // current shape
+  return null;                                                              // no password on file, caller falls back
+}
+// Every write to {passwords}/{pid} goes through here. RTDB update() on a node whose
+// value is a primitive replaces that primitive with an object, so writing any child of
+// a record that still stores its password as the node value would destroy the password.
+// When the cache shows that legacy shape, this carries the password down to its pw leaf
+// in the SAME update, so the promotion and the caller's write land together or not at
+// all. A patch that already sets pw is left alone, so a password change is never
+// overwritten by the value it is replacing.
+function _pwNodeUpdate(pid, patch){
+  const rec = passwords ? passwords[pid] : null;
+  const out = Object.assign({}, patch);
+  if(typeof rec === 'string' && !Object.prototype.hasOwnProperty.call(out,'pw')) out.pw = rec;
+  return fbUpdateAt(SC.dbRoots.passwords + '/' + pid, out);
 }
 // Result-create writer: stamps seasonId onto full-object result creates (matches/duals/gamedays/scrimmages/schedule).
 // Preserves an explicit seasonId if the object already carries one. fbSet stays generic for non-result writes.
@@ -4196,6 +4247,10 @@ const _elsave_sc_match=document.getElementById('save-sc-match');if(_elsave_sc_ma
 const _addP=document.getElementById('add-player'); if(_addP) _addP.addEventListener('click',()=>{
   const f=document.getElementById('new-first').value.trim(),l=document.getElementById('new-last').value.trim();
   if(!f||!l){toast('Enter first and last name');return;}
+  // Player email is optional. A coach who does not have it yet still adds the player.
+  // Validated only when something was typed, so a blank never blocks the add.
+  const _em=(document.getElementById('new-email')?.value||'').trim().toLowerCase();
+  if(_em&&!_validEmail(_em)){toast('That email does not look right. Check it, or clear it to add without one.');return;}
   const jersey=document.getElementById('new-jersey').value;
   const id=gi('p');fbSet('players/'+id,{id,firstName:f,lastName:l,classYear:document.getElementById('new-class').value,court:parseInt(document.getElementById('new-court').value),jersey:jersey?parseInt(jersey):null});
   // Recruiting identity fields live on the profiles node (existing model: pp.height/position/preferredSide/dominantHand),
@@ -4210,7 +4265,16 @@ const _addP=document.getElementById('add-player'); if(_addP) _addP.addEventListe
   if(_p1)prof.parent1=_p1;                                           // only write a parent with at least one field
   if(_p2)prof.parent2=_p2;
   if(db)db.ref(SC.dbRoots.profiles+'/players/'+id).update(prof);
-  ['new-first','new-last','new-jersey','new-truvolley','new-gradyear','new-height','new-reach','new-hand','new-side','new-role','new-p1-name','new-p1-email','new-p1-phone','new-p2-name','new-p2-email','new-p2-phone'].forEach(eid=>{const el=document.getElementById(eid);if(el)el.value='';});
+  // The player's own address goes to the passwords node's emailPrefs child, which is
+  // where saveEmailPrefs already keeps it and where the worker's resolvePlayerEmail
+  // reads it. Merge-written so it never disturbs the four notification toggles a
+  // player may have already set. Nothing is written at all when no email was entered.
+  if(_em){
+    _pwNodeUpdate(id,{'emailPrefs/email':_em,'emailPrefs/updatedAt':td()}).then(function(ok){
+      if(!ok)toast('Player added, but the email did not save. Add it from the player card.');
+    });
+  }
+  ['new-first','new-last','new-email','new-jersey','new-truvolley','new-gradyear','new-height','new-reach','new-hand','new-side','new-role','new-p1-name','new-p1-email','new-p1-phone','new-p2-name','new-p2-email','new-p2-phone'].forEach(eid=>{const el=document.getElementById(eid);if(el)el.value='';});
   toast('Player added!');});
 
 // Data export (JSON). Named so the Manage Import/Export card can call it directly. Excel export is exportExcel().
@@ -4345,7 +4409,7 @@ function playerLogin(){
   const pw=document.getElementById('login-pw').value;
   if(!pid){document.getElementById('pw-error').textContent='Select your name';return;}
   if(!pw){document.getElementById('pw-error').textContent='Enter your password';return;}
-  const storedPw=passwords[pid]||DEFAULT_PW;
+  const storedPw=_storedPw(pid)||DEFAULT_PW;
   if(pw!==storedPw){document.getElementById('pw-error').textContent='Incorrect password';return;}
   document.getElementById('pw-error').textContent='';
   currentRole='player';currentPlayerId=pid;
@@ -4500,16 +4564,22 @@ async function autoLogin(){
   }catch(e){}
 }
 
-function changePassword(){
+async function changePassword(){
   if(!currentPlayerId)return;
   const cur=document.getElementById('t-pw-current').value;
   const newPw=document.getElementById('t-pw-new').value;
   const confirm=document.getElementById('t-pw-confirm').value;
-  const storedPw=passwords[currentPlayerId]||DEFAULT_PW;
+  const storedPw=_storedPw(currentPlayerId)||DEFAULT_PW;
   if(cur!==storedPw){toast('Current password is incorrect');return;}
   if(!newPw||newPw.length<4){toast('New password must be at least 4 characters');return;}
   if(newPw!==confirm){toast('Passwords do not match');return;}
-  if(db)db.ref(SC.dbRoots.passwords+'/'+currentPlayerId).set(newPw);
+  // Writes the pw leaf rather than the node value, so emailPrefs beside it survives.
+  // A record still holding a bare string is replaced by this object, which is correct:
+  // the string it held is the password being changed.
+  const ok=await _pwNodeUpdate(currentPlayerId,{pw:newPw});
+  // A password change is worth confirming honestly. This used to toast success even
+  // when the write was rejected, which would leave a player locked to the old one.
+  if(!ok){toast('Password did not save. Try again.');return;}
   toast('Password updated!');
   document.getElementById('t-pw-current').value='';document.getElementById('t-pw-new').value='';document.getElementById('t-pw-confirm').value='';
 }
@@ -5328,6 +5398,12 @@ function coachOpenPlayer(pid){
   const _pp1=_idp.parent1||{},_pp2=_idp.parent2||{};
   _setIdV('cpm-p1-name',_pp1.name); _setIdV('cpm-p1-email',_pp1.email); _setIdV('cpm-p1-phone',_pp1.phone);
   _setIdV('cpm-p2-name',_pp2.name); _setIdV('cpm-p2-email',_pp2.email); _setIdV('cpm-p2-phone',_pp2.phone);
+  // The player's own email lives on the passwords node, not profiles, so it prefills
+  // from the passwords listener's cache. A legacy record still holding a bare password
+  // string has no emailPrefs child, which reads as no email rather than as an error.
+  const _pwRec=passwords&&passwords[pid];
+  const _pwPrefs=(_pwRec&&typeof _pwRec==='object'&&_pwRec.emailPrefs)||{};
+  _setIdV('cpm-id-email',_pwPrefs.email);
   // Athlete info demo editor: prefill from the in-memory demo dataset (demo only; unseeded ids leave inputs empty).
   if(SC.demoMode){
     const _aiEdit=_demoAthleteInfo[pid]||{};
@@ -5376,16 +5452,22 @@ function coachSaveSkills(){
   toast('Skills saved!');
 }
 
-function coachSaveIdentity(){
+async function coachSaveIdentity(){
   const overlay=document.getElementById('coach-player-overlay');
   const pid=overlay?.dataset.pid;if(!pid)return;
   const gv=elId=>document.getElementById(elId)?.value.trim()||null;
   const _mkParent=(n,e,ph)=>{if(!n&&!e&&!ph)return null;const o={};if(n)o.name=n;if(e)o.email=e;if(ph)o.phone=ph;return o;};
   const _tvRaw=document.getElementById('cpm-id-truvolley')?.value.trim();
   const _tv=_tvRaw?parseFloat(_tvRaw):NaN;
+  // The player's own email is optional here too, and validated only when present.
+  // The input exists only on non-tier shells, so a missing element means this shell
+  // does not edit the player email at all and the passwords node is left alone.
+  const _emEl=document.getElementById('cpm-id-email');
+  const _em=_emEl?(_emEl.value||'').trim().toLowerCase():null;
+  if(_em&&!_validEmail(_em)){toast('That email does not look right. Fix it, or clear it to save without one.');return;}
   // Merge-write to profiles/players so skills/notes/jumpTests under this player are never clobbered.
   // truvolley/parent1/parent2 write null when cleared (update() removes the key).
-  if(db)db.ref(SC.dbRoots.profiles+'/players/'+pid).update({
+  const profOk=await fbUpdateAt(SC.dbRoots.profiles+'/players/'+pid,{
     height:gv('cpm-id-height'),
     reach:gv('cpm-id-reach'),
     gradYear:parseInt(document.getElementById('cpm-id-gradyear')?.value)||null,
@@ -5396,7 +5478,17 @@ function coachSaveIdentity(){
     parent1:_mkParent(gv('cpm-p1-name'),gv('cpm-p1-email'),gv('cpm-p1-phone')),
     parent2:_mkParent(gv('cpm-p2-name'),gv('cpm-p2-email'),gv('cpm-p2-phone'))
   });
-  toast('Identity saved');
+  // Email goes to the passwords node's emailPrefs child, merge-written so the four
+  // notification toggles survive. A cleared field writes null, which removes the key,
+  // matching how the parent fields behave when cleared.
+  let emailOk=true;
+  if(_emEl) emailOk=await _pwNodeUpdate(pid,{'emailPrefs/email':_em||null,'emailPrefs/updatedAt':td()});
+  // Report what actually landed. This used to toast success unconditionally, so a
+  // rejected write looked exactly like a saved one.
+  if(profOk&&emailOk) toast('Identity saved');
+  else if(profOk&&!emailOk) toast('Identity saved, but the email did not save. Try again.');
+  else if(!profOk&&emailOk) toast('The email saved, but the rest of the identity did not. Try again.');
+  else toast('Identity did not save. Try again.');
   setTimeout(()=>renderPlayerProfileData(pid),600);
 }
 
@@ -6188,7 +6280,11 @@ function _importParseRows(rows){
     height:col(['height']), reach:col(['standing reach']),
     position:col(['position']), side:col(['side']), hand:col(['hand']),
     p1n:col(['parent 1 name']), p1e:col(['parent 1 email']), p1p:col(['parent 1 phone']),
-    p2n:col(['parent 2 name']), p2e:col(['parent 2 email']), p2p:col(['parent 2 phone'])
+    p2n:col(['parent 2 name']), p2e:col(['parent 2 email']), p2p:col(['parent 2 phone']),
+    // The player's own address. 'player email' first so a sheet carrying both that and
+    // a bare 'email' column resolves to the explicit one. Absent column means no email
+    // in this file, which is not an error.
+    email:col(['player email','email','player e-mail'])
   };
   const cell=(r,i)=>(i>=0&&r[i]!=null)?String(r[i]).trim():'';
   const nameKey=s=>s.trim().toLowerCase();
@@ -6210,6 +6306,15 @@ function _importParseRows(rows){
     const truvolley=(truvRaw!==''&&!isNaN(truvNum))?truvNum:null;
     const parent1=_importParent(cell(r,C.p1n),cell(r,C.p1e),cell(r,C.p1p));
     const parent2=_importParent(cell(r,C.p2n),cell(r,C.p2e),cell(r,C.p2p));
+    // Player email: optional, and a malformed one is reported and skipped rather than
+    // failing the row. Losing one address is recoverable; losing the whole roster row
+    // over a typo is not.
+    const emailRaw=cell(r,C.email);
+    let email='';
+    if(emailRaw){
+      if(_validEmail(emailRaw)) email=emailRaw.toLowerCase();
+      else errors.push({row:rowNum,why:'Player email "'+emailRaw+'" is not a valid address, field skipped'});
+    }
     const existing=byName[nameKey(first)+' '+nameKey(last)]||null;
     const height=cell(r,C.height), reach=cell(r,C.reach);
     // Position/Side/Hand come from dropdown words; normalize to the app's stored values.
@@ -6223,7 +6328,7 @@ function _importParseRows(rows){
     // Pre-assign the id a NEW player will get, so Skills/Star Drill/Verticals rows in the
     // same file can point at it before the roster commit runs. _importCommit reuses it.
     const newId=existing?null:gi('p');
-    plan.push({row:rowNum, existing, newId, data:{first,last,gradYear,jersey,truvolley,height,reach,position,side,hand,parent1,parent2}});
+    plan.push({row:rowNum, existing, newId, data:{first,last,gradYear,jersey,truvolley,height,reach,position,side,hand,parent1,parent2,email}});
   }
   return {plan, errors};
 }
@@ -6427,6 +6532,10 @@ function _importCommit(plan){
       if(d.parent1)prof.parent1=d.parent1;
       if(d.parent2)prof.parent2=d.parent2;
       db.ref(SC.dbRoots.profiles+'/players/'+id).update(prof);
+      // Player email to the passwords node's emailPrefs child, same target as the add
+      // form and the player card. Written only when the file supplied one, so a blank
+      // cell never clears an address the player already set for themselves.
+      if(d.email)_pwNodeUpdate(id,{'emailPrefs/email':d.email,'emailPrefs/updatedAt':td()});
     }
   });
   return {nNew,nUpd};
@@ -7701,10 +7810,16 @@ function saveEmailPrefs(){
   // on screen, so an HS save never stamps notifClub at all.
   const _clubEl=document.getElementById('pp-notif-club');
   if(_clubEl)prefs.notifClub=!!_clubEl.checked;
-  if(db)db.ref(SC.dbRoots.passwords+'/'+pid+'/emailPrefs').set(prefs);
-  toast('Email preferences saved!');
-  const savedEl=document.getElementById('pp-email-saved');
-  if(savedEl){savedEl.style.opacity='1';setTimeout(function(){savedEl.style.opacity='0';},2500);}
+  // emailPrefs is handed over as one object, so this keeps the whole-child replace the
+  // old .set() did: a toggle absent from prefs is removed rather than left behind.
+  // Routed through _pwNodeUpdate so it can no longer destroy a legacy bare password,
+  // which is exactly how a player who saved preferences used to lock themselves out.
+  _pwNodeUpdate(pid,{emailPrefs:prefs}).then(function(ok){
+    if(!ok){toast('Preferences did not save. Try again.');return;}
+    toast('Email preferences saved!');
+    const savedEl=document.getElementById('pp-email-saved');
+    if(savedEl){savedEl.style.opacity='1';setTimeout(function(){savedEl.style.opacity='0';},2500);}
+  });
 }
 
 function closeAssignEditModal(){document.getElementById('assign-edit-modal').classList.remove('active');}
