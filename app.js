@@ -43,7 +43,7 @@ const AUTH_WORKER = 'https://courtsense-email-worker.markmcnees-479.workers.dev'
 // the version of THIS file, not the shell's ?v= cache-buster, so a stale cached
 // app.js still reports its own real version.
 // DO NOT EDIT BY HAND: any manual value is overwritten on the next deploy.
-const APP_VERSION='1.1.153';
+const APP_VERSION='1.1.154';
 
 // ============================================================
 // DEMO FIXTURE — only consumed when SC.demoMode === true
@@ -1044,11 +1044,24 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       <button class="login-btn" id="player-login-btn" onclick="playerLoginEmail()">View My Stats</button>
       <div style="text-align:center;font-family:'Barlow',sans-serif;font-size:13px;color:var(--gray);padding:12px 8px 0;">Forgot password? <a href="/community/reset/" style="color:var(--gray);font-weight:600;text-decoration:underline;">Reset it.</a></div>
       `:`
-      <div style="font-family:'Bebas Neue';font-size:14px;letter-spacing:1.5px;color:var(--charcoal);margin-bottom:8px;">Select Your Name</div>
-      <div class="login-player-select"><select id="login-player-select"><option value="">— Choose Player —</option></select></div>
-      <input type="password" style="width:100%;padding:12px 14px;border:2px solid var(--gray-lighter);border-radius:8px;font-family:'Barlow',sans-serif;font-size:15px;margin-top:8px;" id="login-pw" placeholder="Enter Password">
-      <div class="login-error" id="pw-error"></div>
-      <button class="login-btn" id="player-login-btn" onclick="playerLogin()">View My Stats</button>
+      <div id="hs-pick-block">
+        <div style="font-family:'Bebas Neue';font-size:14px;letter-spacing:1.5px;color:var(--charcoal);margin-bottom:8px;">Select Your Name</div>
+        <div class="login-player-select"><select id="login-player-select" onchange="onPickPlayer()"><option value="">— Choose Player —</option></select></div>
+      </div>
+      <div id="hs-legacy-block">
+        <input type="password" style="width:100%;padding:12px 14px;border:2px solid var(--gray-lighter);border-radius:8px;font-family:'Barlow',sans-serif;font-size:15px;margin-top:8px;" id="login-pw" placeholder="Enter Password">
+        <div class="login-error" id="pw-error"></div>
+        <button class="login-btn" id="player-login-btn" onclick="playerLogin()">View My Stats</button>
+      </div>
+      <div id="hs-acct-block" style="display:none;">
+        <div id="hs-acct-note" style="font-family:'Barlow',sans-serif;font-size:13px;color:var(--gray);line-height:1.5;margin:8px 0;"></div>
+        <input type="email" style="width:100%;padding:12px 14px;border:2px solid var(--gray-lighter);border-radius:8px;font-family:'Barlow',sans-serif;font-size:15px;" id="hs-login-email" placeholder="Email you claimed with" autocomplete="email" autocapitalize="none" spellcheck="false">
+        <input type="password" style="width:100%;padding:12px 14px;border:2px solid var(--gray-lighter);border-radius:8px;font-family:'Barlow',sans-serif;font-size:15px;margin-top:8px;" id="hs-login-pw" placeholder="Password" autocomplete="current-password">
+        <div class="login-error" id="hs-pw-error"></div>
+        <button class="login-btn" id="hs-player-login-btn" onclick="playerLoginEmail()">View My Stats</button>
+        <div style="text-align:center;font-family:'Barlow',sans-serif;font-size:13px;color:var(--gray);padding:12px 8px 0;">Forgot password? <a href="/community/reset/" style="color:var(--gray);font-weight:600;text-decoration:underline;">Reset it.</a></div>
+      </div>
+      <div style="text-align:center;padding:12px 8px 0;"><a href="javascript:void(0)" id="hs-login-toggle" onclick="hsToggleLoginMode()" style="font-family:'Barlow',sans-serif;font-size:13px;color:var(--gray);font-weight:600;text-decoration:underline;">I have a CourtSense account</a></div>
       `}
     </div>
     <div class="login-fans" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--gray-lighter);text-align:center;">
@@ -3990,9 +4003,72 @@ function renderRoster(){
       ${!SC.tiersEnabled?`<input type="number" min="0" max="99" placeholder="#" title="Jersey #" value="${p.jersey||''}" style="width:52px;padding:4px 6px;border:1px solid var(--gray-lighter);border-radius:6px;font-family:'Bebas Neue',sans-serif;font-size:15px;text-align:center;color:var(--charcoal);" onchange="updJersey('${p.id}',this.value)">`:''}
       <select class="court-select" onchange="updCt('${p.id}',this.value)">${COURTS.map(c=>`<option value="${c}" ${p.court===c?'selected':''}>PG ${c}</option>`).join('')}</select>
       <button class="btn btn-small" onclick="editPlayerName('${p.id}')" style="padding:4px 8px;font-size:10px;background:var(--blue);color:var(--white);">✎</button>
-      <button class="btn btn-danger btn-small" onclick="remPlayer('${p.id}')" style="padding:4px 8px;font-size:10px;">✕</button></div>`;});
+      <button class="btn btn-danger btn-small" onclick="remPlayer('${p.id}')" style="padding:4px 8px;font-size:10px;">✕</button>${hsClaimCell(p)}</div>`;});
   document.getElementById('roster-list').innerHTML=html;
 }
+// ── CLAIM STATUS + INVITE (coach, high schools only) ─────────
+// Three states a coach needs to tell apart on the roster: claimed, invitable, and
+// missing an email. Club rosters (SC.tiersEnabled) already sign in with accounts and
+// have their own signup, so this renders nothing there.
+function _hsPlayerEmail(pid){
+  const rec=passwords?passwords[pid]:null;
+  const prefs=(rec&&typeof rec==='object'&&rec.emailPrefs)||null;
+  return (prefs&&typeof prefs.email==='string'&&prefs.email.trim())||'';
+}
+function hsClaimCell(p){
+  if(SC.tiersEnabled||currentRole!=='coach'||!p)return '';
+  if(p.accountId){
+    return '<span title="This player has claimed their record" style="font-size:10px;font-weight:700;color:var(--win,#059669);white-space:nowrap;padding:0 4px;">Claimed</span>';
+  }
+  if(!_hsPlayerEmail(p.id)){
+    return '<span title="Add an email on the player card before inviting" style="font-size:10px;color:var(--gray);white-space:nowrap;padding:0 4px;">No email</span>';
+  }
+  const label=p.invitedAt?'Resend':'Invite';
+  const when=p.invitedAt?(' title="Invited '+fD(new Date(p.invitedAt).toISOString().slice(0,10))+'"'):' title="Email an invite to claim this record"';
+  return '<button class="btn btn-small" id="inv-'+p.id+'"'+when+' onclick="hsInvitePlayer(\''+p.id+'\')" style="padding:4px 8px;font-size:10px;background:var(--blue);color:var(--white);white-space:nowrap;">'+label+'</button>';
+}
+// Coach initiated only. Nothing in this build sends an invite on its own, so the whole
+// round trip can be tested one player at a time before anything is automatic.
+async function hsInvitePlayer(pid){
+  const p=gP(pid);if(!p)return;
+  const nm=((p.firstName||'')+' '+(p.lastName||'')).trim()||'this player';
+  let session=null;try{session=JSON.parse(sessionStorage.getItem('csCoachSession'));}catch(e){}
+  if(!session||!session.token||session.dbRoot!==DB_ROOT){toast('Your coach session expired. Sign in again.');return;}
+  const to=_hsPlayerEmail(pid);
+  if(!to){toast(nm+' has no email yet. Add one on their player card first.');return;}
+  if(!window.confirm((p.invitedAt?'Send another invite to ':'Invite ')+nm+' at '+to+'?\n\nThey get a link to set a password and see their stats. The link works for 48 hours.'))return;
+  const btn=document.getElementById('inv-'+pid);
+  const orig=btn?btn.textContent:'';
+  if(btn){btn.disabled=true;btn.textContent='Sending...';}
+  const done=()=>{if(btn){btn.disabled=false;btn.textContent=orig;}};
+  let j=null;
+  try{
+    const r=await fetch(AUTH_WORKER+'/hs/invite-player',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({dbRoot:DB_ROOT,token:session.token,playerId:pid})
+    });
+    j=await r.json().catch(()=>null);
+  }catch(e){
+    console.error('hs invite failed',e);
+    toast('Could not reach the server. Try again.');done();return;
+  }
+  if(!j||j.ok!==true){
+    const code=j&&j.code;
+    toast(code==='forbidden'?'Your coach session expired. Sign in again.'
+      :code==='no_private_node'?'This school is not set up to send invites yet.'
+      :code==='rate_limited'?'Too many invites just now. Try again in a few minutes.'
+      :(j&&j.error)||'Could not send the invite. Try again.');
+    done();return;
+  }
+  if(j.skipped==='no_email'){toast(nm+' has no email on file. Add one first.');done();return;}
+  // Stamp the send so the button reads Resend and the coach can see it went. Checked,
+  // because an unstamped send looks to the coach like it never happened.
+  const stamped=await fbSet('players/'+pid+'/invitedAt',Date.now());
+  toast(j.sent?('Invite sent to '+nm):'Invite queued, it will send shortly.');
+  if(!stamped)toast('Invite sent, but the roster did not record it. The button may still say Invite.');
+  done();
+}
+
 function updCt(id,v){const p=gP(id);if(p){p.court=parseInt(v);fbSet('players/'+id,p);}}
 function updJersey(id,v){const p=gP(id);if(p){p.jersey=v?parseInt(v):null;fbSet('players/'+id,p);}}
 function remPlayer(id){
@@ -4309,6 +4385,49 @@ function switchLogin(mode){
     populatePlayerLogin();
   }
 }
+// ── HYBRID PLAYER LOGIN ──────────────────────────────────────
+// A school migrates to CourtSense accounts one player at a time, so both paths have to
+// work at once on the same shell. Flipping SC.emailLogin switches a whole roster in one
+// go, which would lock out everyone who had not claimed yet.
+//
+// There is no new config. The behavior is data driven: a shell with SC.emailLogin false
+// gets the hybrid, and each player's own accountId decides which form they see. A school
+// needs no shell edit to start, and none to finish.
+//
+// Only one credential form is ever visible, so there is never a double form to choose
+// between. The name picker stays the default. Selecting a player who has claimed swaps
+// the form to email and password and says why, and anyone can switch by hand.
+let _hsAcctManual=false;
+function hsRefreshLoginMode(){
+  const sel=document.getElementById('login-player-select');
+  const p=(sel&&sel.value)?gP(sel.value):null;
+  const pickedClaimed=!!(p&&p.accountId);
+  const useAcct=_hsAcctManual||pickedClaimed;
+  const pick=document.getElementById('hs-pick-block');
+  const legacy=document.getElementById('hs-legacy-block');
+  const acct=document.getElementById('hs-acct-block');
+  const note=document.getElementById('hs-acct-note');
+  const link=document.getElementById('hs-login-toggle');
+  if(!legacy||!acct)return;                       // SC.emailLogin shells have neither
+  if(pick)pick.style.display=_hsAcctManual?'none':'';
+  legacy.style.display=useAcct?'none':'';
+  acct.style.display=useAcct?'':'none';
+  if(note)note.textContent=(pickedClaimed&&!_hsAcctManual)
+    ? ((p.firstName||'You')+' already set up a CourtSense account. Log in with that email and password.')
+    : '';
+  if(link)link.textContent=_hsAcctManual?'Use my name and the team password instead':'I have a CourtSense account';
+}
+function hsToggleLoginMode(){
+  _hsAcctManual=!_hsAcctManual;
+  const e=document.getElementById('pw-error');if(e)e.textContent='';
+  const e2=document.getElementById('hs-pw-error');if(e2)e2.textContent='';
+  hsRefreshLoginMode();
+}
+function onPickPlayer(){
+  const e=document.getElementById('pw-error');if(e)e.textContent='';
+  hsRefreshLoginMode();
+}
+
 function populatePlayerLogin(){
   const sel=document.getElementById('login-player-select');
   if(!sel)return; // email-login mode (SC.emailLogin) has no name dropdown
@@ -4317,6 +4436,9 @@ function populatePlayerLogin(){
   const sorted=[...D.players].sort((a,b)=>a.court-b.court||a.lastName.localeCompare(b.lastName));
   sorted.forEach(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=p.firstName+' '+p.lastName;sel.appendChild(o);});
   if(cur)sel.value=cur;
+  // The roster arrives asynchronously, so re-run the mode check once names exist. A
+  // restored selection whose player has since claimed lands on the right form.
+  hsRefreshLoginMode();
 }
 async function pinPress(n){
   if(_pinChecking)return;                       // ignore digit presses while a request is in flight
@@ -4408,6 +4530,16 @@ function playerLogin(){
   const pid=document.getElementById('login-player-select').value;
   const pw=document.getElementById('login-pw').value;
   if(!pid){document.getElementById('pw-error').textContent='Select your name';return;}
+  // A claimed player has their own CourtSense password, so the team password must stop
+  // working for them. Leaving both live would mean two credentials for one person,
+  // which is the thing claiming was meant to end.
+  const _pSel=gP(pid);
+  if(_pSel&&_pSel.accountId){
+    hsRefreshLoginMode();
+    const _e=document.getElementById('hs-pw-error');
+    if(_e)_e.textContent='You already set up a CourtSense account. Log in with that email and password.';
+    return;
+  }
   if(!pw){document.getElementById('pw-error').textContent='Enter your password';return;}
   const storedPw=_storedPw(pid)||DEFAULT_PW;
   if(pw!==storedPw){document.getElementById('pw-error').textContent='Incorrect password';return;}
@@ -4431,15 +4563,18 @@ function playerLogin(){
 let _emailLoginBusy=false;
 async function playerLoginEmail(){
   if(_emailLoginBusy)return;
-  const emailEl=document.getElementById('login-email');
-  const pwEl=document.getElementById('login-pw');
-  const errEl=document.getElementById('pw-error');
+  // The hybrid block's ids win when present, so a school shell reads its account form
+  // rather than the legacy password field sitting beside it. An SC.emailLogin shell has
+  // no hs-* ids and falls through to the originals, unchanged.
+  const emailEl=document.getElementById('hs-login-email')||document.getElementById('login-email');
+  const pwEl=document.getElementById('hs-login-pw')||document.getElementById('login-pw');
+  const errEl=document.getElementById('hs-pw-error')||document.getElementById('pw-error');
   const email=(emailEl?emailEl.value:'').trim().toLowerCase();
   const pw=pwEl?pwEl.value:'';
   if(!email){if(errEl)errEl.textContent='Enter your email';return;}
   if(!pw){if(errEl)errEl.textContent='Enter your password';return;}
   _emailLoginBusy=true;
-  const btn=document.getElementById('player-login-btn');
+  const btn=document.getElementById('hs-player-login-btn')||document.getElementById('player-login-btn');
   if(btn)btn.disabled=true;
   if(errEl)errEl.textContent='Checking...';
   let j=null, netErr=false;
@@ -4459,7 +4594,14 @@ async function playerLoginEmail(){
   // Verified. Resolve the club roster record by matching accountId to the account id.
   const accountId=j.player&&j.player.id;
   const rec=accountId?D.players.find(p=>p.accountId===accountId):null;
-  if(!rec){if(errEl)errEl.textContent='This account is not on the FSU Grass roster yet. Contact the exec team.';done();return;}
+  // Names the actual tenant rather than hardcoding one school, and points at whoever
+  // runs that program: an exec at the club, a coach at a school.
+  if(!rec){
+    const _who=SC.displayName||SC.shortName||SC.schoolName||'this team';
+    const _ask=SC.tiersEnabled?'Contact the exec team.':'Ask your coach to send you an invite.';
+    if(errEl)errEl.textContent='This account is not linked to a '+_who+' roster record yet. '+_ask;
+    done();return;
+  }
   if(errEl)errEl.textContent='';
   done();
   // Session + portal entry mirror playerLogin. currentPlayerId is the CLUB record id, not the account id.
