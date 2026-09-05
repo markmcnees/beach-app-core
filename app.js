@@ -43,7 +43,7 @@ const AUTH_WORKER = 'https://courtsense-email-worker.markmcnees-479.workers.dev'
 // the version of THIS file, not the shell's ?v= cache-buster, so a stale cached
 // app.js still reports its own real version.
 // DO NOT EDIT BY HAND: any manual value is overwritten on the next deploy.
-const APP_VERSION='1.1.154';
+const APP_VERSION='1.1.155';
 
 // ============================================================
 // DEMO FIXTURE — only consumed when SC.demoMode === true
@@ -1124,7 +1124,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       <button class="tab" data-tab="teamanalysis">Practice</button>
       <button class="tab" data-tab="players">Stats</button>
       <button class="tab" data-tab="goals">Goals</button>
-      <button class="tab" data-tab="practicegroups" style="display:none;">Practice Groups</button>
+      <button class="tab" data-tab="practicegroups">Practice Groups</button>
       <button class="tab" data-tab="dashboard" style="display:none;">Dashboard</button>
       <button class="tab" data-tab="scouts" style="display:none;">Scouts</button>
       `:`
