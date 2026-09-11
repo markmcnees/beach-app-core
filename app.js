@@ -43,7 +43,7 @@ const AUTH_WORKER = 'https://courtsense-email-worker.markmcnees-479.workers.dev'
 // the version of THIS file, not the shell's ?v= cache-buster, so a stale cached
 // app.js still reports its own real version.
 // DO NOT EDIT BY HAND: any manual value is overwritten on the next deploy.
-const APP_VERSION='1.1.155';
+const APP_VERSION='1.1.156';
 
 // ============================================================
 // DEMO FIXTURE — only consumed when SC.demoMode === true
@@ -992,6 +992,9 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
     <div class="login-logo" style="flex-direction:column;align-items:center;gap:6px;">${logoHTML('cs-logo-login',LOGO_H,SC.logoAlt,'')}<span>${SC.displayName}</span></div>
     <div class="login-sub">2026 Beach Volleyball Season</div>
     ${SC.demoMode ? '<div class="demo-creds-inline">'+COACH_LABEL+' PIN: <strong>1234</strong><span class="sep">·</span>Player password: <strong>'+SC.defaultPw+'</strong></div>' : ''}
+    <!-- Door check-in prompt. Filled by tryoutLoginPrompt only when a scanned session id is
+         being held; empty on every other visit and on every school shell. -->
+    <div id="tryout-login-note"></div>
     <div class="login-toggle">
       <button class="login-toggle-btn active" onclick="switchLogin('coach')">${COACH_LABEL.toUpperCase()}</button>
       <button class="login-toggle-btn" onclick="switchLogin('player')">Player</button>
@@ -1068,7 +1071,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       ${SC.applyUrl ? `
       <!-- Apply path: shells that set applyUrl (e.g. FSU Grass, which has no fans or press) point this
            button at their application instead of the fan overlay. Label and subline come from config. -->
-      <button onclick="window.open('${SC.applyUrl}','_blank')" style="display:inline-flex;align-items:center;gap:6px;font-family:'Bebas Neue';font-size:14px;letter-spacing:1.5px;color:var(--white);border:none;cursor:pointer;padding:9px 20px;border-radius:8px;background:var(--red);transition:background 0.2s;" onmouseover="this.style.background='var(--red-dark)';" onmouseout="this.style.background='var(--red)';">
+      <button onclick="openApplyPage()" style="display:inline-flex;align-items:center;gap:6px;font-family:'Bebas Neue';font-size:14px;letter-spacing:1.5px;color:var(--white);border:none;cursor:pointer;padding:9px 20px;border-radius:8px;background:var(--red);transition:background 0.2s;" onmouseover="this.style.background='var(--red-dark)';" onmouseout="this.style.background='var(--red)';">
         ${SC.applyLabel || (SC.displayName + ' Application')}
       </button>
       ${SC.applySubline ? `<div style="font-size:11px;color:var(--red);font-weight:700;margin-top:6px;">${SC.applySubline}</div>` : ''}
@@ -2633,7 +2636,9 @@ function initFB(){
       _autoLoginDone=true;
     }
   }catch(e){}
-  // Door check-in deep link: hold ?tryout=<sid> and strip it; recorded once the member is logged in.
+  // Door check-in deep link: persist ?tryout=<sid> and strip it; recorded once the member is
+  // logged in. The id is held in localStorage, not in the URL and not in memory, so a refresh
+  // or a back tap during login does not throw the check-in away.
   try{captureTryoutParam();}catch(e){}
   if(SC.demoMode){
     // DEMO MODE: hydrate D from _DEMO fixture, no Firebase touched.
@@ -2750,10 +2755,15 @@ function listenData(){if(!db)return;
     D.tryoutSessions=s.val()||{};
     _tryoutSessionsLoaded=true;
     processPendingTryout();
+    if(typeof tryoutLoginPrompt==='function')tryoutLoginPrompt();
+    if(typeof tsDoorRestore==='function')tsDoorRestore();
     _maybeRenderRecruiting();
   });
   db.ref(DB_ROOT+'/tryoutAttendance').on('value',s=>{
     D.tryoutAttendance=s.val()||{};
+    // Door mode gets a count refresh only. Redrawing the QR under a phone that is mid scan
+    // is what made the code unreadable during a rush, so the overlay itself is left alone.
+    if(typeof tsDoorUpdateCount==='function')tsDoorUpdateCount();
     _maybeRenderRecruiting();
   });
   // Club dues (exec only). Re-render Accounting live, but never while the exec is typing the amount.
@@ -4492,6 +4502,10 @@ function updatePinDots(){document.querySelectorAll('.login-pin-dot').forEach((d,
 
 function loginAsCoach(){
   currentRole='coach';currentPlayerId=null;
+  // An exec who scanned the door code lands here; say so rather than dropping it silently.
+  if(typeof processPendingTryout==='function')processPendingTryout();
+  // Door mode is a full-screen display, so a refresh on the door phone has to come back to it.
+  if(typeof tsDoorRestore==='function')tsDoorRestore();
   document.getElementById('login-overlay').classList.add('hidden');
   document.getElementById('app-wrapper').style.display='block';
   document.getElementById('coach-content').style.display='block';
@@ -4599,7 +4613,18 @@ async function playerLoginEmail(){
   if(!rec){
     const _who=SC.displayName||SC.shortName||SC.schoolName||'this team';
     const _ask=SC.tiersEnabled?'Contact the exec team.':'Ask your coach to send you an invite.';
-    if(errEl)errEl.textContent='This account is not linked to a '+_who+' roster record yet. '+_ask;
+    // Scanned at the door with a CourtSense account but no club record: the application is
+    // the way in, and it carries the held session id so finishing it checks them in.
+    const _held=(typeof tryoutHoldGet==='function')?tryoutHoldGet():null;
+    if(errEl){
+      if(_held&&SC.applyUrl){
+        errEl.innerHTML='This account is not linked to a '+_who+' roster record yet. '
+          +'<a href="javascript:void(0)" onclick="openApplyPage()" style="color:var(--red);font-weight:700;text-decoration:underline;">Apply now</a>'
+          +' and you are checked in when you finish.';
+      } else {
+        errEl.textContent='This account is not linked to a '+_who+' roster record yet. '+_ask;
+      }
+    }
     done();return;
   }
   if(errEl)errEl.textContent='';
@@ -4664,6 +4689,8 @@ async function execLoginEmail(){
 }
 function logout(){
   currentRole=null;currentPlayerId=null;pinEntry='';
+  // Door mode is a full-screen layer above the app; signing out has to take it down with them.
+  if(typeof tsDoorClose==='function')tsDoorClose();
   sessionStorage.removeItem('leonAuth');
   sessionStorage.removeItem('csCoachSession');
   updatePinDots();
@@ -10252,27 +10279,149 @@ function assessmentLinkUrl(){
   try{ return new URL(SC.assessmentUrl, location.href).href; }
   catch(e){ return SC.assessmentUrl; }
 }
-// Boot: capture ?tryout=<sid>, hold it, and strip it from the URL (same pattern as ?csadmin).
+// Every surface below is club-only. A school shell (no SC.tiersEnabled) has no tryout
+// sessions, no Recruiting tab, and no door code, so the whole door check-in path stays
+// inert there and the login screen and apply button behave exactly as they did before.
+function tsFeatureOn(){ return !!SC.tiersEnabled; }
+
+// ---- Pending door check-in, held until the write actually lands -----------
+// A camera scan always opens a NEW tab, and player sessions live in per-tab
+// sessionStorage, so the scanner is never already logged in and the held session id
+// cannot live in a tab-scoped store either. It goes in localStorage keyed by club node,
+// which survives a refresh, a back tap, the apply flow in a second tab, and login. It is
+// cleared only after Firebase acknowledges the attendance write, and it expires on its
+// own after four hours so a stale id can never check someone into yesterday.
+var TRYOUT_HOLD_MS=4*60*60*1000;
 var _pendingTryout=null;
 var _tryoutSessionsLoaded=false;
+var _tryoutWriteBusy=false;
+var _tryoutExecNoticeShown=false;
+function _tryoutHoldKey(){ return 'csPendingTryout_'+DB_ROOT; }
+function tryoutHoldGet(){
+  if(!tsFeatureOn()) return null;
+  try{
+    var raw=localStorage.getItem(_tryoutHoldKey()); if(!raw) return null;
+    var o=JSON.parse(raw);
+    if(!o||!o.sid||typeof o.exp!=='number'||o.exp<=Date.now()){ tryoutHoldClear(); return null; }
+    return o.sid;
+  }catch(e){ return null; }
+}
+function tryoutHoldSet(sid){
+  if(!tsFeatureOn()) return;
+  try{ localStorage.setItem(_tryoutHoldKey(),JSON.stringify({sid:sid,exp:Date.now()+TRYOUT_HOLD_MS})); }catch(e){}
+}
+function tryoutHoldClear(){
+  try{ localStorage.removeItem(_tryoutHoldKey()); }catch(e){}
+  _pendingTryout=null;
+}
+// Boot: capture ?tryout=<sid>, persist it, and strip it from the URL (same pattern as ?csadmin).
+// Runs before any login, so the id is already safe by the time the login overlay appears.
 function captureTryoutParam(){
   try{
     var sid=new URLSearchParams(location.search).get('tryout');
-    if(sid){ _pendingTryout=sid; history.replaceState(null,'',location.pathname+location.hash); }
+    if(sid){ tryoutHoldSet(sid); history.replaceState(null,'',location.pathname+location.hash); }
   }catch(e){}
+  _pendingTryout=tryoutHoldGet();
 }
-// Record attendance for a held ?tryout once a member is logged in and sessions have loaded. A member
-// who is not logged in keeps the pending id until login (renderPlayerPortal re-calls this).
+// The apply link, carrying the held session id so the signup page can check a walk-up in
+// the moment they finish. With nothing held (or on a school shell) this is SC.applyUrl
+// exactly as before.
+function tryoutApplyUrl(){
+  var u=SC.applyUrl||'';
+  var sid=tryoutHoldGet();
+  if(u&&sid) u+=(u.indexOf('?')>=0?'&':'?')+'tryout='+encodeURIComponent(sid);
+  return u;
+}
+function openApplyPage(){
+  var u=tryoutApplyUrl(); if(!u) return;
+  window.open(u,'_blank');
+}
+
+// ---- Check-in notice: a banner that stays until it is dismissed -----------
+// A toast disappears in two seconds and fired before the write resolved, so a failed
+// check-in still read as success. This banner is created on demand, sits above
+// everything, and only ever says "checked in" after Firebase acknowledged the write.
+function tryoutNoticeClose(){
+  var el=document.getElementById('tryout-notice');
+  if(el&&el.parentNode) el.parentNode.removeChild(el);
+}
+// kind: 'ok' green, 'error' red with no retry, 'retry' red with a Try again button.
+function tryoutNotice(kind,msg){
+  tryoutNoticeClose();
+  var bg=(kind==='ok')?'#217F7F':'#9B2C2C';
+  var el=document.createElement('div');
+  el.id='tryout-notice';
+  el.setAttribute('role','status');
+  el.style.cssText='position:fixed;left:12px;right:12px;bottom:12px;z-index:10020;background:'+bg
+    +';color:#fff;border-radius:10px;padding:14px 16px;box-shadow:0 6px 24px rgba(0,0,0,0.28);'
+    +'font-family:\'Barlow\',sans-serif;font-size:15px;line-height:1.45;max-width:520px;margin:0 auto;';
+  var btns='';
+  if(kind==='retry'){
+    btns+='<button type="button" id="tryout-notice-retry" style="background:#fff;color:'+bg
+      +';border:none;border-radius:6px;padding:8px 14px;font-family:\'Barlow\',sans-serif;font-size:14px;font-weight:700;cursor:pointer;">Try again</button>';
+  }
+  btns+='<button type="button" id="tryout-notice-close" style="background:rgba(255,255,255,0.18);color:#fff;border:none;border-radius:6px;padding:8px 14px;font-family:\'Barlow\',sans-serif;font-size:14px;font-weight:700;cursor:pointer;">Dismiss</button>';
+  el.innerHTML='<div style="margin-bottom:10px;">'+String(msg==null?'':msg).replace(/[&<>"']/g,function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]); })+'</div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;">'+btns+'</div>';
+  document.body.appendChild(el);
+  var cb=document.getElementById('tryout-notice-close');
+  if(cb) cb.onclick=tryoutNoticeClose;
+  var rb=document.getElementById('tryout-notice-retry');
+  if(rb) rb.onclick=function(){ tryoutNoticeClose(); processPendingTryout(); };
+}
+
+// ---- Login screen prompt --------------------------------------------------
+// Someone who scanned and landed logged out gets told why they are here and is dropped
+// straight onto the member tab. With nothing held this renders nothing and never touches
+// the tab the login screen opens on, so every other school is unchanged.
+var _tryoutLoginTabSwitched=false;
+function tryoutLoginPrompt(){
+  var note=document.getElementById('tryout-login-note'); if(!note) return;
+  var ov=document.getElementById('login-overlay');
+  var sid=tryoutHoldGet();
+  var sess=sid?((D.tryoutSessions||{})[sid]||null):null;
+  if(!sid||!sess||!ov||ov.classList.contains('hidden')){ note.innerHTML=''; return; }
+  var esc=function(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]); }); };
+  note.innerHTML='<div style="background:var(--primary-bg,#f3e9eb);border:1px solid var(--red);border-radius:8px;padding:10px 12px;margin:10px 0 4px;font-family:\'Barlow\',sans-serif;font-size:13px;color:var(--charcoal);line-height:1.45;">'
+    +'<strong>Log in to check in to '+esc(sess.name||'this session')+'.</strong>'
+    +'<div style="margin-top:3px;color:var(--gray);">New to the club? Use the application button below and you are checked in when you finish.</div>'
+    +'</div>';
+  if(!_tryoutLoginTabSwitched){
+    _tryoutLoginTabSwitched=true;
+    try{ switchLogin('player'); }catch(e){}
+  }
+}
+
+// Record attendance for a held ?tryout once a member is logged in and sessions have loaded.
+// Nothing is cleared and nothing is confirmed until the write comes back acknowledged, so a
+// failed save keeps the hold and offers Try again instead of claiming success.
 function processPendingTryout(){
-  if(!_pendingTryout) return;
+  if(!tsFeatureOn()) return;
+  var sid=tryoutHoldGet();
+  _pendingTryout=sid;
+  if(!sid||!_tryoutSessionsLoaded) return;
+  // An exec scanning the code they are displaying is a dead end: the exec session is not a
+  // member record, so there is nobody to mark present. Say so once instead of silently doing
+  // nothing, and keep the hold so their own member login still completes the check-in.
+  if(currentRole==='coach'){
+    if(!_tryoutExecNoticeShown){
+      _tryoutExecNoticeShown=true;
+      tryoutNotice('error','You are signed in as an '+COACH_LABEL.toLowerCase()+'. Use a member account to check in.');
+    }
+    return;
+  }
   if(currentRole!=='player'||!currentPlayerId) return;
-  if(!_tryoutSessionsLoaded) return;
-  var sid=_pendingTryout;
   var sess=(D.tryoutSessions||{})[sid];
-  if(!sess){ _pendingTryout=null; toast('That tryout session was not found'); return; }
-  _pendingTryout=null;
-  fbSet('tryoutAttendance/'+sid+'/'+currentPlayerId,{present:true,at:Date.now(),method:'qr'});
-  toast('Checked in to '+(sess.name||'tryout'));
+  if(!sess){ tryoutHoldClear(); tryoutNotice('error','That check-in link is no longer active. Ask an '+COACH_LABEL.toLowerCase()+' for the current code.'); return; }
+  if(_tryoutWriteBusy) return;
+  _tryoutWriteBusy=true;
+  var nm=sess.name||'this session';
+  var pid=currentPlayerId;
+  fbSet('tryoutAttendance/'+sid+'/'+pid,{present:true,at:Date.now(),method:'qr'}).then(function(ok){
+    _tryoutWriteBusy=false;
+    if(ok){ tryoutHoldClear(); tryoutNotice('ok','You are checked in to '+nm+'.'); }
+    else { tryoutNotice('retry','Your check-in to '+nm+' did not save. You are not checked in yet.'); }
+  });
 }
 
 // ---- Exec-side helpers over the persisted model --------------------------
@@ -10370,6 +10519,152 @@ function tsToggleDoor(sid){
   if(_tsOpenDoor[sid]) delete _tsOpenDoor[sid]; else _tsOpenDoor[sid]=true;
   renderRecruiting();
 }
+// Roster picker open/closed per session (in memory). Holds the full active roster so an exec
+// can mark anyone present by hand, invited or not.
+var _tsOpenPicker={};
+function tsTogglePicker(sid){
+  if(_tsOpenPicker[sid]){ delete _tsOpenPicker[sid]; delete _tsPickerQuery[sid]; }
+  else _tsOpenPicker[sid]=true;
+  renderRecruiting();
+}
+// Filter the open roster picker in place. Pure DOM work on rows already rendered, so typing
+// never triggers a Firebase read or a re-render that would steal focus. The query is kept per
+// session so marking someone present, which does redraw the pane, leaves the exec looking at
+// the same filtered list instead of the whole roster again.
+var _tsPickerQuery={};
+function tsPickerFilter(sid){
+  var box=document.getElementById('ts-search-'+sid); if(!box) return;
+  var q=String(box.value||'').trim().toLowerCase();
+  _tsPickerQuery[sid]=box.value;
+  var rows=document.querySelectorAll('.ts-pick-row[data-sid="'+sid+'"]');
+  Array.prototype.forEach.call(rows,function(r){
+    var n=r.getAttribute('data-name')||'';
+    r.style.display=(!q||n.indexOf(q)>=0)?'':'none';
+  });
+}
+
+// ---- Session time helpers (door mode and ordering) -----------------------
+// Minutes past midnight for a stored "H:MM AM/PM" string. Returns null for blank or legacy
+// free text, which sorts such a session to the front of its day.
+function tsStartMinutes(t){
+  var m=/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(String(t==null?'':t).trim());
+  if(!m) return null;
+  var h=parseInt(m[1],10)%12;
+  if(/PM/i.test(m[3])) h+=12;
+  return h*60+parseInt(m[2],10);
+}
+function tsNowMinutes(){ var d=new Date(); return d.getHours()*60+d.getMinutes(); }
+// Today's sessions, earliest start first.
+function tsTodaySessions(){
+  var today=td();
+  return tsSessionsArr().filter(function(s){ return String(s.date||'')===today; })
+    .sort(function(a,b){
+      var am=tsStartMinutes(a.time), bm=tsStartMinutes(b.time);
+      if(am==null&&bm==null) return (a.createdAt||0)-(b.createdAt||0);
+      if(am==null) return -1;
+      if(bm==null) return 1;
+      return am-bm;
+    });
+}
+// Whichever of today's sessions has most recently started. Before the first one starts, the
+// first one. Null when nothing is scheduled today.
+function tsCurrentDoorSession(){
+  var list=tsTodaySessions(); if(!list.length) return null;
+  var now=tsNowMinutes(), cur=list[0];
+  list.forEach(function(s){ var m=tsStartMinutes(s.time); if(m!=null&&m<=now) cur=s; });
+  return cur;
+}
+function tsPresentCount(sid){
+  var a=(D.tryoutAttendance||{})[sid]||{};
+  return Object.keys(a).filter(function(pid){ return a[pid]&&a[pid].present; }).length;
+}
+
+// ---- Door mode: a full-screen code that stays up ------------------------
+// Lives outside the Recruiting pane, so the live re-render that fires on every check-in
+// cannot tear it down. Its open state is persisted, so a refresh on the door phone comes
+// straight back to it. It follows the clock on its own: at the next session's start time it
+// swaps to that session's code, and that swap is the only thing that ever redraws the QR.
+var _tsDoorSid=null;
+var _tsDoorTimer=null;
+function _tsDoorKey(){ return 'csDoorMode_'+DB_ROOT; }
+function tsDoorOpen(){
+  if(!tsFeatureOn()||currentRole!=='coach') return;
+  try{ localStorage.setItem(_tsDoorKey(),'1'); }catch(e){}
+  var el=document.getElementById('ts-door-overlay');
+  if(!el){
+    el=document.createElement('div');
+    el.id='ts-door-overlay';
+    el.style.cssText='position:fixed;inset:0;z-index:10010;background:#fff;display:flex;flex-direction:column;'
+      +'align-items:center;justify-content:center;gap:14px;padding:18px;text-align:center;font-family:\'Barlow\',sans-serif;';
+    // The QR library emits a fixed-size SVG; let it fill the big square on the door phone.
+    var ds=document.createElement('style');
+    ds.textContent='#ts-door-qr svg{width:100%;height:100%;display:block;}';
+    document.head.appendChild(ds);
+    el.innerHTML='<div id="ts-door-name" style="font-family:\'Bebas Neue\',sans-serif;font-size:26px;letter-spacing:1.5px;color:var(--charcoal);line-height:1.15;"></div>'
+      +'<div id="ts-door-sub" style="font-size:13px;color:var(--gray);margin-top:-8px;"></div>'
+      +'<div id="ts-door-qr" style="width:min(74vw,74vh);height:min(74vw,74vh);display:flex;align-items:center;justify-content:center;"></div>'
+      +'<div id="ts-door-count" style="font-family:\'Bebas Neue\',sans-serif;font-size:34px;letter-spacing:1px;color:var(--red);"></div>'
+      +'<div id="ts-door-link" style="font-size:11px;color:var(--gray);word-break:break-all;max-width:90vw;"></div>'
+      +'<button type="button" onclick="tsDoorClose()" style="margin-top:6px;background:var(--charcoal,#2d2d2d);color:#fff;border:none;border-radius:8px;padding:10px 22px;font-family:\'Bebas Neue\',sans-serif;font-size:15px;letter-spacing:1.5px;cursor:pointer;">Exit Door Mode</button>';
+    document.body.appendChild(el);
+  }
+  el.style.display='flex';
+  _tsDoorSid=null;            // force the first paint
+  tsDoorSync();
+  if(!_tsDoorTimer) _tsDoorTimer=setInterval(tsDoorSync,30000);
+}
+function tsDoorClose(){
+  try{ localStorage.removeItem(_tsDoorKey()); }catch(e){}
+  if(_tsDoorTimer){ clearInterval(_tsDoorTimer); _tsDoorTimer=null; }
+  _tsDoorSid=null;
+  var el=document.getElementById('ts-door-overlay');
+  if(el) el.style.display='none';
+}
+// Reopen after a refresh, once sessions have arrived and the exec is back in coach mode.
+function tsDoorRestore(){
+  if(!tsFeatureOn()||currentRole!=='coach'||!_tryoutSessionsLoaded) return;
+  if(document.getElementById('ts-door-overlay')&&_tsDoorTimer) return;
+  var on=false; try{ on=localStorage.getItem(_tsDoorKey())==='1'; }catch(e){}
+  if(on) tsDoorOpen();
+}
+// Repoint the display at whichever session is current. The QR is redrawn ONLY when the session
+// actually changes; everything else on screen is a text update.
+function tsDoorSync(){
+  var el=document.getElementById('ts-door-overlay');
+  if(!el||el.style.display==='none') return;
+  var esc=function(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]); }); };
+  var sess=tsCurrentDoorSession();
+  var nameEl=document.getElementById('ts-door-name');
+  var subEl=document.getElementById('ts-door-sub');
+  var qrEl=document.getElementById('ts-door-qr');
+  var linkEl=document.getElementById('ts-door-link');
+  if(!sess){
+    _tsDoorSid=null;
+    if(nameEl)nameEl.textContent='No session scheduled today';
+    if(subEl)subEl.textContent='Set a date on a tryout session to use door mode.';
+    if(qrEl)qrEl.innerHTML='';
+    if(linkEl)linkEl.textContent='';
+    tsDoorUpdateCount();
+    return;
+  }
+  if(nameEl)nameEl.textContent=sess.name||'Tryout session';
+  if(subEl)subEl.textContent=[sess.time||'',sess.location||''].filter(Boolean).join(' · ');
+  if(sess.sid!==_tsDoorSid){
+    _tsDoorSid=sess.sid;
+    var url=tryoutAttendUrl(sess.sid);
+    if(linkEl)linkEl.innerHTML=esc(url);
+    if(qrEl){ qrEl.innerHTML=''; renderQrInto('ts-door-qr',url); }
+  }
+  tsDoorUpdateCount();
+}
+// Count only. Called on every attendance change, and deliberately touches nothing else.
+function tsDoorUpdateCount(){
+  var c=document.getElementById('ts-door-count'); if(!c) return;
+  var el=document.getElementById('ts-door-overlay');
+  if(!el||el.style.display==='none') return;
+  if(!_tsDoorSid){ c.textContent=''; return; }
+  c.textContent=tsPresentCount(_tsDoorSid)+' CHECKED IN';
+}
 
 // ---- Invitations (reuse execSendMessage: in-app thread + email) ----------
 // Render a session's ISO date (YYYY-MM-DD) as "Weekday, Month D". Parsed as a local date so it does
@@ -10442,6 +10737,28 @@ function tsClearAttendance(sid,pid){
   fbSet('tryoutAttendance/'+sid+'/'+pid, null);
   toast('Attendance cleared');
 }
+// Move checked attendance records from one session to another. A door code left pointing at the
+// 5:30 session collects the 7:00 arrivals, so the fix has to be after the fact. The original
+// time and method ride along untouched, because when and how someone checked in is still true.
+function tsMoveChecked(sid){
+  var boxes=document.querySelectorAll('input.ts-move-box[data-sid="'+sid+'"]:checked');
+  if(!boxes.length){ toast('Pick at least one check-in to move'); return; }
+  var sel=document.getElementById('ts-move-to-'+sid);
+  var to=sel?sel.value:'';
+  if(!to){ toast('Choose a session to move them to'); return; }
+  if(to===sid){ toast('That is the same session'); return; }
+  var src=(D.tryoutAttendance||{})[sid]||{};
+  var moved=0;
+  Array.prototype.forEach.call(boxes,function(b){
+    var pid=b.getAttribute('data-pid');
+    var rec=src[pid]; if(!rec) return;
+    fbSet('tryoutAttendance/'+to+'/'+pid,{present:!!rec.present,at:rec.at||Date.now(),method:rec.method||'manual'});
+    fbSet('tryoutAttendance/'+sid+'/'+pid,null);
+    moved++;
+  });
+  var dest=(D.tryoutSessions||{})[to];
+  toast(moved?('Moved '+moved+' to '+((dest&&dest.name)||'the other session')):'Nothing to move');
+}
 // ---- Placement (prospect to squad) ---------------------------------------
 var TS_SQUAD_LABELS={gold:'Gold',garnet:'Garnet'};
 // The placement notice, shared so the recruiting tab and the player card word it identically. No
@@ -10494,10 +10811,25 @@ function renderRecruiting(){
   var tierBadge=function(t){ return t==='gold'?'<span class="tier-badge tier-gold">Gold</span>':t==='garnet'?'<span class="tier-badge tier-garnet">Garnet</span>':'<span style="font-size:11px;color:var(--gray);">No request</span>'; };
   var tvText=function(p){ return (p.truVolley!=null&&p.truVolley!=='')?('TV '+esc(p.truVolley)):'<span style="color:var(--gray);">No TruVolley</span>'; };
 
+  // Everyone on the roster who is still active, invited or not. An exec takes attendance from
+  // this, so a prospect nobody remembered to invite is still one tap from being marked present.
+  var activeRoster=(Array.isArray(D.players)?D.players:[]).filter(function(p){ return p&&p.active!==false; })
+    .sort(function(a,b){ return String(a.lastName||'').localeCompare(String(b.lastName||''))||String(a.firstName||'').localeCompare(String(b.firstName||'')); });
+
   var sessionsHtml=sessions.length?sessions.map(function(sess){
     var sid=sess.sid;
     var invitedIds=(sess.invited?Object.keys(sess.invited):[]);
-    var attendRows=invitedIds.length?invitedIds.map(function(pid){
+    // The card listed invited players only, which is why a night with nobody invited showed no
+    // attendance controls at all. It now lists everyone with a mark as well, so a scanned
+    // check-in is always visible on the session it landed on.
+    var markedIds=Object.keys((D.tryoutAttendance||{})[sid]||{});
+    var rowIds=invitedIds.slice();
+    markedIds.forEach(function(pid){ if(rowIds.indexOf(pid)<0) rowIds.push(pid); });
+    rowIds.sort(function(x,y){
+      var px=gP(x)||{}, py=gP(y)||{};
+      return String(px.lastName||'').localeCompare(String(py.lastName||''))||String(px.firstName||'').localeCompare(String(py.firstName||''));
+    });
+    var attendRows=rowIds.length?rowIds.map(function(pid){
       var p=gP(pid); var nm=p?(p.firstName+' '+p.lastName):pid;
       var a=tsAttendance(sid,pid);
       var stateHtml=a?(a.present
@@ -10505,13 +10837,50 @@ function renderRecruiting(){
           :'<span style="font-size:11px;color:var(--red);font-weight:700;">Absent</span>')
         :'<span style="font-size:11px;color:var(--gray);">No mark</span>';
       return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid var(--gray-lighter);flex-wrap:wrap;">'
-        +'<span style="font-size:12px;color:var(--charcoal);">'+esc(nm)+'</span>'
+        +'<span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--charcoal);">'
+        +(a?'<input type="checkbox" class="ts-move-box" data-sid="'+esc(sid)+'" data-pid="'+esc(pid)+'" title="Select to move this check-in">':'')
+        +esc(nm)+'</span>'
         +'<span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">'+stateHtml
         +'<button class="btn btn-small" style="padding:2px 8px;font-size:10px;background:#217F7F;color:#fff;border:none;" onclick="tsMarkAttendance(\''+esc(sid)+'\',\''+esc(pid)+'\',true)">Present</button>'
         +'<button class="btn btn-small" style="padding:2px 8px;font-size:10px;background:var(--gray-light);color:var(--charcoal);border:none;" onclick="tsMarkAttendance(\''+esc(sid)+'\',\''+esc(pid)+'\',false)">Absent</button>'
         +(a?'<button class="btn btn-small" style="padding:2px 8px;font-size:10px;" onclick="tsClearAttendance(\''+esc(sid)+'\',\''+esc(pid)+'\')">Clear</button>':'')
         +'</span></div>';
-    }).join(''):'<div style="font-size:11px;color:var(--gray);padding:4px 0;">No one invited to this session yet.</div>';
+    }).join(''):'<div style="font-size:11px;color:var(--gray);padding:4px 0;">No invitations and no attendance yet. Use Take attendance to mark anyone on the roster.</div>';
+
+    // Move selected check-ins to another session, for a door code that stayed pointed at the
+    // session before this one. Only offered when there is somewhere to move them to.
+    var otherSessions=sessions.filter(function(s){ return s.sid!==sid; });
+    var moveHtml=(otherSessions.length&&markedIds.length)
+      ?'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px;padding-top:6px;border-top:1px dashed var(--gray-lighter);">'
+        +'<span style="font-size:11px;color:var(--gray);">Move selected to</span>'
+        +'<select class="form-select" id="ts-move-to-'+esc(sid)+'" style="padding:4px 6px;font-size:11px;">'
+        +'<option value="">Choose session</option>'
+        +otherSessions.map(function(s){ return '<option value="'+esc(s.sid)+'">'+esc(s.name||'Session')+(s.date?' ('+esc(s.date)+')':'')+'</option>'; }).join('')
+        +'</select>'
+        +'<button class="btn btn-small btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="tsMoveChecked(\''+esc(sid)+'\')">Move</button>'
+        +'</div>'
+      :'';
+
+    // Searchable roster picker. Rows are rendered once and filtered in the page, so typing a
+    // name never costs a read and never steals the redraw out from under the exec.
+    var pickerHtml='';
+    if(_tsOpenPicker[sid]){
+      var pickRows=activeRoster.map(function(p){
+        var a=tsAttendance(sid,p.id);
+        var nm=((p.firstName||'')+' '+(p.lastName||'')).trim();
+        var mark=a?(a.present?'<span style="font-size:10px;color:#217F7F;font-weight:700;">Present</span>':'<span style="font-size:10px;color:var(--red);font-weight:700;">Absent</span>'):'';
+        return '<div class="ts-pick-row" data-sid="'+esc(sid)+'" data-name="'+esc(nm.toLowerCase())+'" style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid var(--gray-lighter);flex-wrap:wrap;">'
+          +'<span style="font-size:12px;color:var(--charcoal);">'+esc(nm)+(p.status==='prospect'?' <span style="font-size:10px;color:var(--gray);">prospect</span>':'')+'</span>'
+          +'<span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">'+mark
+          +'<button class="btn btn-small" style="padding:2px 8px;font-size:10px;background:#217F7F;color:#fff;border:none;" onclick="tsMarkAttendance(\''+esc(sid)+'\',\''+esc(p.id)+'\',true)">Present</button>'
+          +'<button class="btn btn-small" style="padding:2px 8px;font-size:10px;background:var(--gray-light);color:var(--charcoal);border:none;" onclick="tsMarkAttendance(\''+esc(sid)+'\',\''+esc(p.id)+'\',false)">Absent</button>'
+          +'</span></div>';
+      }).join('');
+      pickerHtml='<div style="border-top:1px dashed var(--gray-lighter);margin-top:8px;padding-top:8px;">'
+        +'<input class="form-input" id="ts-search-'+esc(sid)+'" value="'+esc(_tsPickerQuery[sid]||'')+'" oninput="tsPickerFilter(\''+esc(sid)+'\')" placeholder="Search the roster by name" style="padding:6px 8px;font-size:12px;width:100%;box-sizing:border-box;margin-bottom:4px;">'
+        +'<div style="max-height:320px;overflow-y:auto;">'+(pickRows||'<div style="font-size:11px;color:var(--gray);padding:4px 0;">No active roster records yet.</div>')+'</div>'
+        +'</div>';
+    }
 
     var doorHtml='';
     if(_tsOpenDoor[sid]){
@@ -10547,13 +10916,16 @@ function renderRecruiting(){
       +'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px;">'
       +'<button class="btn btn-small btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="tsUpdateSession(\''+esc(sid)+'\')">Save</button>'
       +'<button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:#082A4F;color:#fff;border:none;" onclick="tsToggleDoor(\''+esc(sid)+'\')">'+(_tsOpenDoor[sid]?'Hide door code':'Door check-in code')+'</button>'
+      +'<button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:#217F7F;color:#fff;border:none;" onclick="tsTogglePicker(\''+esc(sid)+'\')">'+(_tsOpenPicker[sid]?'Close attendance':'Take attendance')+'</button>'
       +'<button class="btn btn-small btn-danger" style="padding:3px 10px;font-size:11px;" onclick="tsDeleteSession(\''+esc(sid)+'\')">Delete</button>'
-      +'<span style="font-size:11px;color:var(--gray);margin-left:auto;">'+invitedIds.length+' invited</span>'
+      +'<span style="font-size:11px;color:var(--gray);margin-left:auto;">'+tsPresentCount(sid)+' present · '+invitedIds.length+' invited</span>'
       +'</div>'
       +doorHtml
+      +pickerHtml
       +'<div style="margin-top:6px;">'+attendRows+'</div>'
+      +moveHtml
       +'</div>';
-  }).join(''):'<div style="font-size:12px;color:var(--gray);padding:6px 0;">No tryout sessions yet. Add one to start inviting prospects.</div>';
+  }).join(''):'<div style="font-size:12px;color:var(--gray);padding:6px 0;">No tryout sessions yet. Add one to start taking attendance.</div>';
 
   var checkboxesFor=function(pid){
     if(!sessions.length) return '<span style="font-size:11px;color:var(--gray);">Add a session to invite.</span>';
@@ -10568,7 +10940,7 @@ function renderRecruiting(){
     var inviteTags=invites.length?invites.map(function(sess){
       return '<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;background:var(--gray-lighter);color:var(--charcoal);border-radius:10px;padding:2px 8px;">'+esc(sess.name)
         +'<button onclick="tsRemoveInvite(\''+esc(sess.sid)+'\',\''+esc(pid)+'\')" style="background:none;border:none;color:var(--gray);cursor:pointer;font-size:12px;line-height:1;padding:0;" title="Remove invite">&times;</button></span>';
-    }).join(' '):'<span style="font-size:11px;color:var(--gray);">Not invited yet</span>';
+    }).join(' '):'<span style="font-size:11px;color:var(--gray);">No invitation sent</span>';
     var attended=sessions.filter(function(sess){ var a=tsAttendance(sess.sid,pid); return a&&a.present; });
     var attendHtml=attended.length
       ?'<span style="font-size:11px;color:#217F7F;font-weight:700;">Attended:</span> <span style="font-size:11px;color:var(--charcoal);">'+attended.map(function(sess){ return esc(sess.name); }).join(', ')+'</span>'
@@ -10624,11 +10996,16 @@ function renderRecruiting(){
       +'</div>';
   }
   pane.innerHTML='<div class="card"><div class="card-title"><span class="bar"></span> \u{1F3AF} Recruiting</div>'
-    +'<p style="font-size:11px;color:var(--gray);margin-bottom:12px;">Create tryout sessions, invite prospects, and take attendance at the door.</p>'
+    +'<p style="font-size:11px;color:var(--gray);margin-bottom:12px;">Create tryout sessions and take attendance at the door. Invitations are optional; anyone on the roster can check in or be marked present.</p>'
     +assessHtml
-    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px;">'
     +'<div style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;letter-spacing:1px;color:var(--charcoal);">TRYOUT SESSIONS</div>'
+    +'<span style="display:flex;gap:6px;flex-wrap:wrap;">'
+    // Door mode is the one to hand a phone at the entrance. It follows today's schedule on its
+    // own and survives a refresh, so nobody has to remember to re-open the right session's code.
+    +(tsFeatureOn()?'<button class="btn btn-small" style="padding:3px 10px;font-size:11px;background:#082A4F;color:#fff;border:none;" onclick="tsDoorOpen()">Door mode</button>':'')
     +'<button class="btn btn-small btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="tsAddSession()">Add session</button>'
+    +'</span>'
     +'</div>'
     +sessionsHtml
     +'<div style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;letter-spacing:1px;color:var(--charcoal);margin:14px 0 4px;">PROSPECTS</div>'
@@ -10637,6 +11014,8 @@ function renderRecruiting(){
     +'</div>';
 
   sessions.forEach(function(sess){ if(_tsOpenDoor[sess.sid]) renderQrInto('ts-qr-'+sess.sid, tryoutAttendUrl(sess.sid)); });
+  // Re-apply any live roster search so a redraw does not dump the exec back to the full list.
+  sessions.forEach(function(sess){ if(_tsOpenPicker[sess.sid]&&_tsPickerQuery[sess.sid]) tsPickerFilter(sess.sid); });
 }
 // Accounting (Grass Club): real dues tracking. One dues amount for the club, a per-member paid toggle
 // (records who and when), a paid/collected summary, and a reminder that emails unpaid members. All
