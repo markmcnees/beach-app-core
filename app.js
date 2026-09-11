@@ -1,4 +1,9 @@
 const SC=window.SCHOOL_CONFIG;
+// Name-and-team-password player login. Absent or true means ON, so every shell that
+// never sets it behaves exactly as before. A shell sets playerLoginEnabled:false to
+// close that door, which is the high school position until personal logins ship in
+// December. Coach login and the fan page are untouched either way.
+const PLAYER_LOGIN_ON = SC.playerLoginEnabled !== false;
 // User-facing label for the privileged role. Config-driven via SC.coachLabel, defaulting to Coach so every existing school is unchanged. Display only; the internal role string stays 'coach'.
 const COACH_LABEL = (SC && SC.coachLabel) ? SC.coachLabel : 'Coach';
 // Label for the roster leadership marker (leadership:'exec'), which grants chat
@@ -43,7 +48,7 @@ const AUTH_WORKER = 'https://courtsense-email-worker.markmcnees-479.workers.dev'
 // the version of THIS file, not the shell's ?v= cache-buster, so a stale cached
 // app.js still reports its own real version.
 // DO NOT EDIT BY HAND: any manual value is overwritten on the next deploy.
-const APP_VERSION='1.1.156';
+const APP_VERSION='1.1.157';
 
 // ============================================================
 // DEMO FIXTURE — only consumed when SC.demoMode === true
@@ -995,10 +1000,12 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
     <!-- Door check-in prompt. Filled by tryoutLoginPrompt only when a scanned session id is
          being held; empty on every other visit and on every school shell. -->
     <div id="tryout-login-note"></div>
+    ${PLAYER_LOGIN_ON ? `
     <div class="login-toggle">
       <button class="login-toggle-btn active" onclick="switchLogin('coach')">${COACH_LABEL.toUpperCase()}</button>
       <button class="login-toggle-btn" onclick="switchLogin('player')">Player</button>
     </div>
+    ` : ''}
     <div class="login-section active" id="login-coach">
       ${SC.emailLogin?`
       <!-- Per-exec sign-in first (account-login schools only): signing in as
@@ -1038,6 +1045,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       <div class="login-error" id="pin-error"></div>
       </div>
     </div>
+    ${PLAYER_LOGIN_ON ? `
     <div class="login-section" id="login-player">
       ${SC.emailLogin?`
       <div style="font-family:'Bebas Neue';font-size:14px;letter-spacing:1.5px;color:var(--charcoal);margin-bottom:8px;">Log In With Your Email</div>
@@ -1067,6 +1075,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       <div style="text-align:center;padding:12px 8px 0;"><a href="javascript:void(0)" id="hs-login-toggle" onclick="hsToggleLoginMode()" style="font-family:'Barlow',sans-serif;font-size:13px;color:var(--gray);font-weight:600;text-decoration:underline;">I have a CourtSense account</a></div>
       `}
     </div>
+    ` : ''}
     <div class="login-fans" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--gray-lighter);text-align:center;">
       ${SC.applyUrl ? `
       <!-- Apply path: shells that set applyUrl (e.g. FSU Grass, which has no fans or press) point this
@@ -4384,13 +4393,18 @@ let pinEntry='';
 let _pinChecking=false;
 
 function switchLogin(mode){
+  // With player login off there is no toggle and no player section to switch to, so a
+  // stray call (the door check-in prompt makes one) is a no-op rather than a null crash.
+  if(mode!=='coach'&&!PLAYER_LOGIN_ON)return;
   document.querySelectorAll('.login-toggle-btn').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.login-section').forEach(s=>s.classList.remove('active'));
+  const _coachBtn=document.querySelector('.login-toggle-btn:nth-child(1)');
+  const _playerBtn=document.querySelector('.login-toggle-btn:nth-child(2)');
   if(mode==='coach'){
-    document.querySelector('.login-toggle-btn:nth-child(1)').classList.add('active');
+    if(_coachBtn)_coachBtn.classList.add('active');
     document.getElementById('login-coach').classList.add('active');
   }else{
-    document.querySelector('.login-toggle-btn:nth-child(2)').classList.add('active');
+    if(_playerBtn)_playerBtn.classList.add('active');
     document.getElementById('login-player').classList.add('active');
     populatePlayerLogin();
   }
@@ -4541,6 +4555,8 @@ function adminEnterSchool(token, expiresAt){
   loginAsCoach();
 }
 function playerLogin(){
+  // Closed at the shell. Guarded here too, so the console is not a way around the UI.
+  if(!PLAYER_LOGIN_ON)return;
   const pid=document.getElementById('login-player-select').value;
   const pw=document.getElementById('login-pw').value;
   if(!pid){document.getElementById('pw-error').textContent='Select your name';return;}
@@ -4715,7 +4731,10 @@ async function autoLogin(){
       sessionStorage.removeItem('csCoachSession');
     }
   }catch(e){sessionStorage.removeItem('csCoachSession');}
-  // Player: unchanged, restored from leonAuth.
+  // Player: unchanged, restored from leonAuth. A session minted before player login was
+  // turned off is dropped rather than honored, otherwise flipping the shell would leave
+  // anyone mid-session still inside.
+  if(!PLAYER_LOGIN_ON){ sessionStorage.removeItem('leonAuth'); return; }
   try{
     const auth=JSON.parse(sessionStorage.getItem('leonAuth'));
     if(!auth)return;
@@ -4734,6 +4753,8 @@ async function autoLogin(){
 }
 
 async function changePassword(){
+  // The team password is the only thing this changes, and that login is closed.
+  if(!PLAYER_LOGIN_ON)return;
   if(!currentPlayerId)return;
   const cur=document.getElementById('t-pw-current').value;
   const newPw=document.getElementById('t-pw-new').value;
