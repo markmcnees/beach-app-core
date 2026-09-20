@@ -1121,6 +1121,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
       <button class="tab active" data-tab="recruiting">Recruiting</button>
       <button class="tab" data-tab="accounting">Accounting</button>
       <button class="tab" data-tab="travel">Travel</button>
+      <button class="tab" data-tab="info">Info</button>
       `:`
       <button class="tab active" data-tab="dashboard">Dashboard</button>
       <button class="tab" data-tab="gameday">Planner</button>
@@ -1523,7 +1524,6 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button class="btn btn-small" style="background:#082A4F;color:#fff;border:none;" onclick="exportExcel()">📊 Export Excel</button>
       <button class="btn btn-small" style="background:#082A4F;color:#fff;border:none;" onclick="exportJSON()">Export JSON</button>
-      ${SC.tiersEnabled?'<button class="btn btn-small" style="background:#782F40;color:#fff;border:none;" onclick="exportShirtOrder()">👕 Shirt Order</button>':''}
       <button class="btn btn-small btn-secondary" onclick="triggerRosterImport()">Import</button>
       <input type="file" id="roster-import-input" accept=".xlsx,.xls" style="display:none;" onchange="handleRosterImportFile(this)">
     </div>
@@ -1564,7 +1564,8 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
   <div class="tab-content" id="tab-practicegroups"></div>
   <div class="tab-content" id="tab-recruiting"></div>
   ${SC.tiersEnabled?`<div class="tab-content" id="tab-accounting"></div>
-  <div class="tab-content" id="tab-travel"></div>`:`<div class="tab-content" id="tab-logistics">
+  <div class="tab-content" id="tab-travel"></div>
+  <div class="tab-content" id="tab-info"></div>`:`<div class="tab-content" id="tab-logistics">
     <div id="tab-accounting"></div>
     <div id="tab-travel"></div>
   </div>`}
@@ -4159,6 +4160,7 @@ function refreshTab(id){
     case'recruiting':renderRecruiting();break;
     case'accounting':renderAccounting();break;
     case'travel':renderTravel();break;
+    case'info':renderInfo();break;
     case'logistics':renderAccounting();renderTravel();break;
   }
 }
@@ -11224,6 +11226,151 @@ function acctSendReminder(){
   if(!D.dues)D.dues={}; D.dues.lastReminderAt=now;
   renderAccounting();
 }
+// ============================================================
+// Logistics > Info. A field picker over the club roster, exec only, producing a
+// spreadsheet with exactly the columns that were ticked.
+//
+// This card also hosts the shirt order button. Its previous home was the Import
+// and Export card, which is wrapped in a tiersEnabled-false gate, so for a club
+// it never rendered at all.
+//
+// PRIVACY: contact data is deliberately not offered. Member phone, member email
+// and emergency contact live on the deny-all private account node, which the
+// browser cannot read, because the club app holds no Firebase identity. Offering
+// a checkbox that could only ever produce blanks would be worse than leaving it
+// out. Social handles, ratings, assessments and measurements are excluded by
+// policy, not by accident. Every row is assembled key by key from the ticked
+// list and json_to_sheet is given an explicit header, so a field that is not
+// ticked, or not offered, cannot reach the file.
+//
+// gapWhenEmpty marks the fields where a missing value is a real gap somebody
+// should chase. Fields where absence is meaningful (no leadership means an
+// ordinary member, no practice group means unassigned) are not gaps, otherwise
+// most of the roster would sort to the top and the signal would be lost.
+// ============================================================
+const INFO_FIELDS=[
+  {key:'first',  label:'First name',     group:'roster', on:true,  gapWhenEmpty:true,
+   get:c=>String(c.p.firstName||'')},
+  {key:'last',   label:'Last name',      group:'roster', on:true,  gapWhenEmpty:true,
+   get:c=>String(c.p.lastName||'')},
+  {key:'tier',   label:'Tier',           group:'roster', on:true,  gapWhenEmpty:true,
+   get:c=>(c.p.tier==='garnet'||c.p.tier==='gold')?c.p.tier:SHIRT_NO_TIER},
+  {key:'size',   label:'Shirt size',     group:'roster', on:true,  gapWhenEmpty:true,
+   get:c=>c.sizeOf()},
+  {key:'class',  label:'Class year',     group:'roster', on:true,  gapWhenEmpty:true,
+   get:c=>String(c.p.classYear||'')},
+  {key:'year',   label:'Year at FSU',    group:'roster', on:true,  gapWhenEmpty:true,
+   get:c=>String((c.prof&&c.prof.yearAtFsu)||'')},
+  {key:'major',  label:'Major',          group:'roster', on:true,  gapWhenEmpty:true,
+   get:c=>String((c.prof&&c.prof.major)||'')},
+  {key:'status', label:'Status',         group:'roster', on:true,  gapWhenEmpty:false,
+   get:c=>String(c.p.status||'placed')},
+  {key:'lead',   label:'Leadership',     group:'roster', on:true,  gapWhenEmpty:false,
+   get:c=>String(c.p.leadership||'member')},
+  {key:'pg',     label:'Practice group', group:'roster', on:true,  gapWhenEmpty:false,
+   get:c=>c.p.pg==null?'':String(c.p.pg)},
+  {key:'dues',   label:'Dues paid',      group:'roster', on:true,  gapWhenEmpty:false,
+   get:c=>acctIsPaid(c.p.id)?'yes':'no'},
+  {key:'active', label:'Active',         group:'roster', on:true,  gapWhenEmpty:false,
+   get:c=>c.p.active===false?'no':'yes'},
+  {key:'gender', label:'Gender (useful for shirt cuts)', group:'optional', on:false, gapWhenEmpty:false,
+   get:c=>String(c.p.gender||'')},
+  {key:'treq',   label:'Tier requested', group:'optional', on:false, gapWhenEmpty:false,
+   get:c=>String(c.p.tierRequest||'')},
+  {key:'joined', label:'Joined',         group:'optional', on:false, gapWhenEmpty:false,
+   get:c=>c.p.createdAt?new Date(c.p.createdAt).toISOString().slice(0,10):''}
+];
+
+// Ticked state, remembered across re-renders of the tab. Seeded from the defaults.
+let _infoPicked=null;
+function infoPicked(){
+  if(!_infoPicked){
+    _infoPicked={};
+    INFO_FIELDS.forEach(f=>{ _infoPicked[f.key]=!!f.on; });
+  }
+  return _infoPicked;
+}
+function infoToggle(key){
+  const cb=document.getElementById('info-f-'+key);
+  if(cb) infoPicked()[key]=!!cb.checked;
+}
+
+function renderInfo(){
+  const pane=document.getElementById('tab-info'); if(!pane) return;
+  const picked=infoPicked();
+  const box=(f)=>`<label style="display:flex;align-items:center;gap:8px;padding:7px 0;font-size:13px;cursor:pointer;">
+      <input type="checkbox" id="info-f-${f.key}" ${picked[f.key]?'checked':''} onchange="infoToggle('${f.key}')" style="width:17px;height:17px;accent-color:var(--primary);cursor:pointer;">
+      <span>${f.label}</span>
+    </label>`;
+  const group=(name)=>INFO_FIELDS.filter(f=>f.group===name).map(box).join('');
+  const n=(Array.isArray(D.players)?D.players:[]).filter(p=>SHIRT_SEED_ACCOUNT_IDS.indexOf(p.accountId)===-1).length;
+
+  pane.innerHTML=
+    `<div class="card">
+      <div class="card-title"><span class="bar"></span> Roster info export</div>
+      <p style="font-size:13px;color:var(--gray);line-height:1.6;margin-bottom:12px;">Tick the columns you need and download a spreadsheet of all ${n} members. Anyone missing a ticked detail sorts to the top so the gaps are easy to chase.</p>
+      <div style="font-family:'Bebas Neue';font-size:12px;letter-spacing:1px;color:var(--gray);margin:6px 0 2px;">ROSTER AND LOGISTICS</div>
+      ${group('roster')}
+      <div style="font-family:'Bebas Neue';font-size:12px;letter-spacing:1px;color:var(--gray);margin:14px 0 2px;">OPTIONAL</div>
+      ${group('optional')}
+      <p style="font-size:12px;color:var(--gray);line-height:1.6;margin:14px 0 0;">Phone, email and emergency contact are not available here. They live on the private account record, which the app cannot read from a browser.</p>
+      <button class="btn btn-small btn-w" style="background:var(--primary);color:#fff;border:none;margin-top:14px;" onclick="exportInfo()">📄 Download spreadsheet</button>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="bar"></span> Shirt order</div>
+      <p style="font-size:13px;color:var(--gray);line-height:1.6;margin-bottom:12px;">Name, tier and size only, with a summary grid of counts by tier and size for the printer.</p>
+      <button class="btn btn-small btn-w" style="background:#782F40;color:#fff;border:none;" onclick="exportShirtOrder()">👕 Shirt order export</button>
+    </div>`;
+}
+
+async function exportInfo(){
+  if(typeof XLSX==='undefined'){toast('Spreadsheet library not loaded');return;}
+  const picked=infoPicked();
+  const fields=INFO_FIELDS.filter(f=>picked[f.key]);
+  if(!fields.length){toast('Tick at least one field');return;}
+  const roster=(D.players||[]).filter(p=>SHIRT_SEED_ACCOUNT_IDS.indexOf(p.accountId)===-1);
+  if(!roster.length){toast('No roster loaded');return;}
+  toast('Building export...');
+
+  const accounts=await ensureCommunityPlayers();
+  if(!accounts){toast('Could not read member records. Check your connection.');return;}
+
+  const rows=roster.map(p=>{
+    const acct=p.accountId?accounts[p.accountId]:null;
+    const mem=acct?shirtClubMembership(acct):null;
+    const prof=((profilesData&&profilesData.players)||{})[p.id]||null;
+    // sizeOf is a function so the size lookup only runs when the column is ticked.
+    const ctx={p:p, acct:acct, mem:mem, prof:prof, sizeOf:function(){
+      if(!acct||!mem) return SHIRT_NO_LINK;
+      return (typeof mem.shirtSize==='string'&&mem.shirtSize.trim())?mem.shirtSize.trim():SHIRT_NO_SIZE;
+    }};
+    // Built key by key from the ticked list. No object is ever spread in.
+    const row={};
+    let gap=false;
+    fields.forEach(f=>{
+      const v=f.get(ctx);
+      row[f.label]=v;
+      if(f.gapWhenEmpty&&(v===''||v===SHIRT_NO_TIER||v===SHIRT_NO_SIZE||v===SHIRT_NO_LINK)) gap=true;
+    });
+    row._gap=gap;
+    row._last=String(p.lastName||'').toLowerCase();
+    return row;
+  });
+
+  rows.sort((a,b)=>(a._gap===b._gap?0:(a._gap?-1:1))||a._last.localeCompare(b._last));
+
+  const header=fields.map(f=>f.label);
+  const outRows=rows.map(r=>{ const o={}; header.forEach(h=>{ o[h]=r[h]; }); return o; });
+
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(outRows,{header:header}),'Info');
+  const prefix=(SC&&SC.exportPrefix)||'club_';
+  XLSX.writeFile(wb,prefix+'info_'+td()+'.xlsx');
+
+  const gaps=rows.filter(r=>r._gap).length;
+  toast(gaps?('Exported '+rows.length+' members. '+gaps+' need attention.'):('Exported '+rows.length+' members.'));
+}
+
 function renderAccounting(){
   const pane=document.getElementById('tab-accounting'); if(!pane)return;
   const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
