@@ -1523,6 +1523,7 @@ ${SC.demoMode ? '<div class="demo-banner">DEMO DATA — '+SC.schoolName+' — No
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button class="btn btn-small" style="background:#082A4F;color:#fff;border:none;" onclick="exportExcel()">📊 Export Excel</button>
       <button class="btn btn-small" style="background:#082A4F;color:#fff;border:none;" onclick="exportJSON()">Export JSON</button>
+      ${SC.tiersEnabled?'<button class="btn btn-small" style="background:#782F40;color:#fff;border:none;" onclick="exportShirtOrder()">👕 Shirt Order</button>':''}
       <button class="btn btn-small btn-secondary" onclick="triggerRosterImport()">Import</button>
       <input type="file" id="roster-import-input" accept=".xlsx,.xls" style="display:none;" onchange="handleRosterImportFile(this)">
     </div>
@@ -6405,6 +6406,140 @@ function exportExcel(){
   const _xfPrefix=(SC&&SC.exportPrefix)||(SCHOOL_NAME.replace(/[^a-zA-Z0-9]+/g,'_').replace(/^_+|_+$/g,'')||'export')+'_';
   XLSX.writeFile(wb,_xfPrefix+td()+'.xlsx');
   toast('Excel exported!');
+}
+
+// ============================================================
+// Shirt order export. Name, tier, size, and nothing else.
+//
+// The two fields a printer needs live in two different nodes. Name and the
+// ASSIGNED tier come from the club roster (D.players, already loaded). Size
+// lives on the member's CourtSense account, under the club membership, and is
+// reached through ensureCommunityPlayers(), the one read path the club has for
+// that node.
+//
+// Assigned tier, never tierRequest. The two disagree for roughly 17 people,
+// because an exec can place someone in a different tier than they asked for,
+// and ordering off the request would print the wrong shirt for every one of
+// them.
+//
+// PRIVACY: the column list is hard-coded and only three values are ever read
+// off a record. No object is spread into a row, so a field added to the roster
+// or the account later cannot appear here on its own. This never touches
+// grass_club_profiles, which carries emergency contacts and social handles.
+// Nothing here reads phone, email, dues, consent, academic detail, ratings, or
+// measurements.
+//
+// Everyone on the roster is included, prospects and exec alike. A missing tier
+// or size is printed as a loud placeholder and counted in the summary, so a
+// gap shows up on the order instead of quietly dropping a person.
+// ============================================================
+// Seeded placeholder accounts that hold a roster slot but are not people. Matched
+// on the ACCOUNT ID, which is the record's stable identity and the key the join
+// already runs on, rather than on the display name, which an exec can edit at any
+// time. A real member's account id is derived from their own name, so this can
+// never catch one. If the placeholder is deleted later the test simply stops
+// matching, and nothing else changes.
+const SHIRT_SEED_ACCOUNT_IDS=['exec_exec'];
+const SHIRT_SIZE_ORDER=['XS','S','M','L','XL','XXL','XXXL'];
+const SHIRT_NO_SIZE='NO SIZE SET';
+const SHIRT_NO_TIER='NO TIER SET';
+const SHIRT_NO_LINK='NO ACCOUNT LINK';
+
+// Which membership on an account is this club. Prefer an explicit slug if the
+// shell ever sets one, then match the org name the signup stored, then fall
+// back to the only membership when there is exactly one.
+function shirtClubMembership(acct){
+  const m=acct&&acct.memberships;
+  if(!m||typeof m!=='object') return null;
+  const slug=SC&&SC.orgSlug;
+  if(slug&&m[slug]) return m[slug];
+  const want=String((SC&&(SC.displayName||SC.schoolName))||'').trim().toLowerCase();
+  if(want){
+    for(const k in m){
+      if(m[k]&&String(m[k].orgName||'').trim().toLowerCase()===want) return m[k];
+    }
+  }
+  const keys=Object.keys(m);
+  return keys.length===1?m[keys[0]]:null;
+}
+
+function shirtSizeRank(size){
+  const i=SHIRT_SIZE_ORDER.indexOf(size);
+  return i===-1?SHIRT_SIZE_ORDER.length+1:i;   // placeholders sort last
+}
+
+async function exportShirtOrder(){
+  if(typeof XLSX==='undefined'){toast('Spreadsheet library not loaded');return;}
+  // Everyone on the roster except seeded placeholders. Real exec, faculty,
+  // prospects, and anyone missing a tier or a size all stay in.
+  const roster=(D.players||[]).filter(p=>SHIRT_SEED_ACCOUNT_IDS.indexOf(p.accountId)===-1);
+  if(!roster.length){toast('No roster loaded');return;}
+  toast('Building shirt order...');
+
+  const accounts=await ensureCommunityPlayers();
+  if(!accounts){toast('Could not read sizes. Check your connection.');return;}
+
+  // One row per roster record. Three values read per person, by name, never a spread.
+  const rows=roster.map(p=>{
+    const name=((p.firstName||'')+' '+(p.lastName||'')).trim()||'(no name)';
+    const tier=(p.tier==='garnet'||p.tier==='gold')?p.tier:SHIRT_NO_TIER;
+    let size=SHIRT_NO_LINK;
+    const acct=p.accountId?accounts[p.accountId]:null;
+    if(acct){
+      const mem=shirtClubMembership(acct);
+      if(mem) size=(typeof mem.shirtSize==='string'&&mem.shirtSize.trim())?mem.shirtSize.trim():SHIRT_NO_SIZE;
+    }
+    const gap=(tier===SHIRT_NO_TIER||size===SHIRT_NO_SIZE||size===SHIRT_NO_LINK);
+    return {Name:name, Tier:tier, Size:size, _last:String(p.lastName||'').toLowerCase(), _gap:gap};
+  });
+
+  // Anything missing a tier or a size sorts to the very top, because this sheet is
+  // the list an exec works from to chase the gaps down. Complete rows keep the
+  // order a printer wants underneath: tier, then size in printer order, then last
+  // name. The incomplete block is sorted the same way within itself.
+  rows.sort((a,b)=>
+    (a._gap===b._gap?0:(a._gap?-1:1)) ||
+    a.Tier.localeCompare(b.Tier) ||
+    shirtSizeRank(a.Size)-shirtSizeRank(b.Size) ||
+    a.Size.localeCompare(b.Size) ||
+    a._last.localeCompare(b._last)
+  );
+
+  // Sheet 1. Hard-coded columns, rebuilt one field at a time.
+  const orderRows=rows.map(r=>({Name:r.Name, Tier:r.Tier, Size:r.Size}));
+
+  // Sheet 2. The grid a printer works from: a row per tier, a column per size,
+  // a total each way. Placeholder columns only appear when something is missing.
+  const tiersSeen=[];
+  ['garnet','gold',SHIRT_NO_TIER].forEach(t=>{ if(rows.some(r=>r.Tier===t)) tiersSeen.push(t); });
+  const sizesSeen=SHIRT_SIZE_ORDER.filter(sz=>rows.some(r=>r.Size===sz));
+  [SHIRT_NO_SIZE,SHIRT_NO_LINK].forEach(ph=>{ if(rows.some(r=>r.Size===ph)) sizesSeen.push(ph); });
+
+  const summaryRows=tiersSeen.map(t=>{
+    const row={Tier:t};
+    let total=0;
+    sizesSeen.forEach(sz=>{
+      const n=rows.filter(r=>r.Tier===t&&r.Size===sz).length;
+      row[sz]=n; total+=n;
+    });
+    row.Total=total;
+    return row;
+  });
+  const totalRow={Tier:'TOTAL'};
+  let grand=0;
+  sizesSeen.forEach(sz=>{ const n=rows.filter(r=>r.Size===sz).length; totalRow[sz]=n; grand+=n; });
+  totalRow.Total=grand;
+  summaryRows.push(totalRow);
+
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(orderRows,{header:['Name','Tier','Size']}),'Shirt order');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(summaryRows,{header:['Tier',...sizesSeen,'Total']}),'Summary');
+
+  const prefix=(SC&&SC.exportPrefix)||'club_';
+  XLSX.writeFile(wb,prefix+'shirt_order_'+td()+'.xlsx');
+
+  const gaps=rows.filter(r=>r.Tier===SHIRT_NO_TIER||r.Size===SHIRT_NO_SIZE||r.Size===SHIRT_NO_LINK).length;
+  toast(gaps?('Shirt order exported. '+gaps+' need attention.'):('Shirt order exported. '+rows.length+' members.'));
 }
 
 // ============================================================
